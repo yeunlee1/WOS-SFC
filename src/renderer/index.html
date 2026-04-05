@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';" />
+  <title>WOS SFC 전투 보조</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ── 로그인 모달 ── -->
+  <div id="alliance-modal" class="alliance-modal">
+    <div class="alliance-modal-box">
+      <h2>⚔️ WOS SFC</h2>
+
+      <div class="modal-lang-btns">
+        <button class="modal-lang-btn" data-lang="ko">🇰🇷 한국어</button>
+        <button class="modal-lang-btn" data-lang="en">🇺🇸 English</button>
+        <button class="modal-lang-btn" data-lang="ja">🇯🇵 日本語</button>
+        <button class="modal-lang-btn" data-lang="zh">🇨🇳 中文</button>
+      </div>
+
+      <p data-i18n="modalTitle">서버 코드를 입력하세요</p>
+      <input type="text" id="alliance-code-input" placeholder="예: 2677" maxlength="20" />
+
+      <p class="modal-section-label" data-i18n="modalAllianceLabel">연맹 선택</p>
+      <div class="modal-alliance-btns">
+        <button class="modal-alliance-btn" data-alliance="KOR">KOR</button>
+        <button class="modal-alliance-btn" data-alliance="NSL">NSL</button>
+        <button class="modal-alliance-btn" data-alliance="JKY">JKY</button>
+        <button class="modal-alliance-btn" data-alliance="GPX">GPX</button>
+        <button class="modal-alliance-btn" data-alliance="UFO">UFO</button>
+      </div>
+
+      <p class="modal-section-label" data-i18n="modalNicknameLabel">닉네임</p>
+      <input type="text" id="nickname-input" class="modal-nick-input"
+             data-i18n="modalNicknamePlaceholder" placeholder="게임 닉네임" maxlength="20" />
+
+      <details class="modal-dev-section">
+        <summary class="modal-dev-summary" data-i18n="modalDevSummary">🔧 개발자 코드</summary>
+        <input type="password" id="dev-password-input" class="modal-nick-input modal-dev-input"
+               data-i18n="modalDevPlaceholder" placeholder="개발자 전용 코드" maxlength="64" />
+      </details>
+
+      <button id="alliance-join-btn" class="btn btn-primary" data-i18n="modalJoin">입장</button>
+      <p id="alliance-error" class="alliance-error"></p>
+    </div>
+  </div>
+
+  <!-- ── 앱 본체 ── -->
+  <div id="app" style="display:none">
+
+    <!-- 헤더 -->
+    <header class="app-header">
+      <h1 class="app-title">⚔️ WOS SFC</h1>
+      <div id="world-clock" class="world-clock">UTC --:--:--</div>
+      <div id="user-info" class="user-info" style="display:none">
+        <span id="user-alliance-badge" class="user-alliance-badge"></span>
+        <span id="user-nickname" class="user-nickname"></span>
+        <span id="user-role-badge" class="user-role-badge"></span>
+      </div>
+      <button id="logout-btn" class="btn btn-logout">⏏️</button>
+    </header>
+
+    <!-- 메인 탭 -->
+    <nav class="tab-nav">
+      <button class="tab-btn active" data-tab="dashboard" data-i18n="tabDashboard">🗺️ 대쉬보드</button>
+      <button class="tab-btn" data-tab="battle" data-i18n="tabBattle">⚔️ 전투현황</button>
+      <button class="tab-btn" data-tab="community" data-i18n="tabCommunity">💬 커뮤니티</button>
+    </nav>
+
+    <main class="tab-content">
+
+      <!-- ══ 대쉬보드: 접속 중 유저 ══ -->
+      <section id="dashboard" class="tab-panel active">
+        <div class="dashboard-layout">
+          <div class="online-header">
+            <h2 data-i18n="onlineUsers">👥 접속 중</h2>
+            <span class="online-total-badge">
+              <span id="online-count">0</span>
+              <span data-i18n="onlineUsersDesc">현재 온라인</span>
+            </span>
+          </div>
+          <div id="online-list" class="online-list-full">
+            <p class="empty-message">—</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ 전투현황: 집결 타이머 + 발송 타이밍 ══ -->
+      <section id="battle" class="tab-panel">
+        <div class="battle-grid">
+
+          <!-- 집결 타이머 -->
+          <div class="battle-panel">
+            <div class="battle-panel-header">
+              <h2 data-i18n="rallyTimer">⏱️ 집결 타이머</h2>
+              <p class="panel-desc" data-i18n="rallyTimerDesc">최대 6개 동시 추적</p>
+            </div>
+            <div class="battle-panel-body">
+              <div class="input-group">
+                <input type="text" id="rally-name" data-i18n="rallyNamePlaceholder"
+                       placeholder="집결 이름" maxlength="20" style="flex:1;min-width:0" />
+                <input type="number" id="rally-minutes" data-i18n="rallyMinPlaceholder"
+                       placeholder="분" min="0" max="59" />
+                <span class="time-separator">:</span>
+                <input type="number" id="rally-seconds" data-i18n="rallySecPlaceholder"
+                       placeholder="초" min="0" max="59" />
+                <button id="rally-add-btn" class="btn btn-primary" data-i18n="rallyAdd">추가</button>
+              </div>
+              <div id="rally-list" class="rally-list">
+                <p class="empty-message" data-i18n="emptyRally">집결 정보를 입력하고 추가하세요</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- 발송 타이밍 -->
+          <div class="battle-panel">
+            <div class="battle-panel-header">
+              <h2 data-i18n="dispatchTiming">🚀 발송 타이밍</h2>
+              <p class="panel-desc" data-i18n="dispatchDesc">도착 시각 기준 발송 시각 계산</p>
+            </div>
+            <div class="battle-panel-body">
+              <div class="input-group">
+                <label data-i18n="arrivalLabel">도착 예정</label>
+                <input type="time" id="arrival-time" step="1" />
+                <button id="calc-btn" class="btn btn-primary" data-i18n="calcBtn">계산</button>
+              </div>
+              <div class="input-group member-input">
+                <input type="text" id="member-name" data-i18n="memberNamePlaceholder"
+                       placeholder="집결원 이름" maxlength="15" style="flex:1;min-width:0" />
+                <input type="number" id="member-normal" data-i18n="memberNormalPlaceholder"
+                       placeholder="일반(초)" min="0" />
+                <input type="number" id="member-pet" data-i18n="memberPetPlaceholder"
+                       placeholder="펫(초)" min="0" />
+                <button id="member-add-btn" class="btn btn-secondary" data-i18n="memberAddBtn">추가</button>
+              </div>
+              <div id="dispatch-result" class="dispatch-result">
+                <p class="empty-message" data-i18n="emptyDispatch">집결원을 추가하고 계산하세요</p>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ══ 커뮤니티 ══ -->
+      <section id="community" class="tab-panel">
+
+        <!-- 서브 탭 -->
+        <nav class="sub-tab-nav">
+          <button class="sub-tab-btn active" data-subtab="notices">
+            📌 <span data-i18n="tabNotices">공지사항</span>
+          </button>
+          <button class="sub-tab-btn" data-subtab="board-KOR">
+            <span class="sub-tab-dot" style="background:#3b82f6"></span>KOR
+          </button>
+          <button class="sub-tab-btn" data-subtab="board-NSL">
+            <span class="sub-tab-dot" style="background:#22c55e"></span>NSL
+          </button>
+          <button class="sub-tab-btn" data-subtab="board-JKY">
+            <span class="sub-tab-dot" style="background:#a855f7"></span>JKY
+          </button>
+          <button class="sub-tab-btn" data-subtab="board-GPX">
+            <span class="sub-tab-dot" style="background:#f97316"></span>GPX
+          </button>
+          <button class="sub-tab-btn" data-subtab="board-UFO">
+            <span class="sub-tab-dot" style="background:#06b6d4"></span>UFO
+          </button>
+        </nav>
+
+        <div class="sub-tab-content">
+
+          <!-- 공지사항 (게시판) -->
+          <div id="notices" class="sub-tab-panel active">
+
+            <!-- 목록 뷰 -->
+            <div id="notice-list-view" class="notice-view">
+              <div class="notice-board-header">
+                <span class="notice-board-title">📌 <span data-i18n="tabNotices">공지사항</span></span>
+                <button id="notice-write-btn" class="btn btn-primary btn-sm" data-i18n="noticePin">📌 글쓰기</button>
+              </div>
+              <div id="notice-board-list" class="notice-board-list">
+                <p class="empty-message" data-i18n="emptyNotice">고정된 공지가 없어요</p>
+              </div>
+            </div>
+
+            <!-- 글쓰기 뷰 -->
+            <div id="notice-write-view" class="notice-view" style="display:none">
+              <div class="notice-board-header">
+                <button id="notice-back-from-write" class="btn btn-secondary btn-sm">← <span data-i18n="backToList">목록</span></button>
+                <span class="notice-board-title" data-i18n="noticeWriteTitle">새 공지 작성</span>
+              </div>
+              <div class="notice-write-body">
+                <div class="notice-meta">
+                  <select id="notice-source">
+                    <option value="discord">💬 Discord</option>
+                    <option value="kakao">🟡 KakaoTalk</option>
+                    <option value="game">🎮 In-game</option>
+                  </select>
+                  <input type="text" id="notice-title"
+                         data-i18n="noticeTitlePlaceholder" placeholder="제목 (선택)" maxlength="30" />
+                </div>
+                <textarea id="notice-content"
+                          data-i18n="noticeContentPlaceholder"
+                          placeholder="공지 내용을 붙여넣으세요..." rows="6"></textarea>
+                <button id="notice-add-btn" class="btn btn-primary" data-i18n="noticePin">📌 고정하기</button>
+              </div>
+            </div>
+
+            <!-- 상세 뷰 -->
+            <div id="notice-detail-view" class="notice-view" style="display:none">
+              <div class="notice-board-header">
+                <button id="notice-back-from-detail" class="btn btn-secondary btn-sm">← <span data-i18n="backToList">목록</span></button>
+                <button id="notice-detail-delete" class="btn btn-danger btn-sm" data-i18n="delete">삭제</button>
+              </div>
+              <div id="notice-detail-content" class="notice-detail-content"></div>
+            </div>
+
+          </div>
+
+          <!-- KOR 게시판 -->
+          <div id="board-KOR" class="sub-tab-panel">
+            <div class="community-body">
+              <div class="board-input-area">
+                <textarea id="board-input-KOR" class="board-textarea"
+                          placeholder="KOR 게시판에 글을 남기세요..." rows="3"></textarea>
+                <button class="btn btn-primary board-post-btn" data-alliance="KOR" data-i18n="boardPost">게시하기</button>
+              </div>
+              <div id="board-posts-KOR" class="board-posts">
+                <p class="empty-message" data-i18n="emptyBoard">게시물이 없어요</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- NSL 게시판 -->
+          <div id="board-NSL" class="sub-tab-panel">
+            <div class="community-body">
+              <div class="board-input-area">
+                <textarea id="board-input-NSL" class="board-textarea"
+                          placeholder="NSL 게시판에 글을 남기세요..." rows="3"></textarea>
+                <button class="btn btn-primary board-post-btn" data-alliance="NSL" data-i18n="boardPost">게시하기</button>
+              </div>
+              <div id="board-posts-NSL" class="board-posts">
+                <p class="empty-message" data-i18n="emptyBoard">게시물이 없어요</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- JKY 게시판 -->
+          <div id="board-JKY" class="sub-tab-panel">
+            <div class="community-body">
+              <div class="board-input-area">
+                <textarea id="board-input-JKY" class="board-textarea"
+                          placeholder="JKY 게시판에 글을 남기세요..." rows="3"></textarea>
+                <button class="btn btn-primary board-post-btn" data-alliance="JKY" data-i18n="boardPost">게시하기</button>
+              </div>
+              <div id="board-posts-JKY" class="board-posts">
+                <p class="empty-message" data-i18n="emptyBoard">게시물이 없어요</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- GPX 게시판 -->
+          <div id="board-GPX" class="sub-tab-panel">
+            <div class="community-body">
+              <div class="board-input-area">
+                <textarea id="board-input-GPX" class="board-textarea"
+                          placeholder="GPX 게시판에 글을 남기세요..." rows="3"></textarea>
+                <button class="btn btn-primary board-post-btn" data-alliance="GPX" data-i18n="boardPost">게시하기</button>
+              </div>
+              <div id="board-posts-GPX" class="board-posts">
+                <p class="empty-message" data-i18n="emptyBoard">게시물이 없어요</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- UFO 게시판 -->
+          <div id="board-UFO" class="sub-tab-panel">
+            <div class="community-body">
+              <div class="board-input-area">
+                <textarea id="board-input-UFO" class="board-textarea"
+                          placeholder="UFO 게시판에 글을 남기세요..." rows="3"></textarea>
+                <button class="btn btn-primary board-post-btn" data-alliance="UFO" data-i18n="boardPost">게시하기</button>
+              </div>
+              <div id="board-posts-UFO" class="board-posts">
+                <p class="empty-message" data-i18n="emptyBoard">게시물이 없어요</p>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <script src="js/i18n.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/rally-timer.js"></script>
+  <script src="js/dispatch.js"></script>
+  <script src="js/noticeboard.js"></script>
+  <script src="js/online.js"></script>
+  <script src="js/community.js"></script>
+
+</body>
+</html>
