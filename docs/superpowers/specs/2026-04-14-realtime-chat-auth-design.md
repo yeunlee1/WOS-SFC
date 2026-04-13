@@ -8,7 +8,7 @@
 ## 개요
 
 동맹원들끼리 실시간 채팅이 가능하도록 회원가입/로그인 시스템과 채팅 기능을 추가한다.
-백엔드는 Node.js + Express + PostgreSQL, 실시간 통신은 Socket.io를 사용한다.
+백엔드는 Node.js + NestJS + PostgreSQL, 실시간 통신은 Socket.io를 사용한다.
 
 ---
 
@@ -18,7 +18,7 @@
 Electron 앱 (프론트엔드)
     ↕ REST API (로그인/회원가입)
     ↕ Socket.io (실시간 채팅)
-Node.js + Express 백엔드
+Node.js + NestJS 백엔드
     ↕
 PostgreSQL DB
 ```
@@ -88,17 +88,30 @@ PostgreSQL DB
 
 ## 백엔드 구조
 
+NestJS 모듈 기반 구조 사용.
+
 ```
 server/
-├── index.js           # Express + Socket.io 서버 진입점
-├── db.js              # PostgreSQL 연결
-├── routes/
-│   ├── auth.js        # POST /signup, POST /login
-│   └── messages.js    # GET /messages (기록 조회)
-├── middleware/
-│   └── auth.js        # JWT 검증 미들웨어
-└── socket/
-    └── chat.js        # Socket.io 이벤트 핸들러
+├── src/
+│   ├── main.ts                  # 앱 진입점
+│   ├── app.module.ts            # 루트 모듈
+│   ├── auth/
+│   │   ├── auth.module.ts
+│   │   ├── auth.controller.ts   # POST /auth/signup, POST /auth/login
+│   │   ├── auth.service.ts      # 회원가입/로그인 로직, JWT 발급
+│   │   └── jwt.strategy.ts      # Passport JWT 전략
+│   ├── chat/
+│   │   ├── chat.module.ts
+│   │   ├── chat.gateway.ts      # Socket.io 게이트웨이 (실시간 채팅)
+│   │   └── chat.service.ts      # 메시지 저장/조회 로직
+│   ├── users/
+│   │   ├── users.module.ts
+│   │   ├── users.entity.ts      # PostgreSQL users 테이블 엔티티
+│   │   └── users.service.ts
+│   └── messages/
+│       ├── messages.module.ts
+│       └── messages.entity.ts   # PostgreSQL messages 테이블 엔티티
+└── package.json
 ```
 
 ---
