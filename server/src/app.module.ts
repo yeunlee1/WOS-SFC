@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { User } from './users/users.entity';
 import { Message } from './chat/message.entity';
+import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
@@ -20,7 +21,7 @@ import { Message } from './chat/message.entity';
         synchronize: configService.get<string>('NODE_ENV') !== 'production',
       }),
     }),
-    // UsersModule, (Task 4에서 추가)
+    UsersModule,
     // AuthModule,  (Task 5에서 추가)
     // ChatModule,  (Task 6에서 추가)
   ],
