@@ -29,8 +29,8 @@ export class User {
   @Column({ length: 100 })
   name: string;
 
-  @Column({ length: 20 })
-  language: string;
+  @Column({ type: 'enum', enum: LANGUAGES })
+  language: Language;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

@@ -13,6 +13,9 @@ export class Message {
   @JoinColumn({ name: 'user_id' })
   user: User;
 
+  @Column({ name: 'user_id' })
+  userId: number;
+
   @Column({ type: 'text' })
   content: string;
 
