@@ -1327,6 +1327,9 @@ textarea#notice-content {
 .auth-switch { text-align: center; color: #94a3b8; font-size: 0.85rem; margin: 0; }
 .auth-switch a { color: #60a5fa; text-decoration: none; }
 .auth-server-question { color: #fbbf24; font-size: 0.85rem; margin: 0.25rem 0 0; font-weight: 600; }
+#dev-login-panel { position:fixed; bottom:1rem; left:50%; transform:translateX(-50%); display:flex; flex-wrap:wrap; gap:0.4rem; justify-content:center; align-items:center; background:#0f0f23cc; border:1px solid #2a2a4a; border-radius:10px; padding:0.5rem 0.75rem; z-index:9999; }
+.dev-login-btn { font-size:0.75rem; padding:0.3rem 0.6rem; background:#1e1e3f; border:1px solid #3a3a5a; border-radius:6px; color:#cbd5e1; cursor:pointer; white-space:nowrap; }
+.dev-login-btn:hover { background:#2a2a5a; color:#fff; }
 
 /* ── Chat ── */
 .chat-layout {

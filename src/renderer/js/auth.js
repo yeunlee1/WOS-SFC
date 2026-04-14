@@ -161,9 +161,52 @@
     };
   }
 
+  // ── 개발용 빠른 로그인 ──
+  const DEV_ACCOUNTS = [
+    { label: '👑 관리자 (한국)', nickname: 'dev_admin_ko', password: 'devpass123', role: 'admin',   language: 'ko', allianceName: 'KOR', name: '관리자', birthDate: '1990-01-01' },
+    { label: '🇨🇳 멤버 (중국)',  nickname: 'dev_member_zh', password: 'devpass123', role: 'member', language: 'zh', allianceName: 'KOR', name: '중국멤버', birthDate: '1990-01-01' },
+    { label: '🇺🇸 멤버 (영어)',  nickname: 'dev_member_en', password: 'devpass123', role: 'member', language: 'en', allianceName: 'KOR', name: 'EnMember', birthDate: '1990-01-01' },
+    { label: '🇯🇵 멤버 (일본)',  nickname: 'dev_member_ja', password: 'devpass123', role: 'member', language: 'ja', allianceName: 'KOR', name: '日本メンバー', birthDate: '1990-01-01' },
+  ];
+
+  async function devLogin(account) {
+    // 로그인 시도 → 실패 시 가입 후 재로그인
+    let result = await window.electronAPI.login({ nickname: account.nickname, password: account.password });
+    if (!result.success) {
+      await window.electronAPI.signup({
+        nickname: account.nickname, password: account.password,
+        name: account.name, allianceName: account.allianceName,
+        role: account.role, birthDate: account.birthDate,
+        language: account.language, serverCode: '2677',
+      });
+      result = await window.electronAPI.login({ nickname: account.nickname, password: account.password });
+    }
+    if (result.success) {
+      hideAuthModal();
+      initAppWithUser(result.user);
+    }
+  }
+
+  function renderDevButtons() {
+    const existing = document.getElementById('dev-login-panel');
+    if (existing) return;
+    const panel = document.createElement('div');
+    panel.id = 'dev-login-panel';
+    panel.innerHTML = `<p style="color:#64748b;font-size:0.7rem;margin:0.5rem 0 0.3rem;text-align:center;">🛠 DEV 빠른 로그인</p>`;
+    DEV_ACCOUNTS.forEach(acc => {
+      const btn = document.createElement('button');
+      btn.textContent = acc.label;
+      btn.className = 'btn dev-login-btn';
+      btn.onclick = () => devLogin(acc);
+      panel.appendChild(btn);
+    });
+    document.getElementById('auth-modal').appendChild(panel);
+  }
+
   // 앱 시작 시 auth 모달 표시
   window.addEventListener('DOMContentLoaded', () => {
     showAuthModal();
+    renderDevButtons();
   });
 
   window.showAuthModal = showAuthModal;
