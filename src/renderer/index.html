@@ -9,42 +9,9 @@
 </head>
 <body>
 
-  <!-- ── 로그인 모달 ── -->
-  <div id="alliance-modal" class="alliance-modal">
-    <div class="alliance-modal-box">
-      <h2>⚔️ WOS SFC</h2>
-
-      <div class="modal-lang-btns">
-        <button class="modal-lang-btn" data-lang="ko">🇰🇷 한국어</button>
-        <button class="modal-lang-btn" data-lang="en">🇺🇸 English</button>
-        <button class="modal-lang-btn" data-lang="ja">🇯🇵 日本語</button>
-        <button class="modal-lang-btn" data-lang="zh">🇨🇳 中文</button>
-      </div>
-
-      <p data-i18n="modalTitle">서버 코드를 입력하세요</p>
-      <input type="text" id="alliance-code-input" placeholder="예: 2677" maxlength="20" />
-
-      <p class="modal-section-label" data-i18n="modalAllianceLabel">연맹 선택</p>
-      <div class="modal-alliance-btns">
-        <button class="modal-alliance-btn" data-alliance="KOR">KOR</button>
-        <button class="modal-alliance-btn" data-alliance="NSL">NSL</button>
-        <button class="modal-alliance-btn" data-alliance="JKY">JKY</button>
-        <button class="modal-alliance-btn" data-alliance="GPX">GPX</button>
-        <button class="modal-alliance-btn" data-alliance="UFO">UFO</button>
-      </div>
-
-      <p class="modal-section-label" data-i18n="modalNicknameLabel">닉네임</p>
-      <input type="text" id="nickname-input" class="modal-nick-input"
-             data-i18n="modalNicknamePlaceholder" placeholder="게임 닉네임" maxlength="20" />
-
-      <details class="modal-dev-section">
-        <summary class="modal-dev-summary" data-i18n="modalDevSummary">🔧 개발자 코드</summary>
-        <input type="password" id="dev-password-input" class="modal-nick-input modal-dev-input"
-               data-i18n="modalDevPlaceholder" placeholder="개발자 전용 코드" maxlength="64" />
-      </details>
-
-      <button id="alliance-join-btn" class="btn btn-primary" data-i18n="modalJoin">입장</button>
-      <p id="alliance-error" class="alliance-error"></p>
+  <!-- ── Auth 모달 (auth.js가 동적 렌더링) ── -->
+  <div id="auth-modal" class="auth-modal" style="display:none">
+    <div id="auth-modal-box" class="auth-modal-box">
     </div>
   </div>
 
@@ -68,6 +35,7 @@
       <button class="tab-btn active" data-tab="dashboard" data-i18n="tabDashboard">🗺️ 대쉬보드</button>
       <button class="tab-btn" data-tab="battle" data-i18n="tabBattle">⚔️ 전투현황</button>
       <button class="tab-btn" data-tab="community" data-i18n="tabCommunity">💬 커뮤니티</button>
+      <button class="tab-btn" data-tab="chat">💬 채팅</button>
     </nav>
 
     <main class="tab-content">
@@ -293,6 +261,26 @@
         </div>
       </section>
 
+      <!-- ══ 채팅 ══ -->
+      <section id="chat" class="tab-panel">
+        <div class="chat-layout">
+          <div class="chat-header">
+            <h2>💬 동맹 채팅</h2>
+            <span class="chat-online-badge">
+              <span id="chat-online-count">0</span>명 접속 중
+            </span>
+          </div>
+          <div id="chat-online-list" class="chat-online-list"></div>
+          <div id="chat-messages" class="chat-messages">
+            <p class="empty-message">채팅 탭을 열면 연결됩니다</p>
+          </div>
+          <div class="chat-input-area">
+            <input type="text" id="chat-input" placeholder="메시지 입력... (Enter 전송)" maxlength="500" />
+            <button id="chat-send-btn" class="btn btn-primary">전송</button>
+          </div>
+        </div>
+      </section>
+
     </main>
   </div>
 
@@ -303,6 +291,8 @@
   <script src="js/noticeboard.js"></script>
   <script src="js/online.js"></script>
   <script src="js/community.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/chat.js"></script>
 
 </body>
 </html>

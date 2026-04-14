@@ -4,6 +4,8 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { User } from './users/users.entity';
 import { Message } from './chat/message.entity';
 import { UsersModule } from './users/users.module';
+import { AuthModule } from './auth/auth.module';
+import { ChatModule } from './chat/chat.module';
 
 @Module({
   imports: [
@@ -11,9 +13,9 @@ import { UsersModule } from './users/users.module';
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
-        type: 'postgres',
+        type: 'mysql',
         host: configService.get<string>('DATABASE_HOST'),
-        port: configService.get<number>('DATABASE_PORT', 5432),
+        port: configService.get<number>('DATABASE_PORT', 3306),
         username: configService.get<string>('DATABASE_USER'),
         password: configService.get<string>('DATABASE_PASSWORD'),
         database: configService.get<string>('DATABASE_NAME'),
@@ -22,8 +24,9 @@ import { UsersModule } from './users/users.module';
       }),
     }),
     UsersModule,
-    // AuthModule,  (Task 5에서 추가)
-    // ChatModule,  (Task 6에서 추가)
+    AuthModule,
+    // Task 6: Socket.io 채팅 게이트웨이 모듈 활성화
+    ChatModule,
   ],
 })
 export class AppModule {}
