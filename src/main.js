@@ -28,6 +28,16 @@ const firebaseApp = initFirebase({
 const db = getFirestore(firebaseApp);
 
 let mainWindow;
+
+// ── Auth / Chat ──
+const axios = require('axios');
+const { io } = require('socket.io-client');
+
+const SERVER_URL = 'http://localhost:3001';
+let authToken = null;
+let currentUser = null;
+let chatSocket = null;
+
 let allianceCode = null;
 let unsubscribers = []; // Firestore 리스너 정리용
 
@@ -338,4 +348,66 @@ ipcMain.handle('fb-set-user-role', async (event, targetNickname, newRole) => {
     await setDoc(ref, { role: newRole }, { merge: true });
     return { success: true };
   } catch (e) { return { success: false, error: e.message }; }
+});
+
+// ── 회원가입 ──
+ipcMain.handle('auth-signup', async (event, data) => {
+  try {
+    const res = await axios.post(`${SERVER_URL}/auth/signup`, data);
+    authToken = res.data.token;
+    currentUser = res.data.user;
+    return { success: true, user: currentUser };
+  } catch (e) {
+    return { success: false, error: e.response?.data?.message || e.message };
+  }
+});
+
+// ── 로그인 ──
+ipcMain.handle('auth-login', async (event, data) => {
+  try {
+    const res = await axios.post(`${SERVER_URL}/auth/login`, data);
+    authToken = res.data.token;
+    currentUser = res.data.user;
+    return { success: true, user: currentUser };
+  } catch (e) {
+    return { success: false, error: e.response?.data?.message || e.message };
+  }
+});
+
+// ── 로그아웃 ──
+ipcMain.handle('auth-logout', async () => {
+  if (chatSocket) { chatSocket.disconnect(); chatSocket = null; }
+  authToken = null;
+  currentUser = null;
+  return { success: true };
+});
+
+// ── 채팅 소켓 연결 ──
+ipcMain.handle('chat-connect', async () => {
+  if (!authToken) return { success: false, error: '로그인 필요' };
+  if (chatSocket?.connected) return { success: true };
+
+  chatSocket = io(SERVER_URL, { auth: { token: authToken } });
+
+  chatSocket.on('chat:history', (messages) => {
+    mainWindow.webContents.send('chat-history', messages);
+  });
+  chatSocket.on('chat:message', (msg) => {
+    mainWindow.webContents.send('chat-message', msg);
+  });
+  chatSocket.on('chat:system', (text) => {
+    mainWindow.webContents.send('chat-system', text);
+  });
+  chatSocket.on('chat:online', (users) => {
+    mainWindow.webContents.send('chat-online', users);
+  });
+
+  return { success: true };
+});
+
+// ── 메시지 전송 ──
+ipcMain.handle('chat-send', async (event, content) => {
+  if (!chatSocket?.connected) return { success: false, error: '채팅 미연결' };
+  chatSocket.emit('chat:message', content);
+  return { success: true };
 });
