@@ -126,7 +126,26 @@
   }
 
   function initAppWithUser(user) {
+    // 다른 JS 파일에서 참조하는 전역 유저 정보 세팅
+    window.currentUser = {
+      nickname:    user.nickname,
+      alliance:    user.allianceName,
+      role:        user.role,
+      allianceCode: '2677',
+    };
+
+    // Firebase 접속 (집결/공지/게시판 기능 유지)
+    window.electronAPI.connectAlliance('2677').then((result) => {
+      if (result && result.timeOffset !== undefined) {
+        window.timeOffset = result.timeOffset;
+      }
+    });
+
     // 유저 정보 헤더 표시
+    const allianceBadge = document.getElementById('user-alliance-badge');
+    if (allianceBadge) {
+      allianceBadge.textContent = user.allianceName || '';
+    }
     document.getElementById('user-nickname').textContent = user.nickname;
     document.getElementById('user-role-badge').textContent = user.role;
     document.getElementById('user-info').style.display = '';
@@ -134,6 +153,7 @@
     // 로그아웃 버튼
     document.getElementById('logout-btn').onclick = async () => {
       await window.electronAPI.logout();
+      window.currentUser = null;
       showAuthModal();
     };
   }
