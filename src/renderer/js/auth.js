@@ -185,6 +185,7 @@
       // 역할 강제 업데이트 (기존 계정 role 변경 반영)
       await window.electronAPI.setUserRole(account.nickname, account.role);
       result.user.role = account.role;
+      result.user.language = account.language;
       hideAuthModal();
       initAppWithUser(result.user);
     }
