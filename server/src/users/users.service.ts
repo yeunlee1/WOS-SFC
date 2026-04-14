@@ -41,4 +41,11 @@ export class UsersService {
   async findByNickname(nickname: string): Promise<User | null> {
     return this.usersRepo.findOne({ where: { nickname } });
   }
+
+  async setRole(nickname: string, role: UserRole): Promise<User | null> {
+    const user = await this.findByNickname(nickname);
+    if (!user) return null;
+    user.role = role;
+    return this.usersRepo.save(user);
+  }
 }

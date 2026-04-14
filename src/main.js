@@ -1,5 +1,4 @@
 // main.js — Electron 메인 프로세스
-
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 require('dotenv').config();
@@ -8,38 +7,15 @@ require('dotenv').config();
 const Anthropic = require('@anthropic-ai/sdk');
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-// ── Firebase ──
-const { initializeApp: initFirebase } = require('firebase/app');
-const {
-  getFirestore,
-  collection, doc,
-  onSnapshot, addDoc, deleteDoc, setDoc, getDoc,
-  serverTimestamp, query, orderBy,
-} = require('firebase/firestore');
-
-const firebaseApp = initFirebase({
-  apiKey:             process.env.FIREBASE_API_KEY,
-  authDomain:         process.env.FIREBASE_AUTH_DOMAIN,
-  projectId:          process.env.FIREBASE_PROJECT_ID,
-  storageBucket:      process.env.FIREBASE_STORAGE_BUCKET,
-  messagingSenderId:  process.env.FIREBASE_MESSAGING_SENDER_ID,
-  appId:              process.env.FIREBASE_APP_ID,
-});
-const db = getFirestore(firebaseApp);
-
-let mainWindow;
-
-// ── Auth / Chat ──
+// ── Auth / 실시간 ──
 const axios = require('axios');
 const { io } = require('socket.io-client');
 
 const SERVER_URL = 'http://localhost:3001';
 let authToken = null;
-let currentUser = null;
-let chatSocket = null;
+let mainSocket = null; // 단일 소켓 (chat + realtime 통합)
 
-let allianceCode = null;
-let unsubscribers = []; // Firestore 리스너 정리용
+let mainWindow;
 
 // ── 창 생성 ──
 function createWindow() {
@@ -57,7 +33,6 @@ function createWindow() {
     },
   });
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
-  // 개발 모드에서 DevTools 자동 오픈
   if (process.argv.includes('--inspect') || process.env.NODE_ENV === 'development') {
     mainWindow.webContents.openDevTools();
   }
@@ -87,10 +62,7 @@ ipcMain.handle('translate-to', async (event, text, targetLang) => {
     const message = await anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 1024,
-      messages: [{
-        role: 'user',
-        content: `Translate the following text to ${targetName}. Output only the translated text, no explanations:\n\n${text}`,
-      }],
+      messages: [{ role: 'user', content: `Translate the following text to ${targetName}. Output only the translated text, no explanations:\n\n${text}` }],
     });
     return { success: true, result: message.content[0].text };
   } catch (error) {
@@ -98,256 +70,17 @@ ipcMain.handle('translate-to', async (event, text, targetLang) => {
   }
 });
 
-// ── Firebase: 동맹 접속 + 리스너 시작 ──
-ipcMain.handle('connect-alliance', async (event, code) => {
+// ── 시간 동기화 (connectAlliance 대체) ──
+ipcMain.handle('connect-alliance', async () => {
   try {
-    // 기존 리스너 모두 해제
-    unsubscribers.forEach((u) => u());
-    unsubscribers = [];
-    allianceCode = code;
-
-    const base = `alliances/${code}`;
-
-    // 서버 시간 오프셋 계산 (로컬 시계 보정용)
     const localBefore = Date.now();
-    const syncRef = doc(db, `${base}/_meta/timesync`);
-    await setDoc(syncRef, { t: serverTimestamp() });
-    const snap = await getDoc(syncRef);
-    const serverTime = snap.data().t.toMillis();
+    const res = await axios.get(`${SERVER_URL}/time`);
+    const serverTime = res.data.utc;
     const timeOffset = serverTime - Math.round((localBefore + Date.now()) / 2);
-
-    // 공지 리스너
-    const unsubNotices = onSnapshot(
-      query(collection(db, `${base}/notices`), orderBy('createdAt', 'desc')),
-      (snapshot) => {
-        const data = snapshot.docs.map((d) => {
-          const raw = d.data();
-          return {
-            firebaseId: d.id,
-            source: raw.source,
-            title: raw.title,
-            content: raw.content,
-            authorNick: raw.authorNick || '',
-            createdAt: raw.createdAt?.toDate?.()
-              ? raw.createdAt.toDate().toLocaleString('ko-KR', { dateStyle: 'short', timeStyle: 'short' })
-              : '',
-          };
-        });
-        mainWindow.webContents.send('notices-updated', data);
-      }
-    );
-
-    // 집결 타이머 리스너
-    const unsubRallies = onSnapshot(
-      collection(db, `${base}/rallies`),
-      (snapshot) => {
-        const data = snapshot.docs.map((d) => ({
-          firebaseId: d.id,
-          ...d.data(),
-        }));
-        mainWindow.webContents.send('rallies-updated', data);
-      }
-    );
-
-    // 집결원 리스너
-    const unsubMembers = onSnapshot(
-      collection(db, `${base}/members`),
-      (snapshot) => {
-        const data = snapshot.docs.map((d) => ({
-          firebaseId: d.id,
-          ...d.data(),
-        }));
-        mainWindow.webContents.send('members-updated', data);
-      }
-    );
-
-    // 접속 중 유저 리스너 (90초 이내 heartbeat = 온라인)
-    const unsubOnline = onSnapshot(
-      collection(db, `${base}/online`),
-      (snapshot) => {
-        const now = Date.now();
-        const data = snapshot.docs
-          .map((d) => ({ ...d.data(), lastSeenMs: d.data().lastSeen?.toMillis?.() || 0 }))
-          .filter((u) => now - u.lastSeenMs < 90000)
-          .sort((a, b) => a.alliance.localeCompare(b.alliance) || a.nickname.localeCompare(b.nickname));
-        mainWindow.webContents.send('online-updated', data);
-      }
-    );
-
-    // 연맹 게시판 리스너 (KOR, NSL, JKY, GPX, UFO)
-    const BOARD_ALLIANCES = ['KOR', 'NSL', 'JKY', 'GPX', 'UFO'];
-    const unsubBoards = BOARD_ALLIANCES.map((alliance) =>
-      onSnapshot(
-        query(
-          collection(db, `${base}/boards/${alliance}/posts`),
-          orderBy('createdAt', 'desc')
-        ),
-        (snapshot) => {
-          const data = snapshot.docs.map((d) => ({
-            firebaseId: d.id,
-            ...d.data(),
-            createdAt: d.data().createdAt?.toDate?.()
-              ? d.data().createdAt.toDate().toLocaleString('ko-KR', { dateStyle: 'short', timeStyle: 'short' })
-              : '',
-          }));
-          mainWindow.webContents.send(`board-updated-${alliance}`, data);
-        }
-      )
-    );
-
-    unsubscribers = [unsubNotices, unsubRallies, unsubMembers, unsubOnline, ...unsubBoards];
-
     return { success: true, timeOffset };
-  } catch (error) {
-    console.error('Firebase 연결 오류:', error);
-    return { success: false, error: error.message };
+  } catch (e) {
+    return { success: true, timeOffset: 0 };
   }
-});
-
-// ── 공지 CRUD ──
-ipcMain.handle('fb-add-notice', async (event, data) => {
-  try {
-    await addDoc(collection(db, `alliances/${allianceCode}/notices`), {
-      ...data,
-      createdAt: serverTimestamp(),
-    });
-    return { success: true };
-  } catch (e) { return { success: false, error: e.message }; }
-});
-
-ipcMain.handle('fb-delete-notice', async (event, firebaseId) => {
-  try {
-    await deleteDoc(doc(db, `alliances/${allianceCode}/notices/${firebaseId}`));
-    return { success: true };
-  } catch (e) { return { success: false, error: e.message }; }
-});
-
-// ── 집결 타이머 CRUD ──
-ipcMain.handle('fb-add-rally', async (event, data) => {
-  try {
-    await addDoc(collection(db, `alliances/${allianceCode}/rallies`), data);
-    return { success: true };
-  } catch (e) { return { success: false, error: e.message }; }
-});
-
-ipcMain.handle('fb-delete-rally', async (event, firebaseId) => {
-  try {
-    await deleteDoc(doc(db, `alliances/${allianceCode}/rallies/${firebaseId}`));
-    return { success: true };
-  } catch (e) { return { success: false, error: e.message }; }
-});
-
-// ── 집결원 CRUD ──
-ipcMain.handle('fb-add-member', async (event, data) => {
-  try {
-    const ref = await addDoc(collection(db, `alliances/${allianceCode}/members`), data);
-    return { success: true, firebaseId: ref.id };
-  } catch (e) { return { success: false, error: e.message }; }
-});
-
-ipcMain.handle('fb-delete-member', async (event, firebaseId) => {
-  try {
-    await deleteDoc(doc(db, `alliances/${allianceCode}/members/${firebaseId}`));
-    return { success: true };
-  } catch (e) { return { success: false, error: e.message }; }
-});
-
-// ── 번역 캐시 (Firebase 공유) ──
-ipcMain.handle('fb-get-translation', async (event, cacheKey) => {
-  try {
-    // cacheKey에 '/'가 포함되면 안 되므로 doc path 처리
-    const safeKey = cacheKey.replace(/\//g, '_');
-    const ref = doc(db, `alliances/${allianceCode}/translations/${safeKey}`);
-    const snap = await getDoc(ref);
-    return snap.exists() ? snap.data().translated : null;
-  } catch { return null; }
-});
-
-ipcMain.handle('fb-set-translation', async (event, cacheKey, translated) => {
-  try {
-    const safeKey = cacheKey.replace(/\//g, '_');
-    await setDoc(doc(db, `alliances/${allianceCode}/translations/${safeKey}`), { translated });
-    return { success: true };
-  } catch (e) { return { success: false }; }
-});
-
-// ── 온라인 상태 ──
-ipcMain.handle('fb-set-online', async (event, userData) => {
-  try {
-    const safeNick = userData.nickname.replace(/[\/\.#\$\[\]]/g, '_');
-    await setDoc(doc(db, `alliances/${allianceCode}/online/${safeNick}`), {
-      nickname: userData.nickname,
-      alliance: userData.alliance,
-      role:     userData.role,
-      lastSeen: serverTimestamp(),
-    });
-    return { success: true };
-  } catch (e) { return { success: false, error: e.message }; }
-});
-
-ipcMain.handle('fb-remove-online', async (event, nickname) => {
-  try {
-    const safeNick = nickname.replace(/[\/\.#\$\[\]]/g, '_');
-    await deleteDoc(doc(db, `alliances/${allianceCode}/online/${safeNick}`));
-    return { success: true };
-  } catch (e) { return { success: false, error: e.message }; }
-});
-
-// ── 연맹 게시판 CRUD ──
-ipcMain.handle('fb-add-board-post', async (event, alliance, data) => {
-  try {
-    await addDoc(
-      collection(db, `alliances/${allianceCode}/boards/${alliance}/posts`),
-      { ...data, createdAt: serverTimestamp() }
-    );
-    return { success: true };
-  } catch (e) { return { success: false, error: e.message }; }
-});
-
-ipcMain.handle('fb-delete-board-post', async (event, alliance, firebaseId) => {
-  try {
-    await deleteDoc(
-      doc(db, `alliances/${allianceCode}/boards/${alliance}/posts/${firebaseId}`)
-    );
-    return { success: true };
-  } catch (e) { return { success: false, error: e.message }; }
-});
-
-// ── 유저 역할 조회 ──
-ipcMain.handle('fb-get-user-role', async (event, nickname, devPassword) => {
-  try {
-    // 개발자 코드 체크 → 관리자 계급 부여
-    const devPass = (process.env.DEVELOPER_PASSWORD || '').trim();
-    if (devPass && devPassword && devPassword === devPass) {
-      return { success: true, role: 'admin' };
-    }
-
-    // DEVELOPER_NICKS 체크 (레거시 지원)
-    const devNicks = (process.env.DEVELOPER_NICKS || '')
-      .split(',').map((n) => n.trim()).filter(Boolean);
-    if (devNicks.includes(nickname)) return { success: true, role: 'developer' };
-
-    const ref = doc(db, `alliances/${allianceCode}/users/${nickname}`);
-    const snap = await getDoc(ref);
-    if (snap.exists()) {
-      return { success: true, role: snap.data().role || 'user' };
-    }
-    // 신규 유저 — 기본 role 생성
-    await setDoc(ref, { role: 'user', createdAt: serverTimestamp() });
-    return { success: true, role: 'user' };
-  } catch (e) { return { success: true, role: 'user' }; }
-});
-
-// ── 유저 역할 변경 (관리자/개발자 전용) ──
-ipcMain.handle('fb-set-user-role', async (event, targetNickname, newRole) => {
-  try {
-    if (!['admin', 'user'].includes(newRole)) {
-      return { success: false, error: '유효하지 않은 역할입니다' };
-    }
-    const ref = doc(db, `alliances/${allianceCode}/users/${targetNickname}`);
-    await setDoc(ref, { role: newRole }, { merge: true });
-    return { success: true };
-  } catch (e) { return { success: false, error: e.message }; }
 });
 
 // ── 회원가입 ──
@@ -355,8 +88,7 @@ ipcMain.handle('auth-signup', async (event, data) => {
   try {
     const res = await axios.post(`${SERVER_URL}/auth/signup`, data);
     authToken = res.data.token;
-    currentUser = res.data.user;
-    return { success: true, user: currentUser };
+    return { success: true, user: res.data.user };
   } catch (e) {
     return { success: false, error: e.response?.data?.message || e.message };
   }
@@ -367,8 +99,7 @@ ipcMain.handle('auth-login', async (event, data) => {
   try {
     const res = await axios.post(`${SERVER_URL}/auth/login`, data);
     authToken = res.data.token;
-    currentUser = res.data.user;
-    return { success: true, user: currentUser };
+    return { success: true, user: res.data.user };
   } catch (e) {
     return { success: false, error: e.response?.data?.message || e.message };
   }
@@ -376,38 +107,140 @@ ipcMain.handle('auth-login', async (event, data) => {
 
 // ── 로그아웃 ──
 ipcMain.handle('auth-logout', async () => {
-  if (chatSocket) { chatSocket.disconnect(); chatSocket = null; }
+  if (mainSocket) { mainSocket.disconnect(); mainSocket = null; }
   authToken = null;
-  currentUser = null;
   return { success: true };
 });
 
-// ── 채팅 소켓 연결 ──
-ipcMain.handle('chat-connect', async () => {
+// ── 소켓 연결 (로그인 후 한 번 호출 — chat + realtime 통합) ──
+ipcMain.handle('socket-connect', async () => {
   if (!authToken) return { success: false, error: '로그인 필요' };
-  if (chatSocket?.connected) return { success: true };
+  if (mainSocket?.connected) return { success: true };
 
-  chatSocket = io(SERVER_URL, { auth: { token: authToken } });
+  mainSocket = io(SERVER_URL, { auth: { token: authToken } });
 
-  chatSocket.on('chat:history', (messages) => {
-    mainWindow.webContents.send('chat-history', messages);
-  });
-  chatSocket.on('chat:message', (msg) => {
-    mainWindow.webContents.send('chat-message', msg);
-  });
-  chatSocket.on('chat:system', (text) => {
-    mainWindow.webContents.send('chat-system', text);
-  });
-  chatSocket.on('chat:online', (users) => {
-    mainWindow.webContents.send('chat-online', users);
+  // ── 채팅 이벤트 ──
+  mainSocket.on('chat:history', (msgs) => mainWindow.webContents.send('chat-history', msgs));
+  mainSocket.on('chat:message', (msg) => mainWindow.webContents.send('chat-message', msg));
+  mainSocket.on('chat:system', (text) => mainWindow.webContents.send('chat-system', text));
+  mainSocket.on('chat:online', (users) => mainWindow.webContents.send('chat-online', users));
+
+  // ── 실시간 데이터 이벤트 ──
+  mainSocket.on('notices:updated', (data) => mainWindow.webContents.send('notices-updated', data));
+  mainSocket.on('rallies:updated', (data) => mainWindow.webContents.send('rallies-updated', data));
+  mainSocket.on('members:updated', (data) => mainWindow.webContents.send('members-updated', data));
+  mainSocket.on('online:updated', (data) => mainWindow.webContents.send('online-updated', data));
+  ['KOR', 'NSL', 'JKY', 'GPX', 'UFO'].forEach((a) => {
+    mainSocket.on(`board:updated:${a}`, (data) => mainWindow.webContents.send(`board-updated-${a}`, data));
   });
 
   return { success: true };
 });
 
-// ── 메시지 전송 ──
+// ── 채팅 메시지 전송 ──
 ipcMain.handle('chat-send', async (event, content) => {
-  if (!chatSocket?.connected) return { success: false, error: '채팅 미연결' };
-  chatSocket.emit('chat:message', content);
+  if (!mainSocket?.connected) return { success: false, error: '소켓 미연결' };
+  mainSocket.emit('chat:message', content);
   return { success: true };
+});
+
+// ── 공지 CRUD ──
+ipcMain.handle('api-add-notice', async (event, data) => {
+  try {
+    await axios.post(`${SERVER_URL}/notices`, data, { headers: { Authorization: `Bearer ${authToken}` } });
+    return { success: true };
+  } catch (e) { return { success: false, error: e.message }; }
+});
+
+ipcMain.handle('api-delete-notice', async (event, id) => {
+  try {
+    await axios.delete(`${SERVER_URL}/notices/${id}`, { headers: { Authorization: `Bearer ${authToken}` } });
+    return { success: true };
+  } catch (e) { return { success: false, error: e.message }; }
+});
+
+// ── 집결 타이머 CRUD ──
+ipcMain.handle('api-add-rally', async (event, data) => {
+  try {
+    await axios.post(`${SERVER_URL}/rallies`, data, { headers: { Authorization: `Bearer ${authToken}` } });
+    return { success: true };
+  } catch (e) { return { success: false, error: e.message }; }
+});
+
+ipcMain.handle('api-delete-rally', async (event, id) => {
+  try {
+    await axios.delete(`${SERVER_URL}/rallies/${id}`, { headers: { Authorization: `Bearer ${authToken}` } });
+    return { success: true };
+  } catch (e) { return { success: false, error: e.message }; }
+});
+
+// ── 집결원 CRUD ──
+ipcMain.handle('api-add-member', async (event, data) => {
+  try {
+    const res = await axios.post(`${SERVER_URL}/members`, data, { headers: { Authorization: `Bearer ${authToken}` } });
+    return { success: true, id: res.data.id };
+  } catch (e) { return { success: false, error: e.message }; }
+});
+
+ipcMain.handle('api-delete-member', async (event, id) => {
+  try {
+    await axios.delete(`${SERVER_URL}/members/${id}`, { headers: { Authorization: `Bearer ${authToken}` } });
+    return { success: true };
+  } catch (e) { return { success: false, error: e.message }; }
+});
+
+// ── 번역 캐시 ──
+ipcMain.handle('api-get-translation', async (event, cacheKey) => {
+  try {
+    const res = await axios.get(`${SERVER_URL}/translations/${encodeURIComponent(cacheKey)}`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    return res.data;
+  } catch { return null; }
+});
+
+ipcMain.handle('api-set-translation', async (event, cacheKey, translated) => {
+  try {
+    await axios.post(`${SERVER_URL}/translations`, { cacheKey, translated }, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    return { success: true };
+  } catch { return { success: false }; }
+});
+
+// ── 연맹 게시판 CRUD ──
+ipcMain.handle('api-add-board-post', async (event, alliance, data) => {
+  try {
+    await axios.post(`${SERVER_URL}/boards`, { ...data, alliance }, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    return { success: true };
+  } catch (e) { return { success: false, error: e.message }; }
+});
+
+ipcMain.handle('api-delete-board-post', async (event, id) => {
+  try {
+    await axios.delete(`${SERVER_URL}/boards/${id}`, { headers: { Authorization: `Bearer ${authToken}` } });
+    return { success: true };
+  } catch (e) { return { success: false, error: e.message }; }
+});
+
+// ── 유저 역할 조회 ──
+ipcMain.handle('api-get-user-role', async (event, nickname) => {
+  try {
+    const res = await axios.get(`${SERVER_URL}/users/${nickname}/role`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    return { success: true, role: res.data.role };
+  } catch { return { success: true, role: 'member' }; }
+});
+
+// ── 유저 역할 변경 ──
+ipcMain.handle('api-set-user-role', async (event, nickname, role) => {
+  try {
+    await axios.patch(`${SERVER_URL}/users/${nickname}/role`, { role }, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    return { success: true };
+  } catch (e) { return { success: false, error: e.message }; }
 });

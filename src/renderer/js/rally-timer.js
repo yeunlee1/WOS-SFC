@@ -7,7 +7,7 @@ const rallySecondsInput = document.getElementById('rally-seconds');
 const rallyAddBtn       = document.getElementById('rally-add-btn');
 const rallyListContainer = document.getElementById('rally-list');
 
-// 활성 타이머 (firebaseId → intervalId)
+// 활성 타이머 (id → intervalId)
 let rallyTimers = {};
 // 현재 렌더링된 집결 목록
 let currentRallies = [];
@@ -70,16 +70,16 @@ function renderRallyCards(rallies) {
     const remaining = Math.max(0, r.endTimeUTC - (Date.now() + window.timeOffset));
     const remainSec = Math.floor(remaining / 1000);
     return `
-      <div class="rally-card" data-id="${r.firebaseId}">
+      <div class="rally-card" data-id="${r.id}">
         <div class="rally-card-header">
           <span class="rally-name">${r.name}</span>
-          <button class="btn btn-danger" data-delete-rally="${r.firebaseId}">${t('delete')}</button>
+          <button class="btn btn-danger" data-delete-rally="${r.id}">${t('delete')}</button>
         </div>
-        <div class="rally-countdown" id="countdown-${r.firebaseId}">
+        <div class="rally-countdown" id="countdown-${r.id}">
           ${remainSec > 0 ? formatTime(remainSec) : '도착!'}
         </div>
         <div class="rally-progress">
-          <div class="rally-progress-bar" id="progress-${r.firebaseId}"
+          <div class="rally-progress-bar" id="progress-${r.id}"
             style="width:${Math.min(100, (remaining / (r.totalSeconds * 1000)) * 100)}%">
           </div>
         </div>
@@ -92,18 +92,18 @@ function renderRallyCards(rallies) {
 function startCountdown(rally) {
   let alerted = false;
 
-  rallyTimers[rally.firebaseId] = setInterval(() => {
+  rallyTimers[rally.id] = setInterval(() => {
     const remaining = rally.endTimeUTC - (Date.now() + window.timeOffset);
     const remainSec = Math.floor(remaining / 1000);
     const ratio = remaining / (rally.totalSeconds * 1000);
 
-    const card        = rallyListContainer.querySelector(`[data-id="${rally.firebaseId}"]`);
-    const countdownEl = document.getElementById(`countdown-${rally.firebaseId}`);
-    const progressBar = document.getElementById(`progress-${rally.firebaseId}`);
+    const card        = rallyListContainer.querySelector(`[data-id="${rally.id}"]`);
+    const countdownEl = document.getElementById(`countdown-${rally.id}`);
+    const progressBar = document.getElementById(`progress-${rally.id}`);
     if (!card || !countdownEl) return;
 
     if (remaining <= 0) {
-      clearInterval(rallyTimers[rally.firebaseId]);
+      clearInterval(rallyTimers[rally.id]);
       countdownEl.textContent = '도착!';
       countdownEl.className   = 'rally-countdown finished';
       if (progressBar) progressBar.style.width = '0%';
@@ -140,8 +140,8 @@ function startCountdown(rally) {
 rallyListContainer.addEventListener('click', async (e) => {
   const btn = e.target.closest('[data-delete-rally]');
   if (!btn) return;
-  const firebaseId = btn.dataset.deleteRally;
-  clearInterval(rallyTimers[firebaseId]);
-  delete rallyTimers[firebaseId];
-  await window.electronAPI.deleteRally(firebaseId);
+  const id = btn.dataset.deleteRally;
+  clearInterval(rallyTimers[id]);
+  delete rallyTimers[id];
+  await window.electronAPI.deleteRally(id);
 });
