@@ -2,6 +2,7 @@
 import {
   WebSocketGateway, WebSocketServer,
   OnGatewayConnection, OnGatewayDisconnect,
+  SubscribeMessage, MessageBody, ConnectedSocket,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
@@ -23,6 +24,9 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
 
   // socketId → OnlineUser
   private onlineMap = new Map<string, OnlineUser>();
+
+  // 카운트다운 상태 (인메모리)
+  private countdown = { active: false, startedAt: 0, totalSeconds: 0 };
 
   constructor(
     private jwtService: JwtService,
@@ -68,6 +72,31 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     for (const [alliance, posts] of Object.entries(boards)) {
       client.emit(`board:updated:${alliance}`, posts.map(this.formatBoardPost));
     }
+
+    // 현재 카운트다운 상태 전송
+    client.emit('countdown:state', this.countdown);
+  }
+
+  @SubscribeMessage('countdown:start')
+  handleCountdownStart(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() totalSeconds: number,
+  ) {
+    const user = this.getUserFromSocket(client);
+    if (!user || !['admin', 'developer'].includes(user.role)) return;
+    if (typeof totalSeconds !== 'number' || totalSeconds < 1 || totalSeconds > 600) return;
+
+    this.countdown = { active: true, startedAt: Date.now(), totalSeconds };
+    this.server.emit('countdown:state', this.countdown);
+  }
+
+  @SubscribeMessage('countdown:stop')
+  handleCountdownStop(@ConnectedSocket() client: Socket) {
+    const user = this.getUserFromSocket(client);
+    if (!user || !['admin', 'developer'].includes(user.role)) return;
+
+    this.countdown = { active: false, startedAt: 0, totalSeconds: 0 };
+    this.server.emit('countdown:state', this.countdown);
   }
 
   handleDisconnect(client: Socket) {

@@ -47,6 +47,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   login:   (data) => ipcRenderer.invoke('auth-login', data),
   logout:  ()     => ipcRenderer.invoke('auth-logout'),
 
+  // ── 카운트다운 ──
+  countdownStart: (seconds) => ipcRenderer.invoke('countdown-start', seconds),
+  countdownStop:  ()        => ipcRenderer.invoke('countdown-stop'),
+  onCountdownState: (cb) => ipcRenderer.on('countdown-state', (_, state) => cb(state)),
+
   // ── Chat ──
   chatConnect: ()        => ipcRenderer.invoke('socket-connect'), // 동일 소켓 재사용
   chatSend:    (content) => ipcRenderer.invoke('chat-send', content),

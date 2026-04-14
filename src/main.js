@@ -171,6 +171,9 @@ ipcMain.handle('socket-connect', async () => {
   mainSocket.on('chat:system', (text) => mainWindow.webContents.send('chat-system', text));
   mainSocket.on('chat:online', (users) => mainWindow.webContents.send('chat-online', users));
 
+  // ── 카운트다운 이벤트 ──
+  mainSocket.on('countdown:state', (state) => mainWindow.webContents.send('countdown-state', state));
+
   // ── 실시간 데이터 이벤트 ──
   mainSocket.on('notices:updated', (data) => mainWindow.webContents.send('notices-updated', data));
   mainSocket.on('rallies:updated', (data) => mainWindow.webContents.send('rallies-updated', data));
@@ -180,6 +183,19 @@ ipcMain.handle('socket-connect', async () => {
     mainSocket.on(`board:updated:${a}`, (data) => mainWindow.webContents.send(`board-updated-${a}`, data));
   });
 
+  return { success: true };
+});
+
+// ── 카운트다운 ──
+ipcMain.handle('countdown-start', async (event, seconds) => {
+  if (!mainSocket?.connected) return { success: false };
+  mainSocket.emit('countdown:start', seconds);
+  return { success: true };
+});
+
+ipcMain.handle('countdown-stop', async () => {
+  if (!mainSocket?.connected) return { success: false };
+  mainSocket.emit('countdown:stop');
   return { success: true };
 });
 
