@@ -5,6 +5,7 @@ import { User } from './users/users.entity';
 import { Message } from './chat/message.entity';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
+import { ChatModule } from './chat/chat.module';
 
 @Module({
   imports: [
@@ -24,7 +25,8 @@ import { AuthModule } from './auth/auth.module';
     }),
     UsersModule,
     AuthModule,
-    // ChatModule,  (Task 6에서 추가)
+    // Task 6: Socket.io 채팅 게이트웨이 모듈 활성화
+    ChatModule,
   ],
 })
 export class AppModule {}
