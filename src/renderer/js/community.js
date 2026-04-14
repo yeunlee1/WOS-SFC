@@ -83,19 +83,19 @@ function renderBoardPosts(alliance, posts) {
     let originalHtml = '';
     if (!needsTranslate) {
       // 같은 언어 — 원문 그대로
-      contentHtml = `<div class="board-post-content" id="bpc-${escBHtml(p.firebaseId)}">${escBHtml(p.content)}</div>`;
+      contentHtml = `<div class="board-post-content" id="bpc-${escBHtml(p.id)}">${escBHtml(p.content)}</div>`;
     } else if (cached) {
       // 캐시 있음 — 번역 즉시 표시
-      contentHtml = `<div class="board-post-content translated" id="bpc-${escBHtml(p.firebaseId)}">${escBHtml(cached)}</div>`;
+      contentHtml = `<div class="board-post-content translated" id="bpc-${escBHtml(p.id)}">${escBHtml(cached)}</div>`;
       originalHtml = `<details class="notice-original"><summary>${t('viewOriginal')}</summary><div class="notice-original-text">${escBHtml(p.content)}</div></details>`;
     } else {
       // 번역 필요 — 로딩 애니메이션 (원문은 번역 완료 후 표시)
-      contentHtml = `<div class="board-post-content translating" id="bpc-${escBHtml(p.firebaseId)}"></div>`;
-      originalHtml = `<details class="notice-original" id="bpo-${escBHtml(p.firebaseId)}" style="display:none"><summary>${t('viewOriginal')}</summary><div class="notice-original-text">${escBHtml(p.content)}</div></details>`;
+      contentHtml = `<div class="board-post-content translating" id="bpc-${escBHtml(p.id)}"></div>`;
+      originalHtml = `<details class="notice-original" id="bpo-${escBHtml(p.id)}" style="display:none"><summary>${t('viewOriginal')}</summary><div class="notice-original-text">${escBHtml(p.content)}</div></details>`;
     }
 
     return `
-      <div class="board-post-card" data-id="${escBHtml(p.firebaseId)}" data-alliance="${alliance}">
+      <div class="board-post-card" data-id="${escBHtml(p.id)}" data-alliance="${alliance}">
         <div class="board-post-header">
           <span class="board-post-alliance" style="background:${color}">${escBHtml(p.alliance)}</span>
           <span class="board-post-nickname">${escBHtml(p.nickname)}</span>
@@ -113,7 +113,7 @@ function renderBoardPosts(alliance, posts) {
     const card = btn.closest('.board-post-card');
     btn.addEventListener('click', async () => {
       btn.disabled = true;
-      await window.electronAPI.deleteBoardPost(card.dataset.alliance, card.dataset.id);
+      await window.electronAPI.deleteBoardPost(card.dataset.id);
     });
   });
 
@@ -130,7 +130,7 @@ async function _translateUncachedPosts(posts, userLang) {
 
   // 병렬 번역
   await Promise.all(uncached.map(async (p) => {
-    const el = document.getElementById(`bpc-${p.firebaseId}`);
+    const el = document.getElementById(`bpc-${p.id}`);
     if (!el) return; // 이미 DOM에서 사라진 경우
 
     // 1. Firebase 공유 캐시 확인
@@ -138,16 +138,16 @@ async function _translateUncachedPosts(posts, userLang) {
     const fbCached = await window.electronAPI.getTranslation(cacheKey);
     if (fbCached) {
       cacheTranslation(p.content, userLang, fbCached);
-      const elNow = document.getElementById(`bpc-${p.firebaseId}`);
+      const elNow = document.getElementById(`bpc-${p.id}`);
       if (elNow) { elNow.className = 'board-post-content translated'; elNow.textContent = fbCached; }
-      const origEl = document.getElementById(`bpo-${p.firebaseId}`);
+      const origEl = document.getElementById(`bpo-${p.id}`);
       if (origEl) origEl.style.display = '';
       return;
     }
 
     // 2. Claude API 번역
     const result = await window.electronAPI.translateTo(p.content, userLang);
-    const elNow = document.getElementById(`bpc-${p.firebaseId}`); // await 후 재조회
+    const elNow = document.getElementById(`bpc-${p.id}`); // await 후 재조회
     if (!elNow) return;
 
     if (result.success) {
@@ -156,7 +156,7 @@ async function _translateUncachedPosts(posts, userLang) {
       elNow.className = 'board-post-content translated';
       elNow.textContent = result.result;
       // 원문 보기 표시
-      const origEl = document.getElementById(`bpo-${p.firebaseId}`);
+      const origEl = document.getElementById(`bpo-${p.id}`);
       if (origEl) origEl.style.display = '';
     } else {
       elNow.className = 'board-post-content';

@@ -75,7 +75,7 @@ function renderNoticeList() {
   const SOURCE_ICON = { discord: '💬', kakao: '🟡', game: '🎮' };
 
   noticeBoardList.innerHTML = notices.map((n) => `
-    <div class="notice-row" data-id="${escapeHtml(n.firebaseId)}">
+    <div class="notice-row" data-id="${n.id}">
       <span class="notice-row-icon">${SOURCE_ICON[n.source] || '📌'}</span>
       <span class="notice-row-title">${escapeHtml(n.title || '공지')}</span>
       <span class="notice-row-date">${escapeHtml(n.createdAt || '')}</span>
@@ -93,7 +93,7 @@ function renderNoticeList() {
 
 // ── 상세 렌더링 ──
 function renderNoticeDetail(noticeId) {
-  const notice = notices.find((n) => n.firebaseId === noticeId);
+  const notice = notices.find((n) => String(n.id) === String(noticeId));
   if (!notice) { showNoticeView('list'); return; }
 
   const lang = getCurrentLang();

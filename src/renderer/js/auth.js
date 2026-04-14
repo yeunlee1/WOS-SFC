@@ -134,12 +134,13 @@
       allianceCode: '2677',
     };
 
-    // Firebase 접속 (집결/공지/게시판 기능 유지)
-    window.electronAPI.connectAlliance('2677').then((result) => {
+    // 시간 동기화 + 소켓 연결
+    window.electronAPI.connectAlliance().then((result) => {
       if (result && result.timeOffset !== undefined) {
         window.timeOffset = result.timeOffset;
       }
     });
+    window.electronAPI.socketConnect();
 
     // 유저 정보 헤더 표시
     const allianceBadge = document.getElementById('user-alliance-badge');
