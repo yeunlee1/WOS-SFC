@@ -47,12 +47,31 @@
     const el = document.createElement('div');
     el.className = 'chat-message';
     const time = new Date(msg.createdAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+
+    const hasTranslation = msg.translatedContent && msg.translatedContent !== msg.content;
+    const contentHtml = hasTranslation
+      ? `<p class="chat-content">${escapeHtml(msg.translatedContent)}</p>
+         <p class="chat-original" style="display:none">${escapeHtml(msg.content)}</p>
+         <span class="chat-toggle-original">원문 보기</span>`
+      : `<p class="chat-content">${escapeHtml(msg.content)}</p>`;
+
     el.innerHTML = `
       <span class="chat-alliance">[${msg.allianceName}]</span>
       <span class="chat-nickname">${msg.nickname}</span>
       <span class="chat-time">${time}</span>
-      <p class="chat-content">${escapeHtml(msg.content)}</p>
+      ${contentHtml}
     `;
+
+    if (hasTranslation) {
+      const toggle = el.querySelector('.chat-toggle-original');
+      const original = el.querySelector('.chat-original');
+      toggle.addEventListener('click', () => {
+        const isShowing = original.style.display !== 'none';
+        original.style.display = isShowing ? 'none' : 'block';
+        toggle.textContent = isShowing ? '원문 보기' : '번역 보기';
+      });
+    }
+
     container.appendChild(el);
   }
 

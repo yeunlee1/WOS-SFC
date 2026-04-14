@@ -14,6 +14,7 @@ const { io } = require('socket.io-client');
 const SERVER_URL = 'http://localhost:3001';
 let authToken = null;
 let mainSocket = null; // 단일 소켓 (chat + realtime 통합)
+let currentUserLanguage = null; // 로그인한 유저의 언어
 
 let mainWindow;
 
@@ -88,6 +89,7 @@ ipcMain.handle('auth-signup', async (event, data) => {
   try {
     const res = await axios.post(`${SERVER_URL}/auth/signup`, data);
     authToken = res.data.token;
+    currentUserLanguage = res.data.user?.language || null;
     return { success: true, user: res.data.user };
   } catch (e) {
     return { success: false, error: e.response?.data?.message || e.message };
@@ -99,6 +101,7 @@ ipcMain.handle('auth-login', async (event, data) => {
   try {
     const res = await axios.post(`${SERVER_URL}/auth/login`, data);
     authToken = res.data.token;
+    currentUserLanguage = res.data.user?.language || null;
     return { success: true, user: res.data.user };
   } catch (e) {
     return { success: false, error: e.response?.data?.message || e.message };
@@ -109,8 +112,45 @@ ipcMain.handle('auth-login', async (event, data) => {
 ipcMain.handle('auth-logout', async () => {
   if (mainSocket) { mainSocket.disconnect(); mainSocket = null; }
   authToken = null;
+  currentUserLanguage = null;
   return { success: true };
 });
+
+// ── 채팅 메시지 자동번역 헬퍼 ──
+async function translateChatMessage(msg) {
+  const myLang = currentUserLanguage;
+  // 번역 불필요: 같은 언어이거나 소스/타겟 언어가 없는 경우
+  if (!myLang || myLang === 'other' || !msg.language || msg.language === myLang) {
+    return msg;
+  }
+  const cacheKey = `chat:${msg.content.slice(0, 200)}:${msg.language}:${myLang}`;
+  try {
+    // 캐시 확인
+    const cached = await axios.get(
+      `${SERVER_URL}/translations/${encodeURIComponent(cacheKey)}`,
+      { headers: { Authorization: `Bearer ${authToken}` } }
+    ).catch(() => null);
+    if (cached?.data?.translated) {
+      return { ...msg, translatedContent: cached.data.translated };
+    }
+    // 캐시 미스 → Claude API 번역
+    const langNames = { ko: '한국어', en: 'English', ja: '日本語', zh: '中文(简体)' };
+    const targetName = langNames[myLang] || myLang;
+    const result = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 512,
+      messages: [{ role: 'user', content: `Translate the following text to ${targetName}. Output only the translated text, no explanations:\n\n${msg.content}` }],
+    });
+    const translated = result.content[0].text;
+    // 캐시 저장 (비동기, 실패해도 무시)
+    axios.post(`${SERVER_URL}/translations`, { cacheKey, translated }, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    }).catch(() => {});
+    return { ...msg, translatedContent: translated };
+  } catch {
+    return msg;
+  }
+}
 
 // ── 소켓 연결 (로그인 후 한 번 호출 — chat + realtime 통합) ──
 ipcMain.handle('socket-connect', async () => {
@@ -120,8 +160,14 @@ ipcMain.handle('socket-connect', async () => {
   mainSocket = io(SERVER_URL, { auth: { token: authToken } });
 
   // ── 채팅 이벤트 ──
-  mainSocket.on('chat:history', (msgs) => mainWindow.webContents.send('chat-history', msgs));
-  mainSocket.on('chat:message', (msg) => mainWindow.webContents.send('chat-message', msg));
+  mainSocket.on('chat:history', async (msgs) => {
+    const translated = await Promise.all(msgs.map(translateChatMessage));
+    mainWindow.webContents.send('chat-history', translated);
+  });
+  mainSocket.on('chat:message', async (msg) => {
+    const translated = await translateChatMessage(msg);
+    mainWindow.webContents.send('chat-message', translated);
+  });
   mainSocket.on('chat:system', (text) => mainWindow.webContents.send('chat-system', text));
   mainSocket.on('chat:online', (users) => mainWindow.webContents.send('chat-online', users));
 

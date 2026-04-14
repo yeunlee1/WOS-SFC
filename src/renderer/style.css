@@ -1330,6 +1330,9 @@ textarea#notice-content {
 .chat-nickname { color: #60a5fa; font-weight: 600; font-size: 0.85rem; }
 .chat-time { color: #64748b; font-size: 0.7rem; }
 .chat-content { width: 100%; margin: 0; color: #e2e8f0; font-size: 0.9rem; word-break: break-word; }
+.chat-original { width: 100%; margin: 0.2rem 0 0; color: #94a3b8; font-size: 0.8rem; word-break: break-word; }
+.chat-toggle-original { font-size: 0.7rem; color: #4a90d9; cursor: pointer; text-decoration: underline; width: 100%; }
+.chat-toggle-original:hover { color: #60a5fa; }
 .chat-system-msg { color: #94a3b8; font-size: 0.8rem; text-align: center; font-style: italic; margin: 0; }
 .chat-input-area { display: flex; gap: 0.5rem; }
 .chat-input-area input {

@@ -25,7 +25,8 @@
   }
 
   function setError(msg) {
-    document.getElementById('auth-error').textContent = msg;
+    const el = document.getElementById('auth-error');
+    if (el) el.textContent = msg;
   }
 
   function renderForm() {
@@ -131,6 +132,7 @@
       nickname:    user.nickname,
       alliance:    user.allianceName,
       role:        user.role,
+      language:    user.language,
       allianceCode: '2677',
     };
 

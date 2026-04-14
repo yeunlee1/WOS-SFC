@@ -18,8 +18,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
 
-  // socket.id → 유저 닉네임 매핑
-  private connectedUsers = new Map<string, string>();
+  // socket.id → { nickname, language } 매핑
+  private connectedUsers = new Map<string, { nickname: string; language: string }>();
 
   constructor(
     private readonly jwtService: JwtService,
@@ -46,7 +46,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       // 유저 정보를 소켓 객체에 저장
       (client as any).user = user;
-      this.connectedUsers.set(client.id, user.nickname);
+      this.connectedUsers.set(client.id, { nickname: user.nickname, language: user.language });
 
       // 최근 7일치 메시지 히스토리 전송
       const history = await this.chatService.getRecentMessages();
@@ -56,6 +56,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
           id: m.id,
           nickname: m.user.nickname,
           allianceName: m.user.allianceName,
+          language: m.user.language,
           content: m.content,
           createdAt: m.createdAt,
         })),
@@ -65,7 +66,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.server.emit('chat:system', `${user.nickname}님이 입장했습니다`);
       this.server.emit(
         'chat:online',
-        Array.from(this.connectedUsers.values()),
+        Array.from(this.connectedUsers.values()).map((u) => u.nickname),
       );
     } catch {
       client.disconnect();
@@ -74,13 +75,13 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   // 클라이언트 연결 해제 시: 퇴장 알림 및 온라인 목록 갱신
   handleDisconnect(client: Socket) {
-    const nickname = this.connectedUsers.get(client.id);
-    if (nickname) {
+    const info = this.connectedUsers.get(client.id);
+    if (info) {
       this.connectedUsers.delete(client.id);
-      this.server.emit('chat:system', `${nickname}님이 퇴장했습니다`);
+      this.server.emit('chat:system', `${info.nickname}님이 퇴장했습니다`);
       this.server.emit(
         'chat:online',
-        Array.from(this.connectedUsers.values()),
+        Array.from(this.connectedUsers.values()).map((u) => u.nickname),
       );
     }
   }
@@ -99,6 +100,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       id: msg.id,
       nickname: user.nickname,
       allianceName: user.allianceName,
+      language: user.language,
       content: msg.content,
       createdAt: msg.createdAt,
     });
