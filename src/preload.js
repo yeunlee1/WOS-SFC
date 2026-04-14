@@ -41,4 +41,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onMembersUpdated: (cb) => ipcRenderer.on('members-updated', (_, data) => cb(data)),
   onOnlineUpdated:  (cb) => ipcRenderer.on('online-updated',  (_, data) => cb(data)),
   onBoardUpdated:   (alliance, cb) => ipcRenderer.on(`board-updated-${alliance}`, (_, data) => cb(data)),
+
+  // ── Auth ──
+  signup:  (data)   => ipcRenderer.invoke('auth-signup', data),
+  login:   (data)   => ipcRenderer.invoke('auth-login', data),
+  logout:  ()       => ipcRenderer.invoke('auth-logout'),
+
+  // ── Chat ──
+  chatConnect: ()        => ipcRenderer.invoke('chat-connect'),
+  chatSend:    (content) => ipcRenderer.invoke('chat-send', content),
+  onChatHistory: (cb) => ipcRenderer.on('chat-history', (_, data) => cb(data)),
+  onChatMessage: (cb) => ipcRenderer.on('chat-message', (_, data) => cb(data)),
+  onChatSystem:  (cb) => ipcRenderer.on('chat-system',  (_, text) => cb(text)),
+  onChatOnline:  (cb) => ipcRenderer.on('chat-online',  (_, data) => cb(data)),
 });
