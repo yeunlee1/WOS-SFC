@@ -8,7 +8,7 @@
 
 ## 🎉 코드 구현 전체 완료
 
-모든 Task 1~13 구현 완료. 마지막 커밋: `66b32ee feat: auth/chat 스타일 추가`
+모든 Task 1~13 구현 완료 + MySQL 전환 완료. 마지막 커밋: `31b7090 chore: PostgreSQL → MySQL 전환`
 
 ### 완료된 작업 전체 목록
 
@@ -30,19 +30,22 @@
 
 ## 남은 작업: 런타임 검증 + 머지
 
-### Step 1: PostgreSQL 준비
+### Step 1: MySQL 준비
 
 ```bash
-# PostgreSQL이 실행 중인지 확인
-# psql -U postgres
-# CREATE USER wos_user WITH PASSWORD 'wos_pass';
-# CREATE DATABASE wos_db OWNER wos_user;
+# MySQL에서 실행
+mysql -u root -p
+CREATE USER 'wos_user'@'localhost' IDENTIFIED BY 'wos_pass';
+CREATE DATABASE wos_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+GRANT ALL PRIVILEGES ON wos_db.* TO 'wos_user'@'localhost';
+FLUSH PRIVILEGES;
+EXIT;
 ```
 
-`server/.env` 파일 확인:
+`server/.env` 현재 설정:
 ```
 DATABASE_HOST=localhost
-DATABASE_PORT=5432
+DATABASE_PORT=3306
 DATABASE_USER=wos_user
 DATABASE_PASSWORD=wos_pass
 DATABASE_NAME=wos_db
@@ -88,7 +91,7 @@ Expected: Auth 모달이 먼저 표시됨 (기존 Firebase 모달 대신)
 # 워크트리로 이동
 cd C:/WOS/wos-sfc-helper/.worktrees/feature-chat-auth
 
-# PostgreSQL 기동 후
+# MySQL 기동 후
 cd server && npm run start:dev
 
 # 별도 터미널에서
