@@ -4,6 +4,11 @@ const onlineListEl  = document.getElementById('online-list');
 const onlineCountEl = document.getElementById('online-count');
 
 
+const ALLIANCE_COLORS = {
+  KOR: '#3b82f6', NSL: '#22c55e', JKY: '#a855f7',
+  GPX: '#f97316', UFO: '#06b6d4',
+};
+
 const ROLE_ICON = {
   developer: '👑',
   admin:     '⚡',
