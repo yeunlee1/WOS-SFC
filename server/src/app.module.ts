@@ -4,6 +4,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { User } from './users/users.entity';
 import { Message } from './chat/message.entity';
 import { UsersModule } from './users/users.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
@@ -22,7 +23,7 @@ import { UsersModule } from './users/users.module';
       }),
     }),
     UsersModule,
-    // AuthModule,  (Task 5에서 추가)
+    AuthModule,
     // ChatModule,  (Task 6에서 추가)
   ],
 })
