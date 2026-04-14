@@ -21,12 +21,32 @@
     return LANG_MAP[getLang()] || 'ko-KR';
   }
 
+  // 언어별 선호 음성 키워드 (고품질 우선)
+  const VOICE_PREF = {
+    'ko-KR': ['Google 한국의', 'Microsoft Heami', 'Yuna'],
+    'en-US': ['Google US English', 'Microsoft David', 'Microsoft Zira', 'Samantha'],
+    'ja-JP': ['Google 日本語', 'Microsoft Haruka', 'Kyoko'],
+    'zh-CN': ['Google 普通话', 'Microsoft Huihui', 'Tingting'],
+  };
+
+  function getBestVoice(langCode) {
+    const voices = window.speechSynthesis.getVoices();
+    const prefs = VOICE_PREF[langCode] || [];
+    for (const pref of prefs) {
+      const v = voices.find(v => v.name.includes(pref));
+      if (v) return v;
+    }
+    return voices.find(v => v.lang === langCode) || null;
+  }
+
   function speak(text) {
     if (!window.speechSynthesis) return;
     window.speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
     u.lang = getLangCode();
-    u.rate = 1.1;
+    u.rate = 1.8;
+    const voice = getBestVoice(getLangCode());
+    if (voice) u.voice = voice;
     window.speechSynthesis.speak(u);
   }
 
