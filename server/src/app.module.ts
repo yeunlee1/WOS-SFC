@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ServeStaticModule } from '@nestjs/serve-static';
+import { join } from 'path';
 import { AppController } from './app.controller';
 import { User } from './users/users.entity';
 import { Message } from './chat/message.entity';
@@ -18,6 +20,7 @@ import { MembersModule } from './members/members.module';
 import { BoardsModule } from './boards/boards.module';
 import { TranslationsModule } from './translations/translations.module';
 import { RealtimeModule } from './realtime/realtime.module';
+import { TranslateModule } from './translate/translate.module';
 
 @Module({
   imports: [
@@ -35,6 +38,13 @@ import { RealtimeModule } from './realtime/realtime.module';
         synchronize: configService.get<string>('NODE_ENV') !== 'production',
       }),
     }),
+    ServeStaticModule.forRoot({
+      rootPath: join(__dirname, '..', '..', '..', 'web', 'dist'),
+      exclude: ['/auth/(.*)', '/notices/(.*)', '/rallies/(.*)', '/members/(.*)',
+                '/boards/(.*)', '/translations/(.*)', '/users/(.*)',
+                '/translate/(.*)', '/time', '/socket.io/(.*)'],
+      serveStaticOptions: { fallthrough: false },
+    }),
     UsersModule,
     AuthModule,
     ChatModule,
@@ -44,6 +54,7 @@ import { RealtimeModule } from './realtime/realtime.module';
     BoardsModule,
     TranslationsModule,
     RealtimeModule,
+    TranslateModule,
   ],
   controllers: [AppController],
 })
