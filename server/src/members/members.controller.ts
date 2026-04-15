@@ -9,7 +9,7 @@ export class MembersController {
   constructor(private service: MembersService) {}
 
   @Post()
-  add(@Body() body: { name: string; role?: string; notes?: string }) {
+  add(@Body() body: { name: string; normalSeconds?: number; petSeconds?: number; role?: string; notes?: string }) {
     return this.service.add(body);
   }
 
