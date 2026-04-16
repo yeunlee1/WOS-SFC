@@ -23,6 +23,7 @@ export const api = {
   // 인증
   login:   (data) => apiFetch('/auth/login',  { method: 'POST', body: JSON.stringify(data) }),
   signup:  (data) => apiFetch('/auth/signup', { method: 'POST', body: JSON.stringify(data) }),
+  getMe:   ()     => apiFetch('/auth/me'),
   getTime: ()     => apiFetch('/time'),
 
   // 공지
@@ -59,7 +60,8 @@ export function getSocket() { return _socket; }
 
 export function connectSocket(token) {
   if (_socket?.connected) return _socket;
-  _socket = io({ auth: { token }, path: '/socket.io' });
+  const url = import.meta.env.VITE_API_URL || '/';
+  _socket = io(url, { auth: { token }, path: '/socket.io' });
   return _socket;
 }
 
