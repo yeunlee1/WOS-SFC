@@ -4,9 +4,9 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as fsPromises from 'fs/promises';
 import axios from 'axios';
-import { LANGS, LANG_CODES, PHRASES, TTS_PREGEN_MAX, getTtsText } from './tts.constants';
+import { LANGS, GOOGLE_VOICES, PHRASES, TTS_PREGEN_MAX, getTtsText } from './tts.constants';
 
-// ── 동시 ElevenLabs 호출 수 제한 (rate limit 대응) ──────────────────────
+// ── 동시 Google TTS 호출 수 제한 ─────────────────────────────────────────
 class Semaphore {
   private count: number;
   private readonly queue: Array<() => void> = [];
@@ -37,26 +37,23 @@ class Semaphore {
 export class TtsService implements OnModuleInit {
   private readonly logger = new Logger(TtsService.name);
   private readonly apiKey: string;
-  private readonly voiceId: string;
   private readonly cacheDir: string;
-  // 동시 ElevenLabs 호출 1개로 제한 (무료 티어 기준 — Starter 이상: 3으로 변경 가능)
-  private readonly semaphore = new Semaphore(1);
+  // Google TTS 무료 티어도 초당 요청 제한 있음 — 동시 3개로 제한
+  private readonly semaphore = new Semaphore(3);
   // 동일 파일 중복 생성 방지 — 같은 키에 대한 요청을 하나의 Promise로 합침
   private readonly pendingFiles = new Map<string, Promise<string>>();
 
   constructor(private config: ConfigService) {
-    this.apiKey  = this.config.get<string>('ELEVENLABS_API_KEY') || '';
-    this.voiceId = this.config.get<string>('ELEVENLABS_VOICE_ID') || 'EXAVITQu4vr4xnSDxMaL';
-    // I3: 환경변수로 캐시 경로 주입 가능 (컨테이너 볼륨 마운트 대응)
+    this.apiKey  = this.config.get<string>('GOOGLE_TTS_API_KEY') || '';
     this.cacheDir = this.config.get<string>('TTS_CACHE_DIR')
       || path.join(process.cwd(), 'tts-cache');
     if (!fs.existsSync(this.cacheDir)) fs.mkdirSync(this.cacheDir, { recursive: true });
   }
 
-  // 서버 시작 시 사전 생성 (1~30 완전 완료 보장, 31~600 백그라운드)
+  // 서버 시작 시 사전 생성 (백그라운드 — startup 블로킹 없음)
   async onModuleInit() {
     if (!this.apiKey) {
-      this.logger.warn('ELEVENLABS_API_KEY 없음 — TTS 사전 생성 건너뜀');
+      this.logger.warn('GOOGLE_TTS_API_KEY 없음 — TTS 사전 생성 건너뜀');
       return;
     }
     this.preGenerateAll().catch(e => this.logger.error('preGenerateAll 실패', e));
@@ -70,18 +67,16 @@ export class TtsService implements OnModuleInit {
   // 파일 반환 — 없으면 생성, 동일 키 동시 요청은 하나의 Promise로 합침
   async ensureFile(lang: string, key: string, text: string): Promise<string> {
     const fp = this.filePath(lang, key);
-    // I4: async 파일 존재 확인
     const exists = await fsPromises.access(fp).then(() => true).catch(() => false);
     if (exists) return fp;
 
-    // 동일 파일에 대한 중복 ElevenLabs 호출 방지
     const lockKey = `${lang}-${key}`;
     if (this.pendingFiles.has(lockKey)) {
       return this.pendingFiles.get(lockKey)!;
     }
 
     const promise = this.semaphore
-      .run(() => this.generateFile(lang, fp, text))
+      .run(() => this.generateFile(lang, key, fp, text))
       .finally(() => this.pendingFiles.delete(lockKey));
 
     this.pendingFiles.set(lockKey, promise);
@@ -89,11 +84,10 @@ export class TtsService implements OnModuleInit {
   }
 
   // 실제 파일 생성
-  private async generateFile(lang: string, fp: string, text: string): Promise<string> {
-    // 생성 중 서버 재시작으로 인한 partial file 방지: 임시 파일에 먼저 쓰기
+  private async generateFile(lang: string, key: string, fp: string, text: string): Promise<string> {
     const tmpFp = `${fp}.tmp`;
     try {
-      const buf = await this.fetchFromElevenLabs(lang, text);
+      const buf = await this.fetchFromGoogleTts(lang, key, text);
       await fsPromises.writeFile(tmpFp, buf);
       await fsPromises.rename(tmpFp, fp);
       return fp;
@@ -111,34 +105,37 @@ export class TtsService implements OnModuleInit {
     return this.filePath(lang, key);
   }
 
-  // ElevenLabs 호출 — language_code로 언어 강제 지정, timeout 10s
-  private async fetchFromElevenLabs(lang: string, text: string): Promise<Buffer> {
-    if (!this.apiKey) throw new Error('ELEVENLABS_API_KEY 없음');
-    const languageCode = LANG_CODES[lang] ?? 'ko';
+  // Google Cloud TTS REST API 호출
+  // 숫자: SSML <say-as interpret-as="cardinal"> — "180" → "백팔십" (한국어 기준)
+  // 문구: 일반 텍스트
+  private async fetchFromGoogleTts(lang: string, key: string, text: string): Promise<Buffer> {
+    if (!this.apiKey) throw new Error('GOOGLE_TTS_API_KEY 없음');
+
+    const voice = GOOGLE_VOICES[lang] ?? GOOGLE_VOICES['ko'];
+    const isNumber = /^\d+$/.test(key);
+
+    const input = isNumber
+      ? { ssml: `<speak><say-as interpret-as="cardinal">${text}</say-as></speak>` }
+      : { text };
+
     try {
       const res = await axios.post(
-        `https://api.elevenlabs.io/v1/text-to-speech/${this.voiceId}`,
+        `https://texttospeech.googleapis.com/v1/text:synthesize?key=${this.apiKey}`,
         {
-          text,
-          model_id: 'eleven_multilingual_v2',
-          language_code: languageCode,
-          voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+          input,
+          voice: { languageCode: voice.languageCode, name: voice.name },
+          audioConfig: { audioEncoding: 'MP3' },
         },
-        {
-          headers: { 'xi-api-key': this.apiKey, 'Content-Type': 'application/json' },
-          responseType: 'arraybuffer',
-          timeout: 10000, // M2: 10초 타임아웃
-        },
+        { timeout: 10000 },
       );
-      return Buffer.from(res.data as ArrayBuffer);
+      return Buffer.from(res.data.audioContent as string, 'base64');
     } catch (e) {
-      // M3: 에러 로깅 (API 키 만료·쿼터 초과 감지)
-      this.logger.error(`ElevenLabs 호출 실패 [${lang}/${text}]: ${(e as Error).message}`);
+      this.logger.error(`Google TTS 호출 실패 [${lang}/${text}]: ${(e as Error).message}`);
       throw e;
     }
   }
 
-  // 전체 사전 생성 — 1~30 완전 완료 보장, 31~600 백그라운드 (startup 블로킹 없음)
+  // 전체 사전 생성 — 1~10 순차, 문구+11~30 병렬, 31~600 백그라운드
   async preGenerateAll() {
     for (const lang of LANGS) {
       // 1단계: 1~10 순차 (즉시 필요)
@@ -147,7 +144,7 @@ export class TtsService implements OnModuleInit {
           this.logger.warn(`사전 생성 실패 [${lang}/${i}]: ${e.message}`)
         );
       }
-      // 2단계: 문구 + 11~30 병렬 완료 보장 (concurrency=3 세마포어 적용)
+      // 2단계: 문구 + 11~30 병렬 완료 보장
       const batch2 = [
         ...Object.entries(PHRASES).map(([key, map]) => ({ key, text: map[lang] || map['en'] })),
         ...Array.from({ length: 20 }, (_, i) => ({ key: String(i + 11), text: String(i + 11) })),
@@ -161,8 +158,7 @@ export class TtsService implements OnModuleInit {
       );
     }
 
-    // 3단계: 31~180 백그라운드 (무료 티어 기준 — 총 ~6,000글자로 10,000글자/월 이내)
-    // 181~600은 on-demand 생성 (첫 사용 시 1회만 ElevenLabs 호출, 이후 캐시)
+    // 3단계: 31~600 백그라운드 (Google TTS 무료 티어 월 1,000,000자 — 7,000자 이내로 전부 가능)
     const batch3: Array<{ lang: string; key: string; text: string }> = [];
     for (const lang of LANGS) {
       for (let i = 31; i <= TTS_PREGEN_MAX; i++) {

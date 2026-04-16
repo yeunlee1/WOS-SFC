@@ -3,9 +3,12 @@
 export const LANGS = ['ko', 'en', 'ja', 'zh'] as const;
 export type TtsLang = typeof LANGS[number];
 
-// ElevenLabs language_code 매핑
-export const LANG_CODES: Record<string, string> = {
-  ko: 'ko', en: 'en', ja: 'ja', zh: 'zh',
+// Google Cloud TTS Chirp3-HD 음성 매핑 (4개 언어 동일 모델 패밀리 사용)
+export const GOOGLE_VOICES: Record<string, { languageCode: string; name: string }> = {
+  ko: { languageCode: 'ko-KR', name: 'ko-KR-Chirp3-HD-Aoede' },
+  en: { languageCode: 'en-US', name: 'en-US-Chirp3-HD-Aoede' },
+  ja: { languageCode: 'ja-JP', name: 'ja-JP-Chirp3-HD-Aoede' },
+  zh: { languageCode: 'cmn-CN', name: 'cmn-CN-Chirp3-HD-Aoede' },
 };
 
 // 카운트다운 문구 (서비스·컨트롤러 공통 사용)
@@ -19,12 +22,12 @@ export const PHRASES: Record<string, Record<string, string>> = {
 export const TTS_NUM_MIN = 1;
 export const TTS_NUM_MAX = 600;  // 유효성 검사 상한 (최대 프리셋 10분)
 
-// 사전 생성 상한 — 무료 티어: 1~180 ≈ 6,000글자/4개언어 (10,000글자/월 이내)
-// Starter 이상으로 업그레이드 시 600으로 올려도 됨
-export const TTS_PREGEN_MAX = 180;
+// 사전 생성 상한 — Google TTS 무료 티어: 월 1,000,000자 이내
+// 1~600 × 4개 언어 ≈ 약 7,000자 — 넉넉하게 600까지 사전 생성 가능
+export const TTS_PREGEN_MAX = 600;
 
 /**
- * 허용된 TTS 키인지 검증 — 화이트리스트 초과 요청으로 ElevenLabs 비용 폭탄 방지
+ * 허용된 TTS 키인지 검증 — 화이트리스트 초과 요청으로 API 비용 폭탄 방지
  * 유효한 키: PHRASES 키(start/stop/finish) 또는 1~600 사이의 정수
  */
 export function isValidTtsKey(key: string): boolean {
@@ -39,5 +42,5 @@ export function isValidTtsKey(key: string): boolean {
 /** 키에 해당하는 TTS 텍스트 반환 */
 export function getTtsText(lang: string, key: string): string {
   if (PHRASES[key]) return PHRASES[key][lang] || PHRASES[key]['en'];
-  return key; // 숫자는 그대로
+  return key; // 숫자는 그대로 (서비스에서 SSML로 감쌈)
 }
