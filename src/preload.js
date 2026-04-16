@@ -52,6 +52,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   countdownStop:  ()        => ipcRenderer.invoke('countdown-stop'),
   onCountdownState: (cb) => ipcRenderer.on('countdown-state', (_, state) => cb(state)),
 
+  // ── TTS (ElevenLabs) ──
+  ttsSpeak: (text) => ipcRenderer.invoke('tts-speak', text),
+
   // ── Chat ──
   chatConnect: ()        => ipcRenderer.invoke('socket-connect'), // 동일 소켓 재사용
   chatSend:    (content) => ipcRenderer.invoke('chat-send', content),

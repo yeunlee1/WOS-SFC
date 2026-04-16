@@ -21,43 +21,28 @@
     return LANG_MAP[getLang()] || 'ko-KR';
   }
 
-  // 음성 목록 캐시 (voiceschanged 이후 로드)
-  let cachedVoices = [];
-  if (window.speechSynthesis) {
-    const loadVoices = () => { cachedVoices = window.speechSynthesis.getVoices(); };
-    window.speechSynthesis.addEventListener('voiceschanged', loadVoices);
-    loadVoices();
-  }
+  // ── ElevenLabs TTS ──
+  let currentAudio = null;
 
-  const VOICE_PREF = {
-    'ko-KR': ['Google 한국의', 'Microsoft Heami', 'Yuna'],
-    'en-US': ['Google US English', 'Microsoft David', 'Microsoft Zira', 'Samantha'],
-    'ja-JP': ['Google 日本語', 'Microsoft Haruka', 'Kyoko'],
-    'zh-CN': ['Google 普通话', 'Microsoft Huihui', 'Tingting'],
-  };
-
-  function getBestVoice(langCode) {
-    const voices = cachedVoices.length ? cachedVoices : window.speechSynthesis.getVoices();
-    const prefs = VOICE_PREF[langCode] || [];
-    for (const pref of prefs) {
-      const v = voices.find(v => v.name.includes(pref));
-      if (v) return v;
-    }
-    // 언어 코드 앞 2자리로 매칭 (ko, en, ja, zh)
-    const langPrefix = langCode.split('-')[0];
-    return voices.find(v => v.lang.startsWith(langPrefix)) || null;
-  }
-
-  function speak(text) {
+  function speakFallback(text) {
     if (!window.speechSynthesis) return;
     window.speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
-    const langCode = getLangCode();
-    u.lang = langCode;
+    u.lang = getLangCode();
     u.rate = 1.8;
-    const voice = getBestVoice(langCode);
-    if (voice) u.voice = voice;
     window.speechSynthesis.speak(u);
+  }
+
+  async function speak(text) {
+    try {
+      const result = await window.electronAPI.ttsSpeak(text);
+      if (!result?.success) { speakFallback(text); return; }
+      if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+      currentAudio = new Audio('data:audio/mpeg;base64,' + result.audio);
+      currentAudio.play().catch(() => speakFallback(text));
+    } catch {
+      speakFallback(text);
+    }
   }
 
   function speakPhrase(key) {
