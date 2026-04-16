@@ -9,8 +9,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     super({
       // Authorization 헤더의 Bearer 토큰에서 JWT 추출
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
-      // 환경변수 JWT_SECRET 우선, 없으면 기본값 사용
-      secretOrKey: process.env.JWT_SECRET || 'wos_jwt_secret',
+      // 환경변수 JWT_SECRET 필수 (미설정 시 서버 기동 실패)
+      secretOrKey: process.env.JWT_SECRET ?? (() => { throw new Error('JWT_SECRET 환경변수가 설정되지 않았습니다'); })(),
     });
   }
 

@@ -1,6 +1,10 @@
 // rally-timer.js — Firebase 실시간 집결 타이머
 // endTimeUTC 방식: 모든 접속자가 동일한 카운트다운 표시
 
+function escapeHtml(text) {
+  return String(text).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
 const rallyNameInput    = document.getElementById('rally-name');
 const rallyMinutesInput = document.getElementById('rally-minutes');
 const rallySecondsInput = document.getElementById('rally-seconds');
@@ -72,11 +76,11 @@ function renderRallyCards(rallies) {
     return `
       <div class="rally-card" data-id="${r.id}">
         <div class="rally-card-header">
-          <span class="rally-name">${r.name}</span>
+          <span class="rally-name">${escapeHtml(r.name)}</span>
           <button class="btn btn-danger" data-delete-rally="${r.id}">${t('delete')}</button>
         </div>
         <div class="rally-countdown" id="countdown-${r.id}">
-          ${remainSec > 0 ? formatTime(remainSec) : '도착!'}
+          ${remainSec > 0 ? `${remainSec}${t('secUnit')}` : t('arrived')}
         </div>
         <div class="rally-progress">
           <div class="rally-progress-bar" id="progress-${r.id}"
@@ -104,7 +108,7 @@ function startCountdown(rally) {
 
     if (remaining <= 0) {
       clearInterval(rallyTimers[rally.id]);
-      countdownEl.textContent = '도착!';
+      countdownEl.textContent = t('arrived');
       countdownEl.className   = 'rally-countdown finished';
       if (progressBar) progressBar.style.width = '0%';
       card.className = 'rally-card danger';
@@ -116,7 +120,7 @@ function startCountdown(rally) {
         setTimeout(() => playBeep(1200, 500), 800);
       }
     } else {
-      countdownEl.textContent = formatTime(remainSec);
+      countdownEl.textContent = `${remainSec}${t('secUnit')}`;
       if (progressBar) progressBar.style.width = `${Math.min(100, ratio * 100)}%`;
 
       if (ratio < 0.2) {

@@ -133,14 +133,16 @@ export default function AuthModal() {
           </form>
         )}
 
-        <details className="modal-dev-section">
-          <summary className="modal-dev-summary">🔧 DEV 빠른 로그인</summary>
-          <div style={{ display:'flex', flexDirection:'column', gap:'6px', marginTop:'10px' }}>
-            {DEV_ACCOUNTS.map((acc) => (
-              <button key={acc.nickname} className="dev-login-btn" onClick={() => devLogin(acc)} disabled={loading}>{acc.label}</button>
-            ))}
-          </div>
-        </details>
+        {import.meta.env.DEV && (
+          <details className="modal-dev-section">
+            <summary className="modal-dev-summary">🔧 DEV 빠른 로그인</summary>
+            <div style={{ display:'flex', flexDirection:'column', gap:'6px', marginTop:'10px' }}>
+              {DEV_ACCOUNTS.map((acc) => (
+                <button key={acc.nickname} className="dev-login-btn" onClick={() => devLogin(acc)} disabled={loading}>{acc.label}</button>
+              ))}
+            </div>
+          </details>
+        )}
       </div>
     </div>
   );

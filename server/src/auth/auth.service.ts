@@ -5,8 +5,8 @@ import { SignupDto } from './dto/signup.dto';
 import { LoginDto } from './dto/login.dto';
 import * as bcrypt from 'bcrypt';
 
-// 서버 접속 코드 (하드코딩)
-const SERVER_CODE = '2677';
+// 서버 접속 코드 (환경변수 SERVER_CODE, 미설정 시 기동 실패)
+const SERVER_CODE = process.env.SERVER_CODE;
 
 @Injectable()
 export class AuthService {
@@ -24,7 +24,7 @@ export class AuthService {
       nickname: dto.nickname,
       password: dto.password,
       allianceName: dto.allianceName,
-      role: dto.role,
+      role: 'member', // 회원가입 시 항상 일반멤버로 고정 (역할은 관리자만 변경 가능)
       birthDate: dto.birthDate,
       name: dto.name,
       language: dto.language,

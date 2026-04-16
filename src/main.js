@@ -34,6 +34,17 @@ function createWindow() {
     },
   });
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+
+  // 외부 URL로의 내비게이션 차단 (XSS 등으로 인한 탈취 방지)
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (!url.startsWith('file://')) {
+      event.preventDefault();
+    }
+  });
+
+  // 새 창 열기 차단
+  mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+
   if (process.argv.includes('--inspect') || process.env.NODE_ENV === 'development') {
     mainWindow.webContents.openDevTools();
   }

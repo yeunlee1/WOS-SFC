@@ -37,7 +37,7 @@
 
     window.electronAPI.onChatOnline((users) => {
       const el = document.getElementById('chat-online-list');
-      el.innerHTML = users.map(u => `<span class="chat-online-user">${u}</span>`).join('');
+      el.innerHTML = users.map(u => `<span class="chat-online-user">${escapeHtml(String(u))}</span>`).join('');
       document.getElementById('chat-online-count').textContent = users.length;
     });
   }
@@ -56,8 +56,8 @@
       : `<p class="chat-content">${escapeHtml(msg.content)}</p>`;
 
     el.innerHTML = `
-      <span class="chat-alliance">[${msg.allianceName}]</span>
-      <span class="chat-nickname">${msg.nickname}</span>
+      <span class="chat-alliance">[${escapeHtml(msg.allianceName ?? '')}]</span>
+      <span class="chat-nickname">${escapeHtml(msg.nickname ?? '')}</span>
       <span class="chat-time">${time}</span>
       ${contentHtml}
     `;

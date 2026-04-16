@@ -1,5 +1,9 @@
 // dispatch.js — Firebase 실시간 집결원 + 발송 타이밍 계산기
 
+function escapeHtml(text) {
+  return String(text).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
 const arrivalTimeInput = document.getElementById('arrival-time');
 const calcBtn          = document.getElementById('calc-btn');
 const memberNameInput  = document.getElementById('member-name');
@@ -72,7 +76,7 @@ function renderMembers() {
   dispatchResult.innerHTML = members.map((m) => `
     <div class="member-card">
       <div class="member-info">
-        <span class="member-name">${m.name}</span>
+        <span class="member-name">${escapeHtml(m.name)}</span>
         <span class="member-times">일반: ${formatTime(m.normalSeconds)} / 펫: ${formatTime(m.petSeconds)}</span>
       </div>
       <div class="member-dispatch-time">— —</div>
