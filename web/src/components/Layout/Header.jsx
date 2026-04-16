@@ -9,7 +9,6 @@ const ALLIANCE_COLORS = {
 };
 
 const TAB_KEYS = [
-  { id: 'dashboard', key: 'tabDashboard' },
   { id: 'battle',    key: 'tabBattle' },
   { id: 'community', key: 'tabCommunity' },
   { id: 'chat',      key: 'tabChat' },

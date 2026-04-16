@@ -29,7 +29,7 @@ export class AuthService {
       name: dto.name,
       language: dto.language,
     });
-    const token = this.jwtService.sign({ sub: user.id, nickname: user.nickname, role: user.role });
+    const token = this.jwtService.sign({ sub: user.id, nickname: user.nickname, role: user.role, allianceName: user.allianceName });
     return { token, user: { id: user.id, nickname: user.nickname, role: user.role, allianceName: user.allianceName, language: user.language } };
   }
 
@@ -39,7 +39,7 @@ export class AuthService {
     if (!user) throw new UnauthorizedException('닉네임 또는 비밀번호가 올바르지 않습니다');
     const valid = await bcrypt.compare(dto.password, user.passwordHash);
     if (!valid) throw new UnauthorizedException('닉네임 또는 비밀번호가 올바르지 않습니다');
-    const token = this.jwtService.sign({ sub: user.id, nickname: user.nickname, role: user.role });
+    const token = this.jwtService.sign({ sub: user.id, nickname: user.nickname, role: user.role, allianceName: user.allianceName });
     return { token, user: { id: user.id, nickname: user.nickname, role: user.role, allianceName: user.allianceName, language: user.language } };
   }
 }

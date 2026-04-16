@@ -5,7 +5,7 @@ import { useI18n } from './i18n';
 import { api } from './api';
 import AuthModal from './components/Auth/AuthModal';
 import Header from './components/Layout/Header';
-import OnlineList from './components/Dashboard/OnlineList';
+import OnlinePanel from './components/Layout/OnlinePanel';
 import BattleTab from './components/Battle/BattleTab';
 import CommunityTab from './components/Community/CommunityTab';
 import ChatTab from './components/Chat/ChatTab';
@@ -17,7 +17,7 @@ export default function App() {
   const clearUser = useStore((s) => s.clearUser);
   const setTimeOffset = useStore((s) => s.setTimeOffset);
   const { changeLang } = useI18n();
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState('battle');
   const [hydrating, setHydrating] = useState(!!token && !user);
 
   // 소켓 연결 (로그인 후 유지)
@@ -54,12 +54,14 @@ export default function App() {
   return (
     <div className="app-container">
       <Header activeTab={activeTab} onTabChange={setActiveTab} />
-      <main className="tab-content">
-        {activeTab === 'dashboard'  && <OnlineList />}
-        {activeTab === 'battle'     && <BattleTab />}
-        {activeTab === 'community'  && <CommunityTab />}
-        {activeTab === 'chat'       && <ChatTab />}
-      </main>
+      <div className="main-with-sidebar">
+        <main className="tab-content">
+          {activeTab === 'battle'    && <BattleTab />}
+          {activeTab === 'community' && <CommunityTab />}
+          {activeTab === 'chat'      && <ChatTab />}
+        </main>
+        <OnlinePanel />
+      </div>
     </div>
   );
 }
