@@ -56,6 +56,16 @@ export class TtsService implements OnModuleInit {
       this.logger.warn('GOOGLE_TTS_API_KEY 없음 — TTS 사전 생성 건너뜀');
       return;
     }
+    // 핵심 파일(숫자 1~10 + 문구)이 모두 있으면 사전 생성 스킵
+    // npm run tts:generate 로 미리 생성한 경우
+    const alreadyReady = LANGS.every(lang =>
+      [...Array.from({ length: 10 }, (_, i) => String(i + 1)),
+       ...Object.keys(PHRASES)].every(k => this.fileExists(lang, k))
+    );
+    if (alreadyReady) {
+      this.logger.log('TTS 캐시 확인 완료 — 사전 생성 스킵 (API 호출 없음)');
+      return;
+    }
     this.preGenerateAll().catch(e => this.logger.error('preGenerateAll 실패', e));
   }
 

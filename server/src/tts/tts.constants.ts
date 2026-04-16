@@ -21,9 +21,9 @@ export const PHRASES: Record<string, Record<string, string>> = {
 export const TTS_NUM_MIN = 1;
 export const TTS_NUM_MAX = 600;  // 유효성 검사 상한 (최대 프리셋 10분)
 
-// 사전 생성 상한 — Google TTS 무료 티어: 월 1,000,000자 이내
-// 1~600 × 4개 언어 ≈ 약 7,000자 — 넉넉하게 600까지 사전 생성 가능
-export const TTS_PREGEN_MAX = 600;
+// 사전 생성 상한 — 최대 프리셋 3분(180초) 기준
+// 1~180 × 4개 언어 + 문구 ≈ 약 2,200자 (무료 티어 1,000,000자 이내)
+export const TTS_PREGEN_MAX = 180;
 
 /**
  * 허용된 TTS 키인지 검증 — 화이트리스트 초과 요청으로 API 비용 폭탄 방지
