@@ -124,7 +124,7 @@ export default function Countdown() {
       speak(PHRASES.stop[lang] || PHRASES.stop.en, langCode);
     }
     prevActiveRef.current = countdown.active;
-  }, [countdown.active]);
+  }, [countdown.active, lang, langCode]);
 
   // 관리자/개발자 여부
   const isAdmin = user?.role === 'admin' || user?.role === 'developer';
@@ -148,7 +148,7 @@ export default function Countdown() {
 
   return (
     <section className="section">
-      <h2 className="section-title">⏳ 카운트다운</h2>
+      <h2 className="section-title">{t('countdown')}</h2>
 
       <div className="countdown-display">
         <span id="countdown-number" className={dispClass}>

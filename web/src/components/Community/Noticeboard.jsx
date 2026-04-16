@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useStore } from '../../store';
 import { useI18n } from '../../i18n';
-import { api, escapeHtml } from '../../api';
+import { api } from '../../api';
 import { getCachedTranslation, cacheTranslation } from '../../i18n';
 
 const SOURCE_ICON  = { discord: '💬', kakao: '🟡', game: '🎮' };
@@ -24,6 +24,9 @@ export default function Noticeboard() {
 
   // 상세 뷰 번역 상태 Map<noticeId, translatedText | null>
   const [translations, setTranslations] = useState({});
+
+  // lang 변경 시 번역 캐시 리셋
+  useEffect(() => { setTranslations({}); }, [lang]);
 
   // 상세 열릴 때 번역 실행
   useEffect(() => {
@@ -59,7 +62,7 @@ export default function Noticeboard() {
         }
       } catch { /* 실패 시 원문 유지 */ }
     })();
-  }, [view, detailId, lang]);
+  }, [view, detailId, notices, lang]);
 
   // 공지 추가
   async function handlePost() {
@@ -154,7 +157,8 @@ export default function Noticeboard() {
 
   // ─── 상세 뷰 ─────────────────────────────────
   const notice = notices.find((n) => String(n.id) === detailId);
-  if (!notice) { setView('list'); return null; }
+  // notice 없으면 useEffect에서 setView('list') 처리 — 렌더 중 직접 호출 금지
+  if (view === 'detail' && !notice) return null;
 
   const postLang        = notice.lang || 'ko';
   const needsTranslation = postLang !== lang;

@@ -33,6 +33,9 @@ export default function Dispatch() {
       await api.addMember({ name, normalSeconds, petSeconds });
       setMName(''); setMNormal(''); setMPet('');
       setResults(null); // 목록 변경 시 계산 초기화
+    } catch (err) {
+      console.error('집결원 추가 실패:', err);
+      alert('집결원 추가에 실패했습니다.');
     } finally {
       setAddLoading(false);
     }

@@ -74,6 +74,8 @@ const UI_TEXTS = {
     countdownStop: '정지',
     countdownSeconds: '초',
     viewTranslation: '번역 보기',
+    logout: '로그아웃',
+    countdown: '⏳ 카운트다운',
   },
   en: {
     modalTitle: 'Enter server code',
@@ -139,6 +141,8 @@ const UI_TEXTS = {
     countdownStop: 'Stop',
     countdownSeconds: 's',
     viewTranslation: 'View Translation',
+    logout: 'Logout',
+    countdown: '⏳ Countdown',
   },
   ja: {
     modalTitle: 'サーバーコードを入力してください',
@@ -204,6 +208,8 @@ const UI_TEXTS = {
     countdownStop: '停止',
     countdownSeconds: '秒',
     viewTranslation: '翻訳を見る',
+    logout: 'ログアウト',
+    countdown: '⏳ カウントダウン',
   },
   zh: {
     modalTitle: '请输入服务器代码',
@@ -269,6 +275,8 @@ const UI_TEXTS = {
     countdownStop: '停止',
     countdownSeconds: '秒',
     viewTranslation: '查看翻译',
+    logout: '退出',
+    countdown: '⏳ 倒计时',
   },
 };
 

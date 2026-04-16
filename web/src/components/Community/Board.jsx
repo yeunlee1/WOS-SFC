@@ -1,8 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useStore } from '../../store';
-import { useI18n } from '../../i18n';
+import { useI18n, getCachedTranslation, cacheTranslation } from '../../i18n';
 import { api } from '../../api';
-import { getCachedTranslation, cacheTranslation } from '../../i18n';
 
 const ALLIANCE_COLORS = {
   KOR: '#3b82f6', NSL: '#22c55e', JKY: '#a855f7',
@@ -24,11 +23,14 @@ export default function Board({ alliance }) {
   const [content, setContent] = useState('');
   const [posting, setPosting] = useState(false);
 
+  // lang 변경 시 번역 캐시 리셋
+  useEffect(() => { setTranslations({}); }, [lang]);
+
   // lang 또는 posts 변경 시 캐시 없는 포스트 번역
   useEffect(() => {
     const uncached = posts.filter((p) => {
       const postLang = p.lang || 'ko';
-      return postLang !== lang && !getCachedTranslation(p.content, lang);
+      return postLang !== lang && !getCachedTranslation(p.content, lang) && !translations[p.id];
     });
     if (uncached.length === 0) return;
 
@@ -65,7 +67,7 @@ export default function Board({ alliance }) {
         } catch { /* 실패 시 원문 유지 */ }
       })
     );
-  }, [posts, lang]);
+  }, [posts, lang, translations]);
 
   // 게시
   async function handlePost() {
@@ -86,7 +88,11 @@ export default function Board({ alliance }) {
 
   // 삭제
   async function handleDelete(postId) {
-    await api.deleteBoardPost(postId);
+    try {
+      await api.deleteBoardPost(postId);
+    } catch (err) {
+      console.error('게시물 삭제 실패:', err);
+    }
   }
 
   return (

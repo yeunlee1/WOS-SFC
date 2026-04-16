@@ -13,6 +13,8 @@ export default function RallyTimer() {
 
   // 종료 알림 발송 여부 추적 (메모리 내)
   const alertedRef = useRef(new Set());
+  // 비프음 setTimeout ID 추적 (unmount 시 정리)
+  const beepTimeoutsRef = useRef([]);
 
   // 입력 폼 상태
   const [name, setName]     = useState('');
@@ -35,15 +37,19 @@ export default function RallyTimer() {
         if (remainMs <= 0 && !alertedRef.current.has(r.id)) {
           alertedRef.current.add(r.id);
           playBeep(1000, 300);
-          setTimeout(() => playBeep(1000, 300), 400);
-          setTimeout(() => playBeep(1200, 500), 800);
+          beepTimeoutsRef.current.push(setTimeout(() => playBeep(1000, 300), 400));
+          beepTimeoutsRef.current.push(setTimeout(() => playBeep(1200, 500), 800));
         }
       });
 
       setTickMap(next);
     }, 200);
 
-    return () => clearInterval(id);
+    return () => {
+      clearInterval(id);
+      beepTimeoutsRef.current.forEach(clearTimeout);
+      beepTimeoutsRef.current = [];
+    };
   }, [rallies, timeOffset]);
 
   // 집결 추가
@@ -69,8 +75,13 @@ export default function RallyTimer() {
 
   // 집결 삭제
   async function handleDelete(id) {
-    await api.deleteRally(id);
-    alertedRef.current.delete(id);
+    alertedRef.current.delete(id); // 낙관적 롤백 대비 먼저 제거
+    try {
+      await api.deleteRally(id);
+    } catch (err) {
+      alertedRef.current.add(id); // 실패 시 롤백
+      console.error('집결 삭제 실패:', err);
+    }
   }
 
   // 활성 집결만 표시 (3초 여유)
