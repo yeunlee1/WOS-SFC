@@ -3,3 +3,4 @@ node_modules/
 dist/
 .bkit/
 .worktrees/
+server/tts-cache/

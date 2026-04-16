@@ -21,6 +21,7 @@ import { BoardsModule } from './boards/boards.module';
 import { TranslationsModule } from './translations/translations.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { TranslateModule } from './translate/translate.module';
+import { TtsModule } from './tts/tts.module';
 
 @Module({
   imports: [
@@ -40,9 +41,9 @@ import { TranslateModule } from './translate/translate.module';
     }),
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', '..', '..', 'web', 'dist'),
-      exclude: ['/auth/(.*)', '/notices/(.*)', '/rallies/(.*)', '/members/(.*)',
-                '/boards/(.*)', '/translations/(.*)', '/users/(.*)',
-                '/translate/(.*)', '/time', '/socket.io/(.*)'],
+      exclude: ['/auth/:path*', '/notices/:path*', '/rallies/:path*', '/members/:path*',
+                '/boards/:path*', '/translations/:path*', '/users/:path*',
+                '/translate/:path*', '/tts-audio/:path*', '/time', '/socket.io/:path*'],
       serveStaticOptions: { fallthrough: false },
     }),
     UsersModule,
@@ -55,6 +56,7 @@ import { TranslateModule } from './translate/translate.module';
     TranslationsModule,
     RealtimeModule,
     TranslateModule,
+    TtsModule,
   ],
   controllers: [AppController],
 })

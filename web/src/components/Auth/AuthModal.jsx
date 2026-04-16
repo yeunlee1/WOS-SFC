@@ -23,12 +23,8 @@ export default function AuthModal() {
   const [mode, setMode] = useState('login');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-
-  // login form
   const [nickname, setNickname] = useState('');
   const [password, setPassword] = useState('');
-
-  // signup form
   const [name, setName] = useState('');
   const [signupNickname, setSignupNickname] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
@@ -44,13 +40,11 @@ export default function AuthModal() {
   async function initUser(user, token) {
     setUser(user, token);
     changeLang(user.language || 'ko');
-    // 시간 동기화
     try {
       const localBefore = Date.now();
       const res = await api.getTime();
-      const offset = res.utc - Math.round((localBefore + Date.now()) / 2);
-      setTimeOffset(offset);
-    } catch { /* 실패 시 0 유지 */ }
+      setTimeOffset(res.utc - Math.round((localBefore + Date.now()) / 2));
+    } catch { /* offset 0 유지 */ }
   }
 
   async function handleLogin(e) {
@@ -60,93 +54,86 @@ export default function AuthModal() {
     try {
       const res = await api.login({ nickname, password });
       await initUser(res.user, res.token);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
+    } catch (err) { setError(err.message); }
+    finally { setLoading(false); }
   }
 
   async function handleSignup(e) {
     e.preventDefault();
-    if (!name || !signupNickname || !signupPassword || !allianceName || !birthDate) {
-      setError('모든 항목을 입력하세요'); return;
-    }
+    if (!name || !signupNickname || !signupPassword || !allianceName || !birthDate) { setError('모든 항목을 입력하세요'); return; }
     if (signupPassword.length < 6) { setError('비밀번호는 6자 이상이어야 합니다'); return; }
     setLoading(true); setError('');
     try {
       const res = await api.signup({ name, nickname: signupNickname, password: signupPassword, allianceName, role, birthDate, language, serverCode });
       await initUser(res.user, res.token);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
+    } catch (err) { setError(err.message); }
+    finally { setLoading(false); }
   }
 
   async function devLogin(account) {
     setLoading(true); setError('');
     try {
       let res;
-      try {
-        res = await api.login({ nickname: account.nickname, password: account.password });
-      } catch {
+      try { res = await api.login({ nickname: account.nickname, password: account.password }); }
+      catch {
         await api.signup({ nickname: account.nickname, password: account.password, name: account.name, allianceName: account.allianceName, role: account.role, birthDate: account.birthDate, language: account.language, serverCode: '2677' }).catch(() => {});
         res = await api.login({ nickname: account.nickname, password: account.password });
       }
       await api.setUserRole(account.nickname, account.role).catch(() => {});
       await initUser({ ...res.user, role: account.role, language: account.language }, res.token);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
+    } catch (err) { setError(err.message); }
+    finally { setLoading(false); }
   }
 
   return (
-    <div className="alliance-modal" style={{ display: 'flex' }}>
+    <div className="alliance-modal">
       <div className="alliance-modal-box">
-        <h2>⚔️ WOS SFC</h2>
-        <p className="auth-subtitle">{mode === 'login' ? '로그인' : '회원가입'}</p>
+        <h2>🌸 WOS SFC</h2>
+        <p className="auth-subtitle">{mode === 'login' ? '동맹 지휘 보조 시스템' : '새 계정 만들기'}</p>
 
         {mode === 'login' ? (
-          <form onSubmit={handleLogin}>
-            <input className="modal-nick-input" type="text" placeholder="닉네임" value={nickname} onChange={(e) => setNickname(e.target.value)} maxLength={50} autoComplete="username" />
-            <input className="modal-nick-input" type="password" placeholder="비밀번호" value={password} onChange={(e) => setPassword(e.target.value)} maxLength={100} autoComplete="current-password" />
+          <form onSubmit={handleLogin} style={{ width:'100%', display:'flex', flexDirection:'column' }}>
+            <div className="auth-field">
+              <label htmlFor="login-nick">닉네임</label>
+              <input id="login-nick" className="modal-nick-input" type="text" placeholder="게임 닉네임" value={nickname} onChange={(e) => setNickname(e.target.value)} maxLength={50} autoComplete="username" />
+            </div>
+            <div className="auth-field">
+              <label htmlFor="login-pw">비밀번호</label>
+              <input id="login-pw" className="modal-nick-input" type="password" placeholder="비밀번호 입력" value={password} onChange={(e) => setPassword(e.target.value)} maxLength={100} autoComplete="current-password" />
+            </div>
             {error && <p className="auth-error">{error}</p>}
-            <button type="submit" className="btn btn-primary" disabled={loading}>{loading ? '처리 중...' : '로그인'}</button>
+            <button type="submit" className="btn btn-primary" disabled={loading} style={{ marginTop:'8px' }}>
+              {loading ? '로그인 중...' : '로그인'}
+            </button>
             <p className="auth-switch">계정이 없으신가요? <a href="#" onClick={(e) => { e.preventDefault(); setMode('signup'); setError(''); }}>회원가입</a></p>
           </form>
         ) : (
-          <form onSubmit={handleSignup}>
-            <input className="modal-nick-input" type="text" placeholder="이름" value={name} onChange={(e) => setName(e.target.value)} maxLength={100} />
-            <input className="modal-nick-input" type="text" placeholder="닉네임" value={signupNickname} onChange={(e) => setSignupNickname(e.target.value)} maxLength={50} autoComplete="username" />
-            <input className="modal-nick-input" type="password" placeholder="비밀번호 (6자 이상)" value={signupPassword} onChange={(e) => setSignupPassword(e.target.value)} maxLength={100} autoComplete="new-password" />
-            <input className="modal-nick-input" type="text" placeholder="동맹명 (예: KOR)" value={allianceName} onChange={(e) => setAllianceName(e.target.value)} maxLength={100} />
-            <select className="modal-nick-input" value={role} onChange={(e) => setRole(e.target.value)}>
-              <option value="member">일반 인원</option>
-              <option value="admin">관리자</option>
-            </select>
-            <input className="modal-nick-input" type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
-            <select className="modal-nick-input" value={language} onChange={(e) => setLanguage(e.target.value)}>
-              {LANGUAGES.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
-            </select>
-            <p className="auth-server-question">서버가 어디입니까?</p>
-            <input className="modal-nick-input" type="text" placeholder="답변 입력" value={serverCode} onChange={(e) => setServerCode(e.target.value)} maxLength={10} />
+          <form onSubmit={handleSignup} style={{ width:'100%', display:'flex', flexDirection:'column' }}>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0 12px' }}>
+              <div className="auth-field"><label>이름</label><input className="modal-nick-input" type="text" placeholder="실제 이름" value={name} onChange={(e) => setName(e.target.value)} maxLength={100} /></div>
+              <div className="auth-field"><label>닉네임</label><input className="modal-nick-input" type="text" placeholder="게임 닉네임" value={signupNickname} onChange={(e) => setSignupNickname(e.target.value)} maxLength={50} autoComplete="username" /></div>
+            </div>
+            <div className="auth-field"><label>비밀번호</label><input className="modal-nick-input" type="password" placeholder="6자 이상" value={signupPassword} onChange={(e) => setSignupPassword(e.target.value)} maxLength={100} autoComplete="new-password" /></div>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0 12px' }}>
+              <div className="auth-field"><label>동맹명</label><input className="modal-nick-input" type="text" placeholder="예: KOR" value={allianceName} onChange={(e) => setAllianceName(e.target.value)} maxLength={100} /></div>
+              <div className="auth-field"><label>계급</label><select className="modal-nick-input" value={role} onChange={(e) => setRole(e.target.value)}><option value="member">일반 인원</option><option value="admin">관리자</option></select></div>
+            </div>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0 12px' }}>
+              <div className="auth-field"><label>생년월일</label><input className="modal-nick-input" type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} /></div>
+              <div className="auth-field"><label>언어</label><select className="modal-nick-input" value={language} onChange={(e) => setLanguage(e.target.value)}>{LANGUAGES.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}</select></div>
+            </div>
+            <div className="auth-field"><label className="auth-server-question">🗺 서버 번호가 어디입니까?</label><input className="modal-nick-input" type="text" placeholder="숫자 입력 (예: 2677)" value={serverCode} onChange={(e) => setServerCode(e.target.value)} maxLength={10} /></div>
             {error && <p className="auth-error">{error}</p>}
-            <button type="submit" className="btn btn-primary" disabled={loading}>{loading ? '처리 중...' : '가입하기'}</button>
+            <button type="submit" className="btn btn-primary" disabled={loading} style={{ marginTop:'8px' }}>{loading ? '처리 중...' : '가입하기'}</button>
             <p className="auth-switch">이미 계정이 있으신가요? <a href="#" onClick={(e) => { e.preventDefault(); setMode('login'); setError(''); }}>로그인</a></p>
           </form>
         )}
 
-        {/* 개발용 빠른 로그인 */}
-        <details className="modal-dev-section" style={{ marginTop: '1rem' }}>
+        <details className="modal-dev-section">
           <summary className="modal-dev-summary">🔧 DEV 빠른 로그인</summary>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', marginTop: '0.5rem' }}>
+          <div style={{ display:'flex', flexDirection:'column', gap:'6px', marginTop:'10px' }}>
             {DEV_ACCOUNTS.map((acc) => (
-              <button key={acc.nickname} className="btn dev-login-btn" onClick={() => devLogin(acc)} disabled={loading}>
-                {acc.label}
-              </button>
+              <button key={acc.nickname} className="dev-login-btn" onClick={() => devLogin(acc)} disabled={loading}>{acc.label}</button>
             ))}
           </div>
         </details>

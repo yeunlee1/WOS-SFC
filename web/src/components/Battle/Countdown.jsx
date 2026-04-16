@@ -3,81 +3,153 @@ import { useStore } from '../../store';
 import { useI18n } from '../../i18n';
 import { getSocket } from '../../api';
 
-// ── TTS 설정 (countdown.js 로직 그대로) ──
-const LANG_MAP = { ko: 'ko-KR', en: 'en-US', ja: 'ja-JP', zh: 'zh-CN' };
+// ── TTS — 서버 캐시된 mp3 직접 재생 ─────────────
+// 키 규칙: 숫자는 숫자 그대로, 문구는 start/stop/finish
+let currentAudio = null;
+const audioCache = new Map(); // key → HTMLAudioElement (preloaded)
 
-const PHRASES = {
-  start:  { ko: '카운트다운을 시작합니다.', en: 'Countdown starting.', ja: 'カウントダウンを開始します。', zh: '倒计时开始。' },
-  stop:   { ko: '카운트다운이 중지되었습니다.', en: 'Countdown stopped.', ja: 'カウントダウンが中止されました。', zh: '倒计时已停止。' },
-  finish: { ko: '시작!', en: 'Start!', ja: '始め!', zh: '开始!' },
-};
-
-const VOICE_PREF = {
-  'ko-KR': ['Google 한국의', 'Microsoft Heami', 'Yuna'],
-  'en-US': ['Google US English', 'Microsoft David', 'Microsoft Zira', 'Samantha'],
-  'ja-JP': ['Google 日本語', 'Microsoft Haruka', 'Kyoko'],
-  'zh-CN': ['Google 普通话', 'Microsoft Huihui', 'Tingting'],
-};
-
-function getBestVoice(langCode) {
-  const voices = window.speechSynthesis?.getVoices() || [];
-  const prefs = VOICE_PREF[langCode] || [];
-  for (const pref of prefs) {
-    const v = voices.find((v) => v.name.includes(pref));
-    if (v) return v;
-  }
-  const prefix = langCode.split('-')[0];
-  return voices.find((v) => v.lang.startsWith(prefix)) || null;
+function ttsUrl(lang, key) {
+  return `/tts-audio/${lang}/${encodeURIComponent(key)}`;
 }
 
-function speak(text, langCode) {
-  if (!window.speechSynthesis) return;
-  window.speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang  = langCode;
-  u.rate  = 1.8;
-  const voice = getBestVoice(langCode);
-  if (voice) u.voice = voice;
-  window.speechSynthesis.speak(u);
+// 즉시 재생 (캐시된 Audio 객체 우선)
+function speak(key, lang = 'ko') {
+  try {
+    if (currentAudio) { currentAudio.pause(); currentAudio.currentTime = 0; currentAudio = null; }
+    const ck = `${lang}:${key}`;
+    const audio = audioCache.get(ck) || new Audio(ttsUrl(lang, key));
+    audio.currentTime = 0;
+    currentAudio = audio;
+    audio.play().catch(() => {});
+  } catch { /* 무시 */ }
 }
 
-// Countdown — 실시간 공유 카운트다운 (TTS 포함)
+// 프리페치: Audio 객체 미리 생성해 브라우저 캐시에 올림
+const prefetchedLangs = new Set();
+function prefetchTts(lang) {
+  if (prefetchedLangs.has(lang)) return;
+  prefetchedLangs.add(lang);
+
+  const preload = (key) => {
+    const ck = `${lang}:${key}`;
+    if (audioCache.has(ck)) return;
+    const a = new Audio(ttsUrl(lang, key));
+    a.preload = 'auto';
+    audioCache.set(ck, a);
+  };
+
+  // 1~10 즉시
+  for (let i = 1; i <= 10; i++) preload(String(i));
+  preload('start'); preload('stop'); preload('finish');
+
+  // 11~180 지연 (UI 블로킹 방지)
+  setTimeout(() => {
+    for (let i = 11; i <= 180; i++) preload(String(i));
+  }, 500);
+}
+
+// ── SVG 원형 프로그레스 링 ──────────────────────
+const RADIUS = 120;
+const STROKE = 10;
+const CIRC   = 2 * Math.PI * RADIUS;
+
+function RingProgress({ progress, secs, total }) {
+  const offset = CIRC * (1 - progress);
+
+  const size   = RADIUS * 2 + STROKE * 2 + 8;
+  const center = size / 2;
+
+  const numClass = secs === null  ? 'countdown-number'
+                 : secs <= 10   ? 'countdown-number countdown-danger'
+                 : secs <= 30   ? 'countdown-number countdown-warning'
+                 :                'countdown-number';
+
+  const ringStroke = secs === null   ? '#e9d5ff'
+                   : secs <= 10     ? 'url(#cd-grad-danger)'
+                   : secs <= 30     ? 'url(#cd-grad-warning)'
+                   :                  'url(#cd-grad-normal)';
+
+  // 항상 초 단위 표시 (분 단위 금지)
+  const display = secs === null ? '--' : String(secs);
+
+  return (
+    <div className="cd-ring-wrap" style={{ position: 'relative', width: size, height: size }}>
+      <svg width={size} height={size} style={{ display: 'block' }}>
+        <defs>
+          <linearGradient id="cd-grad-normal" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#ec4899" />
+            <stop offset="100%" stopColor="#a855f7" />
+          </linearGradient>
+          <linearGradient id="cd-grad-warning" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#fbbf24" />
+            <stop offset="100%" stopColor="#f97316" />
+          </linearGradient>
+          <linearGradient id="cd-grad-danger" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#f87171" />
+            <stop offset="100%" stopColor="#dc2626" />
+          </linearGradient>
+        </defs>
+        {/* 배경 트랙 */}
+        <circle cx={center} cy={center} r={RADIUS}
+          fill="none" stroke="#f3e8ff" strokeWidth={STROKE} />
+        {/* 진행 링 */}
+        <circle cx={center} cy={center} r={RADIUS}
+          fill="none"
+          stroke={ringStroke}
+          strokeWidth={STROKE}
+          strokeLinecap="round"
+          strokeDasharray={CIRC}
+          strokeDashoffset={offset}
+          transform={`rotate(-90 ${center} ${center})`}
+          style={{ transition: 'stroke-dashoffset .25s linear, stroke .3s ease' }}
+        />
+      </svg>
+
+      {/* 숫자 — 절대 위치로 SVG 위에 겹치기 */}
+      <div style={{
+        position: 'absolute', inset: 0,
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center', gap: 2,
+      }}>
+        <span className={numClass}>{display}</span>
+        {secs !== null && total > 0 && (
+          <span className="cd-total">/ {total}s</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── 프리셋 시간 목록 ────────────────────────────
+const PRESETS = [
+  { label: '30초', value: 30 },
+  { label: '1분',  value: 60 },
+  { label: '3분',  value: 180 },
+  { label: '5분',  value: 300 },
+  { label: '10분', value: 600 },
+];
+
+// ── 메인 컴포넌트 ───────────────────────────────
 export default function Countdown() {
   const { countdown, timeOffset, user } = useStore();
   const { t, lang } = useI18n();
 
-  // 남은 초 (소수점 유지 — 표시는 ceil)
   const [remaining, setRemaining]   = useState(null);
-  const intervalRef  = useRef(null);
-  const lastSpokenRef = useRef(-1);
+  const [inputSec,  setInputSec]    = useState('');
+  const intervalRef    = useRef(null);
+  const lastSpokenRef  = useRef(-1);
+  const prevActiveRef  = useRef(countdown.active);
   const initializedRef = useRef(false);
 
-  // 입력값
-  const [inputSec, setInputSec] = useState('');
+  // 마운트 / 언어 변경 시 TTS 프리페치
+  useEffect(() => { prefetchTts(lang); }, [lang]);
 
-  const langCode = LANG_MAP[lang] || 'ko-KR';
-
-  // voices 사전 로드
-  useEffect(() => {
-    if (window.speechSynthesis) {
-      const load = () => window.speechSynthesis.getVoices();
-      window.speechSynthesis.addEventListener('voiceschanged', load);
-      load();
-      return () => window.speechSynthesis.removeEventListener('voiceschanged', load);
-    }
-  }, []);
-
-  // countdown 상태 변경 감지 → interval 재설정
+  // countdown 상태 변경 → interval 재설정
   useEffect(() => {
     clearInterval(intervalRef.current);
     lastSpokenRef.current = -1;
 
     const { active, startedAt, totalSeconds } = countdown;
-
-    if (initializedRef.current) {
-      // 이전 상태와 비교해 멘트 (React에서는 prev state로 처리)
-      // active → start / !active → stop (이미 컴포넌트 마운트 후)
-    }
 
     if (!active) {
       setRemaining(null);
@@ -92,26 +164,24 @@ export default function Countdown() {
       if (rem <= 0) {
         setRemaining(0);
         clearInterval(intervalRef.current);
-        speak(PHRASES.finish[lang] || PHRASES.finish.en, langCode);
+        speak('finish', lang);
         return;
       }
-
       setRemaining(rem);
 
       const currentSec = Math.ceil(rem);
       if (currentSec !== lastSpokenRef.current) {
         lastSpokenRef.current = currentSec;
-        speak(String(currentSec), langCode);
+        speak(String(currentSec), lang);
       }
     }
 
     tick();
     intervalRef.current = setInterval(tick, 200);
     return () => clearInterval(intervalRef.current);
-  }, [countdown, timeOffset, lang, langCode]);
+  }, [countdown, timeOffset, lang]);
 
-  // start/stop 멘트 — countdown.active 토글 감지
-  const prevActiveRef = useRef(countdown.active);
+  // start/stop 멘트
   useEffect(() => {
     if (!initializedRef.current) {
       initializedRef.current = true;
@@ -119,25 +189,23 @@ export default function Countdown() {
       return;
     }
     if (countdown.active && !prevActiveRef.current) {
-      speak(PHRASES.start[lang] || PHRASES.start.en, langCode);
+      speak('start', lang);
     } else if (!countdown.active && prevActiveRef.current) {
-      speak(PHRASES.stop[lang] || PHRASES.stop.en, langCode);
+      speak('stop', lang);
     }
     prevActiveRef.current = countdown.active;
-  }, [countdown.active, lang, langCode]);
+  }, [countdown.active, lang]);
 
-  // 관리자/개발자 여부
-  const isAdmin = user?.role === 'admin' || user?.role === 'developer';
+  // 제어 권한: admin, developer, SFC만 (member는 시청 전용)
+  const canControl = user?.role && user.role !== 'member';
 
-  // 표시 색상
   const secs     = remaining !== null ? Math.max(0, Math.ceil(remaining)) : null;
-  const dispClass = secs === null     ? 'countdown-number'
-                  : secs <= 10        ? 'countdown-number countdown-danger'
-                  : secs <= 30        ? 'countdown-number countdown-warning'
-                  :                     'countdown-number';
+  const total    = countdown.totalSeconds || 0;
+  const progress = (secs !== null && total > 0) ? secs / total : 1;
+  const isActive = countdown.active;
 
-  function handleStart() {
-    const s = parseInt(inputSec, 10);
+  function handleStart(seconds) {
+    const s = seconds ?? parseInt(inputSec, 10);
     if (!s || s < 1) return;
     getSocket()?.emit('countdown:start', s);
   }
@@ -146,34 +214,72 @@ export default function Countdown() {
     getSocket()?.emit('countdown:stop');
   }
 
-  return (
-    <section className="section">
-      <h2 className="section-title">{t('countdown')}</h2>
+  const statusLabel = isActive
+    ? (secs === 0 ? '🎯 전투 시작!' : '📡 공유 중')
+    : '⏸ 대기 중';
 
-      <div className="countdown-display">
-        <span id="countdown-number" className={dispClass}>
-          {secs !== null ? secs : '--'}
-        </span>
+  return (
+    <section className="cd-section">
+      {/* 상태 뱃지 */}
+      <div className={`cd-status-badge ${isActive ? (secs === 0 ? 'finished' : 'active') : ''}`}>
+        {statusLabel}
       </div>
 
-      {isAdmin && (
-        <div id="countdown-controls" className="input-row" style={{ marginTop: '8px' }}>
-          <input
-            className="input input-short"
-            type="number"
-            min="1"
-            placeholder={t('countdownSeconds')}
-            value={inputSec}
-            onChange={(e) => setInputSec(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleStart()}
-          />
-          <button className="btn btn-primary" onClick={handleStart}>
-            {t('countdownStart')}
-          </button>
-          <button className="btn btn-danger" onClick={handleStop}>
-            {t('countdownStop')}
-          </button>
+      {/* 원형 링 + 숫자 */}
+      <RingProgress progress={progress} secs={secs} total={total} />
+
+      {/* 컨트롤 영역 (권한 있는 경우만) */}
+      {canControl && (
+        <div className="cd-controls">
+          {/* 프리셋 버튼 */}
+          <div className="cd-presets">
+            {PRESETS.map((p) => (
+              <button
+                key={p.value}
+                className={`cd-preset-btn ${!isActive && parseInt(inputSec) === p.value ? 'selected' : ''}`}
+                onClick={() => {
+                  setInputSec(String(p.value));
+                  if (!isActive) handleStart(p.value);
+                }}
+                disabled={isActive}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+
+          {/* 커스텀 입력 + 시작/정지 */}
+          <div className="cd-input-row">
+            <input
+              className="input cd-input"
+              type="number"
+              min="1"
+              placeholder="직접 입력 (초)"
+              value={inputSec}
+              onChange={(e) => setInputSec(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && !isActive && handleStart()}
+              disabled={isActive}
+            />
+            {!isActive ? (
+              <button
+                className="btn btn-primary cd-btn-start"
+                onClick={() => handleStart()}
+                disabled={!inputSec || parseInt(inputSec) < 1}
+              >
+                ▶ 시작
+              </button>
+            ) : (
+              <button className="btn btn-danger cd-btn-stop" onClick={handleStop}>
+                ■ 중지
+              </button>
+            )}
+          </div>
         </div>
+      )}
+
+      {/* 권한 없는 경우 — 시청자 메시지 */}
+      {!canControl && !isActive && (
+        <p className="cd-viewer-msg">SFC가 카운트다운을 시작하면 여기에 표시됩니다</p>
       )}
     </section>
   );

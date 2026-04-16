@@ -4,6 +4,7 @@ import { useSocket } from './hooks/useSocket';
 import { useI18n } from './i18n';
 import { api } from './api';
 import AuthModal from './components/Auth/AuthModal';
+import Petals from './components/Layout/Petals';
 import Header from './components/Layout/Header';
 import OnlineList from './components/Dashboard/OnlineList';
 import BattleTab from './components/Battle/BattleTab';
@@ -48,11 +49,12 @@ export default function App() {
   if (hydrating) return null; // 복원 중 빈 화면 (깜빡임 방지)
 
   if (!user) {
-    return <AuthModal />;
+    return <><Petals /><AuthModal /></>;
   }
 
   return (
     <div className="app-container">
+      <Petals />
       <Header activeTab={activeTab} onTabChange={setActiveTab} />
       <main className="tab-content">
         {activeTab === 'dashboard'  && <OnlineList />}

@@ -83,7 +83,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     @MessageBody() totalSeconds: number,
   ) {
     const user = this.getUserFromSocket(client);
-    if (!user || !['admin', 'developer'].includes(user.role)) return;
+    if (!user || !['admin', 'developer', 'SFC'].includes(user.role)) return;
     if (typeof totalSeconds !== 'number' || totalSeconds < 1 || totalSeconds > 600) return;
 
     this.countdown = { active: true, startedAt: Date.now(), totalSeconds };
@@ -93,7 +93,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
   @SubscribeMessage('countdown:stop')
   handleCountdownStop(@ConnectedSocket() client: Socket) {
     const user = this.getUserFromSocket(client);
-    if (!user || !['admin', 'developer'].includes(user.role)) return;
+    if (!user || !['admin', 'developer', 'SFC'].includes(user.role)) return;
 
     this.countdown = { active: false, startedAt: 0, totalSeconds: 0 };
     this.server.emit('countdown:state', this.countdown);
