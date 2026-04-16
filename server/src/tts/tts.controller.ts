@@ -1,21 +1,10 @@
-import { Controller, Get, Param, Res, HttpStatus, UseGuards } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
+import { Controller, Get, Param, Res, HttpStatus } from '@nestjs/common';
 import type { Response } from 'express';
 import { TtsService } from './tts.service';
+import { LANGS, PHRASES, isValidTtsKey, getTtsText } from './tts.constants';
 
-const PHRASES: Record<string, Record<string, string>> = {
-  start:  { ko: '카운트다운을 시작합니다.', en: 'Countdown starting.', ja: 'カウントダウンを開始します。', zh: '倒计时开始。' },
-  stop:   { ko: '카운트다운이 중지되었습니다.', en: 'Countdown stopped.', ja: 'カウントダウンが中止されました。', zh: '倒计时已停止。' },
-  finish: { ko: '시작!', en: 'Start!', ja: '始め!', zh: '开始!' },
-};
-
-function getText(lang: string, key: string): string {
-  if (PHRASES[key]) return PHRASES[key][lang] || PHRASES[key]['en'];
-  return key; // 숫자 그대로
-}
-
+// TTS 파일은 숫자 읽기/문구 음성이라 인증 불필요 — HTMLAudioElement는 Authorization 헤더를 보낼 수 없음
 @Controller('tts-audio')
-@UseGuards(AuthGuard('jwt'))
 export class TtsController {
   constructor(private service: TtsService) {}
 
@@ -26,16 +15,29 @@ export class TtsController {
     @Param('key') key: string,
     @Res() res: Response,
   ) {
-    const allowedLangs = ['ko', 'en', 'ja', 'zh'];
-    if (!allowedLangs.includes(lang)) {
+    // 허용 언어 검증
+    if (!(LANGS as readonly string[]).includes(lang)) {
       return res.status(HttpStatus.BAD_REQUEST).send('invalid lang');
     }
 
+    // C1: 화이트리스트 검증 — 1~600 숫자 또는 PHRASES 키만 허용
+    // 임의 텍스트 전달로 ElevenLabs API 비용 폭탄 방지
+    if (!isValidTtsKey(key)) {
+      return res.status(HttpStatus.NOT_FOUND).send('not found');
+    }
+
     try {
-      const text = getText(lang, key);
+      const text = getTtsText(lang, key);
       const fp = await this.service.ensureFile(lang, key, text);
+
+      // M7: 숫자는 내용 불변이므로 1년 immutable, 문구는 변경 가능하므로 1일 캐시
+      const isPhrase = Boolean(PHRASES[key]);
+      const cacheControl = isPhrase
+        ? 'public, max-age=86400'              // 문구: 1일
+        : 'public, max-age=31536000, immutable'; // 숫자: 1년
+
       res.setHeader('Content-Type', 'audio/mpeg');
-      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      res.setHeader('Cache-Control', cacheControl);
       return res.sendFile(fp);
     } catch (e) {
       return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({ error: (e as Error).message });

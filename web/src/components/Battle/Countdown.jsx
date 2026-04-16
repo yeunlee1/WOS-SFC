@@ -4,47 +4,92 @@ import { useI18n } from '../../i18n';
 import { getSocket } from '../../api';
 
 // ── TTS — 서버 캐시된 mp3 직접 재생 ─────────────
-// 키 규칙: 숫자는 숫자 그대로, 문구는 start/stop/finish
-let currentAudio = null;
-const audioCache = new Map(); // key → HTMLAudioElement (preloaded)
+// 키 규칙: 숫자는 숫자 그대로(1~600), 문구는 start/stop/finish
+// M9: 최대 프리셋 10분(600초)까지 커버
+const TTS_NUM_MAX = 600;
+
+let currentAudio = null; // 현재 재생 중인 Audio 객체
 
 function ttsUrl(lang, key) {
   return `/tts-audio/${lang}/${encodeURIComponent(key)}`;
 }
 
-// 즉시 재생 (캐시된 Audio 객체 우선)
+// I2: 재생은 매번 new Audio() — 같은 HTMLAudioElement 재사용 시 발생하는 play() 충돌 방지
+// 브라우저 HTTP 캐시가 네트워크 요청 중복을 막아줌
 function speak(key, lang = 'ko') {
   try {
-    if (currentAudio) { currentAudio.pause(); currentAudio.currentTime = 0; currentAudio = null; }
-    const ck = `${lang}:${key}`;
-    const audio = audioCache.get(ck) || new Audio(ttsUrl(lang, key));
-    audio.currentTime = 0;
+    // 이전 오디오 정지
+    if (currentAudio) {
+      currentAudio.pause();
+      currentAudio = null;
+    }
+    const audio = new Audio(ttsUrl(lang, key));
     currentAudio = audio;
-    audio.play().catch(() => {});
-  } catch { /* 무시 */ }
+    // M6: 재생 완료 시 참조 해제 (메모리 GC 대상 처리)
+    audio.addEventListener('ended', () => {
+      if (currentAudio === audio) currentAudio = null;
+    }, { once: true });
+    audio.play().catch((e) => {
+      // M5: 개발 모드에서 재생 실패 원인 확인 가능
+      if (import.meta.env.DEV) console.warn('[TTS] play 실패:', key, lang, e.message);
+    });
+  } catch (e) {
+    if (import.meta.env.DEV) console.warn('[TTS] speak 오류:', e);
+  }
 }
 
-// 프리페치: Audio 객체 미리 생성해 브라우저 캐시에 올림
+// I1: "1" 재생이 끝난 뒤 finish 멘트 — 현재 오디오가 재생 중이면 ended 이벤트 대기
+function speakAfterCurrent(key, lang) {
+  const ca = currentAudio;
+  if (ca && !ca.ended && !ca.paused) {
+    const onEnd = () => speak(key, lang);
+    ca.addEventListener('ended', onEnd, { once: true });
+    // 1.5초 내 ended 안 오면 강제 재생 (네트워크 지연 대비)
+    setTimeout(() => {
+      ca.removeEventListener('ended', onEnd);
+      if (currentAudio === ca || currentAudio === null) speak(key, lang);
+    }, 1500);
+  } else {
+    speak(key, lang);
+  }
+}
+
+// 프리페치: URL을 미리 브라우저 캐시에 올려 즉시 재생 대비
+// M4: lang 변경 시 이전 lang 캐시를 제거해 메모리 누수 방지
 const prefetchedLangs = new Set();
+const prefetchLinks = new Map(); // lang → Set<key> (관리용)
+
 function prefetchTts(lang) {
   if (prefetchedLangs.has(lang)) return;
   prefetchedLangs.add(lang);
 
+  // 이전 lang의 <link rel="prefetch"> 제거
+  for (const [prevLang, links] of prefetchLinks) {
+    if (prevLang !== lang) {
+      links.forEach(el => el.parentNode?.removeChild(el));
+      prefetchLinks.delete(prevLang);
+    }
+  }
+
+  const langLinks = new Set();
+  prefetchLinks.set(lang, langLinks);
+
   const preload = (key) => {
-    const ck = `${lang}:${key}`;
-    if (audioCache.has(ck)) return;
-    const a = new Audio(ttsUrl(lang, key));
-    a.preload = 'auto';
-    audioCache.set(ck, a);
+    const link = document.createElement('link');
+    link.rel = 'prefetch';
+    link.as = 'fetch';
+    link.href = ttsUrl(lang, key);
+    document.head.appendChild(link);
+    langLinks.add(link);
   };
 
-  // 1~10 즉시
+  // 1~10 + 문구: 즉시 (가장 자주 쓰임)
   for (let i = 1; i <= 10; i++) preload(String(i));
   preload('start'); preload('stop'); preload('finish');
 
-  // 11~180 지연 (UI 블로킹 방지)
+  // 11~600: 지연 (UI 블로킹 방지, 백그라운드 로드)
   setTimeout(() => {
-    for (let i = 11; i <= 180; i++) preload(String(i));
+    for (let i = 11; i <= TTS_NUM_MAX; i++) preload(String(i));
   }, 500);
 }
 
@@ -69,7 +114,6 @@ function RingProgress({ progress, secs, total }) {
                    : secs <= 30     ? 'url(#cd-grad-warning)'
                    :                  'url(#cd-grad-normal)';
 
-  // 항상 초 단위 표시 (분 단위 금지)
   const display = secs === null ? '--' : String(secs);
 
   return (
@@ -89,10 +133,8 @@ function RingProgress({ progress, secs, total }) {
             <stop offset="100%" stopColor="#dc2626" />
           </linearGradient>
         </defs>
-        {/* 배경 트랙 */}
         <circle cx={center} cy={center} r={RADIUS}
           fill="none" stroke="#f3e8ff" strokeWidth={STROKE} />
-        {/* 진행 링 */}
         <circle cx={center} cy={center} r={RADIUS}
           fill="none"
           stroke={ringStroke}
@@ -104,8 +146,6 @@ function RingProgress({ progress, secs, total }) {
           style={{ transition: 'stroke-dashoffset .25s linear, stroke .3s ease' }}
         />
       </svg>
-
-      {/* 숫자 — 절대 위치로 SVG 위에 겹치기 */}
       <div style={{
         position: 'absolute', inset: 0,
         display: 'flex', flexDirection: 'column',
@@ -145,11 +185,11 @@ export default function Countdown() {
   useEffect(() => { prefetchTts(lang); }, [lang]);
 
   // countdown 상태 변경 → interval 재설정
+  // 의존성을 객체 전체 대신 개별 값으로 분리 — 참조만 바뀌는 경우의 불필요한 재실행 방지
+  const { active, startedAt, totalSeconds } = countdown;
   useEffect(() => {
     clearInterval(intervalRef.current);
     lastSpokenRef.current = -1;
-
-    const { active, startedAt, totalSeconds } = countdown;
 
     if (!active) {
       setRemaining(null);
@@ -164,7 +204,8 @@ export default function Countdown() {
       if (rem <= 0) {
         setRemaining(0);
         clearInterval(intervalRef.current);
-        speak('finish', lang);
+        // I1: "1" 재생 완료 후 finish 멘트 (잘리지 않도록)
+        speakAfterCurrent('finish', lang);
         return;
       }
       setRemaining(rem);
@@ -179,30 +220,29 @@ export default function Countdown() {
     tick();
     intervalRef.current = setInterval(tick, 200);
     return () => clearInterval(intervalRef.current);
-  }, [countdown, timeOffset, lang]);
+  }, [active, startedAt, totalSeconds, timeOffset, lang]);
 
   // start/stop 멘트
   useEffect(() => {
     if (!initializedRef.current) {
       initializedRef.current = true;
-      prevActiveRef.current  = countdown.active;
+      prevActiveRef.current  = active;
       return;
     }
-    if (countdown.active && !prevActiveRef.current) {
+    if (active && !prevActiveRef.current) {
       speak('start', lang);
-    } else if (!countdown.active && prevActiveRef.current) {
+    } else if (!active && prevActiveRef.current) {
       speak('stop', lang);
     }
-    prevActiveRef.current = countdown.active;
-  }, [countdown.active, lang]);
+    prevActiveRef.current = active;
+  }, [active, lang]);
 
-  // 제어 권한: admin, developer, SFC만 (member는 시청 전용)
   const canControl = user?.role && user.role !== 'member';
 
   const secs     = remaining !== null ? Math.max(0, Math.ceil(remaining)) : null;
-  const total    = countdown.totalSeconds || 0;
+  const total    = totalSeconds || 0;
   const progress = (secs !== null && total > 0) ? secs / total : 1;
-  const isActive = countdown.active;
+  const isActive = active;
 
   function handleStart(seconds) {
     const s = seconds ?? parseInt(inputSec, 10);
@@ -220,18 +260,14 @@ export default function Countdown() {
 
   return (
     <section className="cd-section">
-      {/* 상태 뱃지 */}
       <div className={`cd-status-badge ${isActive ? (secs === 0 ? 'finished' : 'active') : ''}`}>
         {statusLabel}
       </div>
 
-      {/* 원형 링 + 숫자 */}
       <RingProgress progress={progress} secs={secs} total={total} />
 
-      {/* 컨트롤 영역 (권한 있는 경우만) */}
       {canControl && (
         <div className="cd-controls">
-          {/* 프리셋 버튼 */}
           <div className="cd-presets">
             {PRESETS.map((p) => (
               <button
@@ -248,7 +284,6 @@ export default function Countdown() {
             ))}
           </div>
 
-          {/* 커스텀 입력 + 시작/정지 */}
           <div className="cd-input-row">
             <input
               className="input cd-input"
@@ -277,7 +312,6 @@ export default function Countdown() {
         </div>
       )}
 
-      {/* 권한 없는 경우 — 시청자 메시지 */}
       {!canControl && !isActive && (
         <p className="cd-viewer-msg">SFC가 카운트다운을 시작하면 여기에 표시됩니다</p>
       )}
