@@ -85,13 +85,15 @@ export default function ChatTab() {
   }
 
   return (
-    <div className="chat-container">
+    <div className="chat-layout">
       {/* 온라인 유저 바 */}
-      <div className="chat-online-bar">
-        <span className="chat-online-count">{onlineUsers.length}</span>
+      <div className="chat-header">
+        <span className="chat-online-badge">{onlineUsers.length} online</span>
         <div className="chat-online-list">
           {onlineUsers.map((u) => (
-            <span key={u} className="chat-online-user">{u}</span>
+            <span key={u.nickname ?? u} className="chat-online-user">
+              {u.nickname ?? u}
+            </span>
           ))}
         </div>
       </div>
@@ -119,14 +121,13 @@ export default function ChatTab() {
       {/* 입력 영역 */}
       <div className="chat-input-area">
         <input
-          className="chat-input"
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={t('chatPlaceholder')}
         />
-        <button className="chat-send-btn" onClick={sendMessage}>
+        <button className="btn btn-primary" onClick={sendMessage}>
           {t('chatSend')}
         </button>
       </div>
@@ -163,12 +164,12 @@ function ChatMessage({ msg }) {
       <span className="chat-time">{time}</span>
       <p className="chat-content">{displayContent}</p>
       {hasTranslation && (
-        <button
-          className="chat-toggle-btn"
+        <span
+          className="chat-toggle-original"
           onClick={() => setShowOriginal((v) => !v)}
         >
           {showOriginal ? t('viewTranslation') : t('viewOriginal')}
-        </button>
+        </span>
       )}
     </div>
   );

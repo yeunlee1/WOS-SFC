@@ -136,39 +136,33 @@ web/
 
 **참고 원본:** `src/renderer/js/chat.js`
 
-- [ ] `Chat/ChatTab.jsx` 생성
-  - [ ] `messages`: 로컬 state (store 불필요)
-  - [ ] 마운트 시 소켓 이벤트 직접 구독:
-    - [ ] `getSocket().on('chat:history', ...)` → `translateChatMessage` 일괄 적용
-    - [ ] `getSocket().on('chat:message', ...)` → 번역 후 append
-    - [ ] `getSocket().on('chat:system', ...)`
-    - [ ] `getSocket().on('chat:online', ...)`
-  - [ ] 자동 스크롤: `useRef(messagesEndRef) + useEffect([messages])`
-  - [ ] 원문/번역 토글 (translatedContent 있을 때)
-  - [ ] 언마운트 시 소켓 이벤트 리스너 정리 (`socket.off(...)`)
+- [x] `Chat/ChatTab.jsx` 생성
+  - [x] `messages`: 로컬 state (store 불필요)
+  - [x] 마운트 시 소켓 이벤트 직접 구독:
+    - [x] `getSocket().on('chat:history', ...)` → `translateChatMessage` 일괄 적용
+    - [x] `getSocket().on('chat:message', ...)` → 번역 후 append
+    - [x] `getSocket().on('chat:system', ...)`
+    - [x] onlineUsers — `store.onlineUsers` 구독 (chat:online 별도 구독 제거)
+  - [x] 자동 스크롤: `useRef(messagesEndRef) + useEffect([messages])`
+  - [x] 원문/번역 토글 (translatedContent 있을 때)
+  - [x] 언마운트 시 소켓 이벤트 리스너 정리 (`socket.off(...)`)
 
 ---
 
 ## Task 6: 최종 통합 및 검증
 
-- [ ] CSS 클래스명 점검 — 기존 `style.css` 클래스가 React 컴포넌트에서 그대로 사용됨
-  - [ ] `section`, `section-title`, `section-desc`
-  - [ ] `rally-card`, `rally-countdown`, `rally-progress-bar`
-  - [ ] `countdown-number`, `countdown-danger`, `countdown-warning`
-  - [ ] `member-card`, `member-dispatch-time`
-  - [ ] `notice-row`, `notice-detail-*`, `notice-badge`
-  - [ ] `board-post-card`, `board-post-*`
-  - [ ] `sub-tab-nav`, `sub-tab-btn`
-  - [ ] `input-row`, `input-col`, `input-label`, `input-short`
-- [ ] `npm run build` (web/) — 빌드 성공 확인
-- [ ] `http://localhost:5173` 시각적 확인
-  - [ ] 로그인/회원가입 동작
-  - [ ] 집결 타이머 실시간 동기화
-  - [ ] 카운트다운 TTS 재생
-  - [ ] 발송 타이밍 계산
-  - [ ] 공지 핀보드 등록/삭제/번역
-  - [ ] 연맹 게시판 게시/번역
-  - [ ] 채팅 실시간 송수신
+- [x] CSS 클래스명 점검 — 기존 `style.css` 클래스가 React 컴포넌트에서 그대로 사용됨
+  - [x] `section`, `section-title`, `section-desc`
+  - [x] `rally-card`, `rally-countdown`, `rally-progress-bar`
+  - [x] `countdown-number`, `countdown-danger`, `countdown-warning`
+  - [x] `member-card`, `member-dispatch-time`
+  - [x] `notice-row`, `notice-detail-*`, `notice-badge`
+  - [x] `board-post-card`, `board-post-*`
+  - [x] `sub-tab-nav`, `sub-tab-btn`
+  - [x] `input-row`, `input-col`, `input-label`, `input-short`
+  - [x] ChatTab CSS 불일치 수정: `chat-container`→`chat-layout`, `chat-online-bar`→`chat-header`, `chat-online-count`→`chat-online-badge`, `chat-toggle-btn`→`chat-toggle-original`
+- [x] `npm run build` (web/) — 빌드 성공 ✅ (88 modules, 227kB JS)
+- [ ] `http://localhost:5173` 시각적 확인 — 로컬 실행 필요 (자동화 불가)
 
 ---
 
@@ -180,10 +174,10 @@ web/
 | Task 2 | 공통 레이아웃 | ✅ 완료 |
 | Task 3 | BattleTab 그룹 | ✅ 완료 |
 | Task 4 | CommunityTab 그룹 | ✅ 완료 |
-| Task 5 | ChatTab | ⬜ 미완료 |
-| Task 6 | 최종 통합/검증 | ⬜ 미완료 |
+| Task 5 | ChatTab | ✅ 완료 |
+| Task 6 | 최종 통합/검증 | 🔶 빌드 완료, 시각적 확인 미완 |
 
-**전체 진행률: 4/6 Tasks 완료 (약 67%)**
+**전체 진행률: 5.5/6 Tasks 완료 (약 92%) — 로컬 실행 확인만 남음**
 
 ---
 
