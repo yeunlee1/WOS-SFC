@@ -4,9 +4,9 @@ import { useI18n } from '../../i18n';
 import { getSocket } from '../../api';
 
 // ── TTS — 서버 캐시된 mp3 직접 재생 ─────────────
-// 키 규칙: 숫자는 숫자 그대로(1~600), 문구는 start/stop/finish
-// M9: 최대 프리셋 10분(600초)까지 커버
-const TTS_NUM_MAX = 600;
+// 키 규칙: 숫자는 숫자 그대로(1~180), 문구는 start/stop
+// 캐시 범위: 1~180 (tts-generate로 사전 생성된 파일)
+const TTS_NUM_MAX = 180;
 
 let currentAudio = null; // 현재 재생 중인 Audio 객체
 
@@ -17,6 +17,8 @@ function ttsUrl(lang, key) {
 // I2: 재생은 매번 new Audio() — 같은 HTMLAudioElement 재사용 시 발생하는 play() 충돌 방지
 // 브라우저 HTTP 캐시가 네트워크 요청 중복을 막아줌
 function speak(key, lang = 'ko') {
+  // 캐시 범위(1~180) 초과 숫자는 스킵 — API 호출 방지
+  if (/^\d+$/.test(key) && parseInt(key, 10) > TTS_NUM_MAX) return;
   try {
     // 이전 오디오 정지
     if (currentAudio) {
@@ -30,7 +32,8 @@ function speak(key, lang = 'ko') {
       if (currentAudio === audio) currentAudio = null;
     }, { once: true });
     audio.play().catch((e) => {
-      // M5: 개발 모드에서 재생 실패 원인 확인 가능
+      // pause()로 인한 play() 중단은 정상 동작 — 무시
+      if (e.name === 'AbortError') return;
       if (import.meta.env.DEV) console.warn('[TTS] play 실패:', key, lang, e.message);
     });
   } catch (e) {
@@ -87,7 +90,7 @@ function prefetchTts(lang) {
   for (let i = 1; i <= 10; i++) preload(String(i));
   preload('start'); preload('stop');
 
-  // 11~600: 지연 (UI 블로킹 방지, 백그라운드 로드)
+  // 11~180: 지연 (UI 블로킹 방지, 백그라운드 로드)
   setTimeout(() => {
     for (let i = 11; i <= TTS_NUM_MAX; i++) preload(String(i));
   }, 500);
