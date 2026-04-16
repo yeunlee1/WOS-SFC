@@ -15,9 +15,13 @@ export const PHRASES: Record<string, Record<string, string>> = {
   finish: { ko: '시작!', en: 'Start!', ja: '始め!', zh: '开始!' },
 };
 
-// 숫자 범위: 최대 프리셋 10분(600초) 커버
+// 숫자 범위
 export const TTS_NUM_MIN = 1;
-export const TTS_NUM_MAX = 600;
+export const TTS_NUM_MAX = 600;  // 유효성 검사 상한 (최대 프리셋 10분)
+
+// 사전 생성 상한 — 무료 티어: 1~180 ≈ 6,000글자/4개언어 (10,000글자/월 이내)
+// Starter 이상으로 업그레이드 시 600으로 올려도 됨
+export const TTS_PREGEN_MAX = 180;
 
 /**
  * 허용된 TTS 키인지 검증 — 화이트리스트 초과 요청으로 ElevenLabs 비용 폭탄 방지

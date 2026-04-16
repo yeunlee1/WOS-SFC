@@ -4,7 +4,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as fsPromises from 'fs/promises';
 import axios from 'axios';
-import { LANGS, LANG_CODES, PHRASES, TTS_NUM_MAX, getTtsText } from './tts.constants';
+import { LANGS, LANG_CODES, PHRASES, TTS_PREGEN_MAX, getTtsText } from './tts.constants';
 
 // ── 동시 ElevenLabs 호출 수 제한 (rate limit 대응) ──────────────────────
 class Semaphore {
@@ -39,8 +39,8 @@ export class TtsService implements OnModuleInit {
   private readonly apiKey: string;
   private readonly voiceId: string;
   private readonly cacheDir: string;
-  // 동시 ElevenLabs 호출 3개로 제한 (Starter 플랜 기준)
-  private readonly semaphore = new Semaphore(3);
+  // 동시 ElevenLabs 호출 1개로 제한 (무료 티어 기준 — Starter 이상: 3으로 변경 가능)
+  private readonly semaphore = new Semaphore(1);
   // 동일 파일 중복 생성 방지 — 같은 키에 대한 요청을 하나의 Promise로 합침
   private readonly pendingFiles = new Map<string, Promise<string>>();
 
@@ -161,10 +161,11 @@ export class TtsService implements OnModuleInit {
       );
     }
 
-    // 3단계: 31~600 백그라운드 (서버 startup 블로킹 없음, concurrency=3 세마포어 적용)
+    // 3단계: 31~180 백그라운드 (무료 티어 기준 — 총 ~6,000글자로 10,000글자/월 이내)
+    // 181~600은 on-demand 생성 (첫 사용 시 1회만 ElevenLabs 호출, 이후 캐시)
     const batch3: Array<{ lang: string; key: string; text: string }> = [];
     for (const lang of LANGS) {
-      for (let i = 31; i <= TTS_NUM_MAX; i++) {
+      for (let i = 31; i <= TTS_PREGEN_MAX; i++) {
         batch3.push({ lang, key: String(i), text: String(i) });
       }
     }
@@ -174,7 +175,7 @@ export class TtsService implements OnModuleInit {
           this.logger.warn(`백그라운드 생성 실패 [${lang}/${key}]: ${e.message}`)
         )
       )
-    ).then(() => this.logger.log('TTS 사전 생성 완료 (1~600, 전 언어)'))
+    ).then(() => this.logger.log(`TTS 사전 생성 완료 (1~${TTS_PREGEN_MAX}, 전 언어)`))
      .catch(() => {});
   }
 }
