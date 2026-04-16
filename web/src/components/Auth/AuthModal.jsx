@@ -13,10 +13,14 @@ const LANGUAGES = [
 ];
 
 const DEV_ACCOUNTS = [
-  { label: '👑 관리자 (한국)', nickname: 'dev_admin_ko',  password: 'devpass123', role: 'admin', language: 'ko', allianceName: 'KOR', name: '관리자',    birthDate: '1990-01-01' },
-  { label: '🇨🇳 관리자 (중국)', nickname: 'dev_member_zh', password: 'devpass123', role: 'admin', language: 'zh', allianceName: 'KOR', name: '중국관리자', birthDate: '1990-01-01' },
-  { label: '🇺🇸 관리자 (영어)', nickname: 'dev_member_en', password: 'devpass123', role: 'admin', language: 'en', allianceName: 'KOR', name: 'EnAdmin',   birthDate: '1990-01-01' },
-  { label: '🇯🇵 관리자 (일본)', nickname: 'dev_member_ja', password: 'devpass123', role: 'admin', language: 'ja', allianceName: 'KOR', name: '日本管理者', birthDate: '1990-01-01' },
+  { label: '👑 관리자 (한국)', nickname: 'dev_admin_ko',  password: 'devpass123', role: 'admin',  language: 'ko', allianceName: 'KOR', name: '관리자',    birthDate: '1990-01-01' },
+  { label: '🇨🇳 관리자 (중국)', nickname: 'dev_admin_zh',  password: 'devpass123', role: 'admin',  language: 'zh', allianceName: 'KOR', name: '中国管理员', birthDate: '1990-01-01' },
+  { label: '🇺🇸 관리자 (영어)', nickname: 'dev_admin_en',  password: 'devpass123', role: 'admin',  language: 'en', allianceName: 'KOR', name: 'EnAdmin',   birthDate: '1990-01-01' },
+  { label: '🇯🇵 관리자 (일본)', nickname: 'dev_admin_ja',  password: 'devpass123', role: 'admin',  language: 'ja', allianceName: 'KOR', name: '日本管理者', birthDate: '1990-01-01' },
+  { label: '🙋 멤버 (한국)',   nickname: 'dev_member_ko', password: 'devpass123', role: 'member', language: 'ko', allianceName: 'KOR', name: '한국멤버',   birthDate: '1990-01-01' },
+  { label: '🙋 멤버 (중국)',   nickname: 'dev_member_zh', password: 'devpass123', role: 'member', language: 'zh', allianceName: 'KOR', name: '中国成员',   birthDate: '1990-01-01' },
+  { label: '🙋 멤버 (영어)',   nickname: 'dev_member_en', password: 'devpass123', role: 'member', language: 'en', allianceName: 'KOR', name: 'EnMember',  birthDate: '1990-01-01' },
+  { label: '🙋 멤버 (일본)',   nickname: 'dev_member_ja', password: 'devpass123', role: 'member', language: 'ja', allianceName: 'KOR', name: '日本メンバー', birthDate: '1990-01-01' },
 ];
 
 export default function AuthModal() {

@@ -13,9 +13,8 @@ export const GOOGLE_VOICES: Record<string, { languageCode: string; name: string 
 
 // 카운트다운 문구 (서비스·컨트롤러 공통 사용)
 export const PHRASES: Record<string, Record<string, string>> = {
-  start:  { ko: '카운트다운을 시작합니다.', en: 'Countdown starting.', ja: 'カウントダウンを開始します。', zh: '倒计时开始。' },
+  start:  { ko: '준비해주세요.', en: 'Get ready.', ja: '準備してください。', zh: '请准备。' },
   stop:   { ko: '카운트다운이 중지되었습니다.', en: 'Countdown stopped.', ja: 'カウントダウンが中止されました。', zh: '倒计时已停止。' },
-  finish: { ko: '시작!', en: 'Start!', ja: '始め!', zh: '开始!' },
 };
 
 // 숫자 범위

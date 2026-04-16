@@ -85,7 +85,7 @@ function prefetchTts(lang) {
 
   // 1~10 + 문구: 즉시 (가장 자주 쓰임)
   for (let i = 1; i <= 10; i++) preload(String(i));
-  preload('start'); preload('stop'); preload('finish');
+  preload('start'); preload('stop');
 
   // 11~600: 지연 (UI 블로킹 방지, 백그라운드 로드)
   setTimeout(() => {
@@ -204,8 +204,6 @@ export default function Countdown() {
       if (rem <= 0) {
         setRemaining(0);
         clearInterval(intervalRef.current);
-        // I1: "1" 재생 완료 후 finish 멘트 (잘리지 않도록)
-        speakAfterCurrent('finish', lang);
         return;
       }
       setRemaining(rem);
