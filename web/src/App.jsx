@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useStore } from './store';
 import { useSocket } from './hooks/useSocket';
+import { useResizable } from './hooks/useResizable';
 import { useI18n } from './i18n';
 import { api } from './api';
 import AuthModal from './components/Auth/AuthModal';
 import Petals from './components/Layout/Petals';
 import Header from './components/Layout/Header';
-import OnlineList from './components/Dashboard/OnlineList';
+import OnlinePanel from './components/Layout/OnlinePanel';
 import BattleTab from './components/Battle/BattleTab';
 import CommunityTab from './components/Community/CommunityTab';
 import ChatTab from './components/Chat/ChatTab';
@@ -18,8 +19,10 @@ export default function App() {
   const clearUser = useStore((s) => s.clearUser);
   const setTimeOffset = useStore((s) => s.setTimeOffset);
   const { changeLang } = useI18n();
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState('battle');
   const [hydrating, setHydrating] = useState(!!token && !user);
+  const { size: sidebarWidth, handleMouseDown: startSidebarResize } =
+    useResizable('wos-sidebar-width', 200, { min: 150, max: 450 });
 
   // 소켓 연결 (로그인 후 유지)
   useSocket(token);
@@ -56,12 +59,18 @@ export default function App() {
     <div className="app-container">
       <Petals />
       <Header activeTab={activeTab} onTabChange={setActiveTab} />
-      <main className="tab-content">
-        {activeTab === 'dashboard'  && <OnlineList />}
-        {activeTab === 'battle'     && <BattleTab />}
-        {activeTab === 'community'  && <CommunityTab />}
-        {activeTab === 'chat'       && <ChatTab />}
-      </main>
+      <div className="main-with-sidebar">
+        <main className="tab-content">
+          {activeTab === 'battle'    && <BattleTab />}
+          {activeTab === 'community' && <CommunityTab />}
+          {activeTab === 'chat'      && <ChatTab />}
+        </main>
+        <div
+          className="resize-handle resize-handle--vertical"
+          onMouseDown={startSidebarResize}
+        />
+        <OnlinePanel style={{ width: sidebarWidth }} />
+      </div>
     </div>
   );
 }
