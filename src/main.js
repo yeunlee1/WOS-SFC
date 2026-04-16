@@ -306,3 +306,36 @@ ipcMain.handle('api-set-user-role', async (event, nickname, role) => {
     return { success: true };
   } catch (e) { return { success: false, error: e.message }; }
 });
+
+// ── ElevenLabs TTS ──
+const ttsCache = new Map(); // text -> base64 audio (세션 내 캐시)
+
+ipcMain.handle('tts-speak', async (event, text) => {
+  const apiKey = process.env.ELEVENLABS_API_KEY;
+  if (!apiKey) return { success: false, error: 'ELEVENLABS_API_KEY 없음' };
+
+  if (ttsCache.has(text)) {
+    return { success: true, audio: ttsCache.get(text) };
+  }
+
+  const voiceId = process.env.ELEVENLABS_VOICE_ID || 'nCTe7fTwrDEKxMJpzYE5';
+  try {
+    const res = await axios.post(
+      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
+      {
+        text,
+        model_id: 'eleven_flash_v2_5',
+        voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+      },
+      {
+        headers: { 'xi-api-key': apiKey, 'Content-Type': 'application/json' },
+        responseType: 'arraybuffer',
+      }
+    );
+    const base64 = Buffer.from(res.data).toString('base64');
+    ttsCache.set(text, base64);
+    return { success: true, audio: base64 };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
