@@ -168,8 +168,6 @@ const PRESETS = [
   { label: '30초', value: 30 },
   { label: '1분',  value: 60 },
   { label: '3분',  value: 180 },
-  { label: '5분',  value: 300 },
-  { label: '10분', value: 600 },
 ];
 
 // ── 메인 컴포넌트 ───────────────────────────────
@@ -247,7 +245,7 @@ export default function Countdown() {
 
   function handleStart(seconds) {
     const s = seconds ?? parseInt(inputSec, 10);
-    if (!s || s < 1) return;
+    if (!s || s < 1 || s > 180) return;
     getSocket()?.emit('countdown:start', s);
   }
 
@@ -290,7 +288,8 @@ export default function Countdown() {
               className="input cd-input"
               type="number"
               min="1"
-              placeholder="직접 입력 (초)"
+              max="180"
+              placeholder="직접 입력 (1~180초)"
               value={inputSec}
               onChange={(e) => setInputSec(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && !isActive && handleStart()}
@@ -300,7 +299,7 @@ export default function Countdown() {
               <button
                 className="btn btn-primary cd-btn-start"
                 onClick={() => handleStart()}
-                disabled={!inputSec || parseInt(inputSec) < 1}
+                disabled={!inputSec || parseInt(inputSec) < 1 || parseInt(inputSec) > 180}
               >
                 ▶ 시작
               </button>

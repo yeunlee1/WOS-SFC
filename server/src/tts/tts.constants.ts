@@ -19,7 +19,7 @@ export const PHRASES: Record<string, Record<string, string>> = {
 
 // 숫자 범위
 export const TTS_NUM_MIN = 1;
-export const TTS_NUM_MAX = 600;  // 유효성 검사 상한 (최대 프리셋 10분)
+export const TTS_NUM_MAX = 180;  // 최대 허용 상한 (3분 = 180초)
 
 // 사전 생성 상한 — 최대 프리셋 3분(180초) 기준
 // 1~180 × 4개 언어 + 문구 ≈ 약 2,200자 (무료 티어 1,000,000자 이내)
