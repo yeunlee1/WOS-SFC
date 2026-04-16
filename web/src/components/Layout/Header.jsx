@@ -71,7 +71,7 @@ export default function Header({ activeTab, onTabChange }) {
                 ))}
               </select>
               <button className="btn btn-sm" id="logout-btn" onClick={handleLogout}>
-                로그아웃
+                {t('logout')}
               </button>
             </>
           )}

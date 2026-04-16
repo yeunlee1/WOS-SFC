@@ -95,9 +95,7 @@ export default function AuthModal() {
         res = await api.login({ nickname: account.nickname, password: account.password });
       }
       await api.setUserRole(account.nickname, account.role).catch(() => {});
-      res.user.role = account.role;
-      res.user.language = account.language;
-      await initUser(res.user, res.token);
+      await initUser({ ...res.user, role: account.role, language: account.language }, res.token);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -128,7 +126,6 @@ export default function AuthModal() {
             <select className="modal-nick-input" value={role} onChange={(e) => setRole(e.target.value)}>
               <option value="member">일반 인원</option>
               <option value="admin">관리자</option>
-              <option value="developer">개발자</option>
             </select>
             <input className="modal-nick-input" type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
             <select className="modal-nick-input" value={language} onChange={(e) => setLanguage(e.target.value)}>

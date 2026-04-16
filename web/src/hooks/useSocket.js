@@ -12,25 +12,25 @@ export function useSocket(token) {
 
   useEffect(() => {
     if (!token) return;
-
     const socket = connectSocket(token);
+
+    // 보드 핸들러 — 참조 보관 후 cleanup에서 동일 참조로 off()
+    const boardHandlers = ALLIANCES.map((a) => (posts) => setBoardPosts(a, posts));
 
     socket.on('notices:updated',  setNotices);
     socket.on('rallies:updated',  setRallies);
     socket.on('members:updated',  setMembers);
     socket.on('online:updated',   setOnlineUsers);
     socket.on('countdown:state',  setCountdown);
-    ALLIANCES.forEach((a) =>
-      socket.on(`board:updated:${a}`, (posts) => setBoardPosts(a, posts))
-    );
+    ALLIANCES.forEach((a, i) => socket.on(`board:updated:${a}`, boardHandlers[i]));
 
     return () => {
-      socket.off('notices:updated');
-      socket.off('rallies:updated');
-      socket.off('members:updated');
-      socket.off('online:updated');
-      socket.off('countdown:state');
-      ALLIANCES.forEach((a) => socket.off(`board:updated:${a}`));
+      socket.off('notices:updated',  setNotices);
+      socket.off('rallies:updated',  setRallies);
+      socket.off('members:updated',  setMembers);
+      socket.off('online:updated',   setOnlineUsers);
+      socket.off('countdown:state',  setCountdown);
+      ALLIANCES.forEach((a, i) => socket.off(`board:updated:${a}`, boardHandlers[i]));
       disconnectSocket();
     };
   }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
