@@ -1,22 +1,12 @@
 {
   "name": "wos-sfc-helper",
   "version": "1.0.0",
-  "description": "WOS SFC 전투 보조 데스크탑 앱",
-  "main": "src/main.js",
-  "scripts": {
-    "start": "electron .",
-    "dev": "electron . --inspect"
-  },
+  "description": "WOS SFC 전투 보조 웹 앱",
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "dependencies": {
-    "@anthropic-ai/sdk": "^0.39.0",
-    "axios": "^1.15.0",
-    "dotenv": "^16.4.5",
-    "socket.io-client": "^4.8.3"
-  },
-  "devDependencies": {
-    "electron": "^34.0.0"
-  }
+  "workspaces": [
+    "web",
+    "server"
+  ]
 }
