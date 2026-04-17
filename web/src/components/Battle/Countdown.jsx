@@ -8,28 +8,33 @@ import { getSocket } from '../../api';
 // 캐시 범위: 1~180 (tts-generate로 사전 생성된 파일)
 const TTS_NUM_MAX = 180;
 
-let currentAudio = null; // 현재 재생 중인 Audio 객체
 let lastSpokenKey = null;
 let lastSpokenAt  = 0;
 const DEDUP_WINDOW_MS = 500; // 같은 key 재요청 방어 창
+
+// 단일 공유 오디오 엘리먼트 — 같은 탭 안에서 동시에 두 개 재생되는 물리적 가능성 제거
+let sharedAudio = null;
+function getSharedAudio() {
+  if (!sharedAudio) {
+    sharedAudio = new Audio();
+    sharedAudio.preload = 'auto';
+  }
+  return sharedAudio;
+}
 
 function ttsUrl(lang, key) {
   return `/tts-audio/${lang}/${encodeURIComponent(key)}`;
 }
 
-// D1: 전역 중복 방어 — 동일 key가 500ms 내 두 번 들어오면 무시.
-//     StrictMode / HMR / 다중 구독 / 외부 트리거 등 어떤 경로라도 보호.
-// I2: 재생은 매번 new Audio() — 같은 HTMLAudioElement 재사용 시 발생하는 play() 충돌 방지.
-//     브라우저 HTTP 캐시가 네트워크 요청 중복을 막아줌.
+// D1: 전역 중복 방어 — 동일 key가 500ms 내 두 번 들어오면 무시
+// D2: 단일 Audio 엘리먼트의 src를 교체해서 재생 — 이전 재생 자동 중단, 두 소리 겹침 불가능
 function speak(key, lang = 'ko') {
-  // 캐시 범위(1~180) 초과 숫자는 스킵 — API 호출 방지
   if (/^\d+$/.test(key) && parseInt(key, 10) > TTS_NUM_MAX) return;
 
   const now = performance.now();
   if (lastSpokenKey === key && (now - lastSpokenAt) < DEDUP_WINDOW_MS) {
     if (import.meta.env.DEV) {
       console.warn('[TTS] dedup skip:', key, 'Δ', (now - lastSpokenAt).toFixed(0) + 'ms');
-      console.trace('[TTS] caller');
     }
     return;
   }
@@ -37,40 +42,16 @@ function speak(key, lang = 'ko') {
   lastSpokenAt  = now;
 
   try {
-    // 이전 오디오 정지
-    if (currentAudio) {
-      currentAudio.pause();
-      currentAudio = null;
-    }
-    const audio = new Audio(ttsUrl(lang, key));
-    currentAudio = audio;
-    // M6: 재생 완료 시 참조 해제 (메모리 GC 대상 처리)
-    audio.addEventListener('ended', () => {
-      if (currentAudio === audio) currentAudio = null;
-    }, { once: true });
+    const audio = getSharedAudio();
+    audio.pause();
+    audio.src = ttsUrl(lang, key);
+    audio.load(); // 대기 중이던 이전 fetch 취소
     audio.play().catch((e) => {
-      // pause()로 인한 play() 중단은 정상 동작 — 무시
       if (e.name === 'AbortError') return;
       if (import.meta.env.DEV) console.warn('[TTS] play 실패:', key, lang, e.message);
     });
   } catch (e) {
     if (import.meta.env.DEV) console.warn('[TTS] speak 오류:', e);
-  }
-}
-
-// I1: "1" 재생이 끝난 뒤 finish 멘트 — 현재 오디오가 재생 중이면 ended 이벤트 대기
-function speakAfterCurrent(key, lang) {
-  const ca = currentAudio;
-  if (ca && !ca.ended && !ca.paused) {
-    const onEnd = () => speak(key, lang);
-    ca.addEventListener('ended', onEnd, { once: true });
-    // 1.5초 내 ended 안 오면 강제 재생 (네트워크 지연 대비)
-    setTimeout(() => {
-      ca.removeEventListener('ended', onEnd);
-      if (currentAudio === ca || currentAudio === null) speak(key, lang);
-    }, 1500);
-  } else {
-    speak(key, lang);
   }
 }
 
