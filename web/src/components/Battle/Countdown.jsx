@@ -9,16 +9,30 @@ import { getSocket } from '../../api';
 const TTS_NUM_MAX = 180;
 
 let currentAudio = null; // 현재 재생 중인 Audio 객체
+let lastSpokenKey = null;
+let lastSpokenAt  = 0;
+const DEDUP_WINDOW_MS = 500; // 같은 key 재요청 방어 창
 
 function ttsUrl(lang, key) {
   return `/tts-audio/${lang}/${encodeURIComponent(key)}`;
 }
 
-// I2: 재생은 매번 new Audio() — 같은 HTMLAudioElement 재사용 시 발생하는 play() 충돌 방지
-// 브라우저 HTTP 캐시가 네트워크 요청 중복을 막아줌
+// D1: 전역 중복 방어 — 동일 key가 500ms 내 두 번 들어오면 무시.
+//     StrictMode / HMR / 다중 구독 / 외부 트리거 등 어떤 경로라도 보호.
+// I2: 재생은 매번 new Audio() — 같은 HTMLAudioElement 재사용 시 발생하는 play() 충돌 방지.
+//     브라우저 HTTP 캐시가 네트워크 요청 중복을 막아줌.
 function speak(key, lang = 'ko') {
   // 캐시 범위(1~180) 초과 숫자는 스킵 — API 호출 방지
   if (/^\d+$/.test(key) && parseInt(key, 10) > TTS_NUM_MAX) return;
+
+  const now = performance.now();
+  if (lastSpokenKey === key && (now - lastSpokenAt) < DEDUP_WINDOW_MS) {
+    if (import.meta.env.DEV) console.warn('[TTS] dedup skip:', key);
+    return;
+  }
+  lastSpokenKey = key;
+  lastSpokenAt  = now;
+
   try {
     // 이전 오디오 정지
     if (currentAudio) {
