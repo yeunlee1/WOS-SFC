@@ -30,11 +30,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   // 클라이언트 연결 시: JWT 검증 → 유저 확인 → 히스토리 전송
   async handleConnection(client: Socket) {
     try {
-      const token = client.handshake.auth?.token as string;
-      if (!token) {
+      // httpOnly 쿠키에서 access_token 파싱 (RealtimeGateway와 동일 방식)
+      const cookieStr = client.handshake.headers.cookie || '';
+      const match = cookieStr.match(/(?:^|;\s*)access_token=([^;]+)/);
+      if (!match) {
         client.disconnect();
         return;
       }
+      const token = decodeURIComponent(match[1]);
 
       // JWT 페이로드 검증
       const payload = this.jwtService.verify(token);
