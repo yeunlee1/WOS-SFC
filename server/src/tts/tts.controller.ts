@@ -1,5 +1,6 @@
 import { Controller, Get, Param, Res, HttpStatus } from '@nestjs/common';
 import type { Response } from 'express';
+import { createReadStream } from 'fs';
 import { TtsService } from './tts.service';
 import { LANGS, PHRASES, isValidTtsKey, getTtsText } from './tts.constants';
 
@@ -38,7 +39,12 @@ export class TtsController {
 
       res.setHeader('Content-Type', 'audio/mpeg');
       res.setHeader('Cache-Control', cacheControl);
-      return res.sendFile(fp);
+      const stream = createReadStream(fp);
+      stream.pipe(res);
+      return new Promise<void>((resolve, reject) => {
+        stream.on('end', () => resolve());
+        stream.on('error', reject);
+      });
     } catch (e) {
       return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({ error: (e as Error).message });
     }

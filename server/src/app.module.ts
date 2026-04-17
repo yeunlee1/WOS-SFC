@@ -44,9 +44,9 @@ import { AdminModule } from './admin/admin.module';
     }),
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', '..', '..', 'web', 'dist'),
-      exclude: ['/auth/:path*', '/notices/:path*', '/rallies/:path*', '/members/:path*',
-                '/boards/:path*', '/translations/:path*', '/users/:path*',
-                '/translate/:path*', '/tts-audio/:path*', '/admin/:path*', '/time', '/socket.io/:path*'],
+      exclude: ['/auth/*path', '/notices/*path', '/rallies/*path', '/members/*path',
+                '/boards/*path', '/translations/*path', '/users/*path',
+                '/translate/*path', '/tts-audio/*path', '/admin/*path', '/time', '/socket.io/*path'],
       serveStaticOptions: { fallthrough: false },
     }),
     UsersModule,
