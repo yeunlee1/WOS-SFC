@@ -189,7 +189,10 @@ const PRESETS = [
 
 // ── 메인 컴포넌트 ───────────────────────────────
 export default function Countdown() {
-  const { countdown, timeOffset, user } = useStore();
+  // S1: zustand selector로 구독 범위 최소화 — onlineUsers 등 무관한 state 변경으로 인한 재렌더 차단
+  const countdown   = useStore((s) => s.countdown);
+  const timeOffset  = useStore((s) => s.timeOffset);
+  const user        = useStore((s) => s.user);
   const { t, lang } = useI18n();
 
   const [remaining, setRemaining]   = useState(null);
@@ -198,6 +201,11 @@ export default function Countdown() {
   const lastSpokenRef  = useRef(-1);
   const prevActiveRef  = useRef(countdown.active);
   const initializedRef = useRef(false);
+
+  // D2: timeOffset은 tick 내부에서 읽기 위해 ref로 보관 — deps에서 제외하여 시간 동기화 갱신으로
+  //     Effect 1이 재실행되고 lastSpokenRef가 리셋되어 같은 숫자를 재발성하는 문제 차단.
+  const timeOffsetRef = useRef(timeOffset);
+  useEffect(() => { timeOffsetRef.current = timeOffset; }, [timeOffset]);
 
   // 마운트 / 언어 변경 시 TTS 프리페치
   useEffect(() => { prefetchTts(lang); }, [lang]);
@@ -219,7 +227,7 @@ export default function Countdown() {
     lastSpokenRef.current = totalSeconds;
 
     function tick() {
-      const now     = Date.now() + timeOffset;
+      const now     = Date.now() + timeOffsetRef.current;
       const elapsed = (now - startedAt) / 1000;
       const rem     = totalSeconds - elapsed;
 
@@ -240,7 +248,7 @@ export default function Countdown() {
     tick();
     intervalRef.current = setInterval(tick, 200);
     return () => clearInterval(intervalRef.current);
-  }, [active, startedAt, totalSeconds, timeOffset, lang]);
+  }, [active, startedAt, totalSeconds, lang]);
 
   // start/stop 멘트
   useEffect(() => {
