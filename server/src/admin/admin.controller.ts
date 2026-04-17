@@ -12,7 +12,8 @@ import {
 import { AuthGuard } from '@nestjs/passport';
 import { IsEnum, IsNotEmpty } from 'class-validator';
 import { Request } from 'express';
-import { AdminService, AssignableRole } from './admin.service';
+import { AdminService } from './admin.service';
+import type { AssignableRole } from './admin.service';
 import { DeveloperGuard } from './developer.guard';
 import { User } from '../users/users.entity';
 
