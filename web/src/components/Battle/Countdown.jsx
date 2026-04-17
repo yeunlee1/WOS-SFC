@@ -190,12 +190,16 @@ export default function Countdown() {
   const { active, startedAt, totalSeconds } = countdown;
   useEffect(() => {
     clearInterval(intervalRef.current);
-    lastSpokenRef.current = -1;
 
     if (!active) {
       setRemaining(null);
+      lastSpokenRef.current = -1;
       return;
     }
+
+    // 시작 직후 초기 숫자(totalSeconds)는 speak 하지 않음 — Effect 2의 'start' 멘트와 중복 방지
+    // 1초 경과 후 다음 숫자(totalSeconds - 1)부터 순차 재생
+    lastSpokenRef.current = totalSeconds;
 
     function tick() {
       const now     = Date.now() + timeOffset;

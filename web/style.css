@@ -218,8 +218,6 @@ textarea, .translate-output, .notice-content-text,
 .mobile-menu-toggle:hover { border-color: var(--accent); color: var(--accent); }
 .header-drawer { display: none; }
 .header-overlay-left { display: none; }
-.header-drawer-close { align-self: flex-end; background: transparent; border: none; font-size: 24px; line-height: 1; cursor: pointer; color: var(--text-2); padding: 4px 8px; }
-.header-drawer-close:hover { color: var(--accent); }
 
 .tab-nav { display: flex; padding: 0 14px; border-top: 1px solid var(--border); gap: 2px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .tab-btn {
@@ -692,48 +690,152 @@ input:focus, select:focus, textarea:focus, .input:focus {
     min-width: 40px;
   }
 
-  /* 좌측 슬라이드 드로어 */
+  /* 좌측 슬라이드 드로어 — 불투명 배경 + 섹션 구조 */
   .header-drawer {
     display: flex;
     flex-direction: column;
     position: fixed;
     top: 0; left: 0; bottom: 0;
-    width: min(280px, 85vw);
-    z-index: 202;
-    background: rgba(255,255,255,0.96);
-    backdrop-filter: blur(16px);
+    width: min(300px, 86vw);
+    z-index: 302;
+    background: var(--bg-card);
     border-right: 1px solid var(--border);
-    box-shadow: 4px 0 24px rgba(0,0,0,.18);
+    box-shadow: 6px 0 28px rgba(30, 10, 46, .22);
     transform: translateX(-100%);
-    transition: transform .25s ease;
-    padding: 16px;
-    gap: 12px;
+    transition: transform .28s cubic-bezier(.32,.72,0,1);
+    padding: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
   .header-drawer--open { transform: translateX(0); }
-  .header-drawer-body {
+
+  /* 프로필 헤더 (드로어 상단) */
+  .drawer-profile {
     display: flex;
-    flex-direction: column;
-    gap: 10px;
-    align-items: stretch;
+    align-items: center;
+    gap: 12px;
+    padding: 20px 16px 18px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(135deg, var(--bg-subtle) 0%, var(--bg-card) 100%);
+    position: relative;
   }
-  .header-drawer .user-nickname,
-  .header-drawer .user-role-badge,
-  .header-drawer .user-alliance-badge { align-self: flex-start; font-size: 13px; padding: 5px 12px; }
-  .header-drawer .lang-select,
-  .header-drawer #logout-btn,
-  .header-drawer .mobile-online-toggle {
-    width: 100%;
-    min-height: 44px;
-    font-size: 14px;
+  .drawer-avatar {
+    width: 48px; height: 48px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-weight: 700; font-size: 20px;
+    flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(30,10,46,.18);
+  }
+  .drawer-profile-text { flex: 1; min-width: 0; padding-right: 28px; }
+  .drawer-nickname {
+    font-size: 16px; font-weight: 700; color: var(--text-1);
+    line-height: 1.25; word-break: break-word;
+  }
+  .drawer-meta {
+    display: flex; align-items: center; gap: 6px;
+    margin-top: 5px; flex-wrap: wrap;
+  }
+  .drawer-alliance-badge {
+    font-size: 11px; padding: 2px 9px; border-radius: 10px;
+    color: #fff; font-weight: 700; letter-spacing: .02em;
+  }
+  .drawer-role {
+    font-size: 12px; color: var(--text-3); font-weight: 600;
+  }
+  .drawer-close-btn {
+    position: absolute; top: 10px; right: 10px;
+    background: transparent; border: none;
+    width: 32px; height: 32px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 22px; line-height: 1; cursor: pointer;
+    color: var(--text-3);
+    border-radius: 50%;
+    transition: background .15s, color .15s;
+  }
+  .drawer-close-btn:hover { background: var(--bg-hover); color: var(--accent); }
+
+  /* 섹션 공통 */
+  .drawer-section {
+    padding: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .drawer-section:last-child { border-bottom: none; }
+  .drawer-section-label {
+    font-size: 11px; font-weight: 700;
+    letter-spacing: .08em; text-transform: uppercase;
+    color: var(--text-3);
+    margin-bottom: 10px;
+  }
+  .drawer-field-label {
+    display: block;
+    font-size: 12px; color: var(--text-2); font-weight: 600;
+    margin-bottom: 6px;
+  }
+  .drawer-lang-select {
+    width: 100%; min-height: 44px;
+    padding: 10px 12px; font-size: 14px;
+    border: 1.5px solid var(--border); border-radius: var(--r-sm);
+    background: var(--bg-input); color: var(--text-1);
+    cursor: pointer;
+  }
+  .drawer-lang-select:focus {
+    outline: none; border-color: var(--accent);
   }
 
-  /* 드로어 오버레이 */
+  /* 액션 버튼 — 아이콘 + 텍스트 + 우측 뱃지 */
+  .drawer-action-btn {
+    width: 100%; min-height: 44px;
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 14px;
+    font-size: 14px; font-weight: 600;
+    background: var(--bg-card); color: var(--text-1);
+    border: 1.5px solid var(--border);
+    border-radius: var(--r-sm);
+    cursor: pointer;
+    transition: background .15s, border-color .15s, color .15s;
+    margin-bottom: 8px;
+  }
+  .drawer-action-btn:last-child { margin-bottom: 0; }
+  .drawer-action-btn:hover {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+  .drawer-action-icon { font-size: 16px; }
+  .drawer-action-text { flex: 1; text-align: left; }
+  .drawer-action-count {
+    background: var(--accent);
+    color: #fff;
+    font-size: 11px; font-weight: 700;
+    padding: 2px 8px; border-radius: 10px;
+    min-width: 22px; text-align: center;
+  }
+  .drawer-action-logout {
+    color: #dc2626;
+    border-color: #fecaca;
+  }
+  .drawer-action-logout:hover {
+    border-color: #dc2626;
+    background: #fff1f2;
+    color: #b91c1c;
+  }
+
+  /* 드로어 오버레이 — 블러 + 페이드 */
   .header-overlay-left {
     display: block;
     position: fixed;
     inset: 0;
-    background: rgba(0,0,0,.35);
-    z-index: 201;
+    background: rgba(20, 8, 30, .48);
+    backdrop-filter: blur(3px);
+    z-index: 301;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .25s ease;
+  }
+  .header-overlay-left--open {
+    opacity: 1;
+    pointer-events: auto;
   }
 
   /* 탭 버튼: 균등 분할 + 44px 터치 타겟 + 유동 폰트 */
@@ -760,6 +862,11 @@ input:focus, select:focus, textarea:focus, .input:focus {
   .app-title { font-size: 14px; }
   .header-top { padding: 8px 12px; gap: 8px; }
   .mobile-menu-toggle { padding: 5px 8px; min-height: 36px; min-width: 36px; font-size: 16px; }
+  .drawer-profile { padding: 16px 14px 14px; gap: 10px; }
+  .drawer-avatar { width: 42px; height: 42px; font-size: 18px; }
+  .drawer-nickname { font-size: 15px; }
+  .drawer-section { padding: 14px; }
+  .drawer-action-btn, .drawer-lang-select { font-size: 13px; padding: 9px 12px; }
 }
 
 /* iOS Safari 100vh 버그 대응 — 주소창 높이 포함 문제 수정 */
