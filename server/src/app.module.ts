@@ -23,6 +23,7 @@ import { TranslationsModule } from './translations/translations.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { TranslateModule } from './translate/translate.module';
 import { TtsModule } from './tts/tts.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -45,7 +46,7 @@ import { TtsModule } from './tts/tts.module';
       rootPath: join(__dirname, '..', '..', '..', 'web', 'dist'),
       exclude: ['/auth/:path*', '/notices/:path*', '/rallies/:path*', '/members/:path*',
                 '/boards/:path*', '/translations/:path*', '/users/:path*',
-                '/translate/:path*', '/tts-audio/:path*', '/time', '/socket.io/:path*'],
+                '/translate/:path*', '/tts-audio/:path*', '/admin/:path*', '/time', '/socket.io/:path*'],
       serveStaticOptions: { fallthrough: false },
     }),
     UsersModule,
@@ -59,6 +60,7 @@ import { TtsModule } from './tts/tts.module';
     RealtimeModule,
     TranslateModule,
     TtsModule,
+    AdminModule,
   ],
   controllers: [AppController],
 })

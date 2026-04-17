@@ -70,6 +70,11 @@ export const api = {
 
   // 유저 역할
   setUserRole: (nickname, role) => apiFetch(`/users/${encodeURIComponent(nickname)}/role`, { method: 'PATCH', body: JSON.stringify({ role }) }),
+
+  // Admin Panel (developer 전용)
+  adminGetUsers: () => apiFetch('/admin/users'),
+  adminSetRole: (id, role) => apiFetch(`/admin/users/${id}/role`, { method: 'PATCH', body: JSON.stringify({ role }) }),
+  adminBanUser: (id) => apiFetch(`/admin/users/${id}`, { method: 'DELETE' }),
 };
 
 // ── Socket 싱글톤 ──

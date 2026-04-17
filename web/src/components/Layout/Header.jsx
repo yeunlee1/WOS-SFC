@@ -91,6 +91,15 @@ export default function Header({ activeTab, onTabChange, onToggleOnline }) {
             {t(key)}
           </button>
         ))}
+        {/* developer 전용 관리자 탭 */}
+        {user?.role === 'developer' && (
+          <button
+            className={`tab-btn${activeTab === 'admin' ? ' active' : ''}`}
+            onClick={() => onTabChange('admin')}
+          >
+            🛡️ 관리자
+          </button>
+        )}
       </nav>
     </header>
   );
