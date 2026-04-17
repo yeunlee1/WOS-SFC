@@ -27,7 +27,10 @@ function speak(key, lang = 'ko') {
 
   const now = performance.now();
   if (lastSpokenKey === key && (now - lastSpokenAt) < DEDUP_WINDOW_MS) {
-    if (import.meta.env.DEV) console.warn('[TTS] dedup skip:', key);
+    if (import.meta.env.DEV) {
+      console.warn('[TTS] dedup skip:', key, 'Δ', (now - lastSpokenAt).toFixed(0) + 'ms');
+      console.trace('[TTS] caller');
+    }
     return;
   }
   lastSpokenKey = key;
