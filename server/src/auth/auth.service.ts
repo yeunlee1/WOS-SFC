@@ -4,8 +4,8 @@ import { UsersService } from '../users/users.service';
 import { SignupDto } from './dto/signup.dto';
 import { LoginDto } from './dto/login.dto';
 import * as bcrypt from 'bcrypt';
+import { randomUUID } from 'crypto';
 
-// 서버 접속 코드 (환경변수 SERVER_CODE, 미설정 시 기동 실패)
 const SERVER_CODE = process.env.SERVER_CODE;
 
 @Injectable()
@@ -15,7 +15,24 @@ export class AuthService {
     private readonly jwtService: JwtService,
   ) {}
 
-  // 회원가입: 서버 코드 검증 후 유저 생성 및 JWT 반환
+  private createAccessToken(payload: { id: number; nickname: string; role: string; allianceName: string }) {
+    return this.jwtService.sign(
+      { sub: payload.id, nickname: payload.nickname, role: payload.role, allianceName: payload.allianceName },
+      { expiresIn: '1h' },
+    );
+  }
+
+  private async createRefreshToken(userId: number): Promise<string> {
+    const jti = randomUUID();
+    const hash = await bcrypt.hash(jti, 10);
+    await this.usersService.updateRefreshTokenHash(userId, hash);
+    // refresh token은 jti를 포함한 JWT (타입 구분용)
+    return this.jwtService.sign(
+      { sub: userId, jti, type: 'refresh' },
+      { expiresIn: '7d' },
+    );
+  }
+
   async signup(dto: SignupDto) {
     if (dto.serverCode !== SERVER_CODE) {
       throw new ForbiddenException('서버 코드가 올바르지 않습니다');
@@ -24,22 +41,46 @@ export class AuthService {
       nickname: dto.nickname,
       password: dto.password,
       allianceName: dto.allianceName,
-      role: 'member', // 회원가입 시 항상 일반멤버로 고정 (역할은 관리자만 변경 가능)
+      role: 'member',
       birthDate: dto.birthDate,
       name: dto.name,
       language: dto.language,
     });
-    const token = this.jwtService.sign({ sub: user.id, nickname: user.nickname, role: user.role, allianceName: user.allianceName });
-    return { token, user: { id: user.id, nickname: user.nickname, role: user.role, allianceName: user.allianceName, language: user.language } };
+    const accessToken = this.createAccessToken(user);
+    const refreshToken = await this.createRefreshToken(user.id);
+    return { accessToken, refreshToken, user: { id: user.id, nickname: user.nickname, role: user.role, allianceName: user.allianceName, language: user.language } };
   }
 
-  // 로그인: 닉네임/비밀번호 검증 후 JWT 반환
   async login(dto: LoginDto) {
     const user = await this.usersService.findByNickname(dto.nickname);
     if (!user) throw new UnauthorizedException('닉네임 또는 비밀번호가 올바르지 않습니다');
     const valid = await bcrypt.compare(dto.password, user.passwordHash);
     if (!valid) throw new UnauthorizedException('닉네임 또는 비밀번호가 올바르지 않습니다');
-    const token = this.jwtService.sign({ sub: user.id, nickname: user.nickname, role: user.role, allianceName: user.allianceName });
-    return { token, user: { id: user.id, nickname: user.nickname, role: user.role, allianceName: user.allianceName, language: user.language } };
+    const accessToken = this.createAccessToken(user);
+    const refreshToken = await this.createRefreshToken(user.id);
+    return { accessToken, refreshToken, user: { id: user.id, nickname: user.nickname, role: user.role, allianceName: user.allianceName, language: user.language } };
+  }
+
+  async refreshTokens(rawRefreshToken: string) {
+    try {
+      const payload = this.jwtService.verify<{ sub: number; jti: string; type: string }>(rawRefreshToken);
+      if (payload.type !== 'refresh') throw new UnauthorizedException();
+
+      const user = await this.usersService.findByIdWithRefreshToken(payload.sub);
+      if (!user?.refreshTokenHash) throw new UnauthorizedException();
+
+      const valid = await bcrypt.compare(payload.jti, user.refreshTokenHash);
+      if (!valid) throw new UnauthorizedException();
+
+      const accessToken = this.createAccessToken(user);
+      const newRefreshToken = await this.createRefreshToken(user.id);
+      return { accessToken, refreshToken: newRefreshToken, user: { id: user.id, nickname: user.nickname, role: user.role, allianceName: user.allianceName, language: user.language } };
+    } catch {
+      throw new UnauthorizedException('리프레시 토큰이 유효하지 않습니다');
+    }
+  }
+
+  async logout(userId: number): Promise<void> {
+    await this.usersService.updateRefreshTokenHash(userId, null);
   }
 }

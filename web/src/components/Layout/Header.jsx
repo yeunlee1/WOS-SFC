@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useStore } from '../../store';
 import { useI18n, SUPPORTED_LANGS } from '../../i18n';
-import { disconnectSocket } from '../../api';
+import { api, disconnectSocket } from '../../api';
 
 const ALLIANCE_COLORS = {
   KOR: '#3b82f6', NSL: '#22c55e', JKY: '#a855f7',
@@ -14,8 +14,8 @@ const TAB_KEYS = [
   { id: 'chat',      key: 'tabChat' },
 ];
 
-export default function Header({ activeTab, onTabChange }) {
-  const { user, timeOffset, clearUser } = useStore();
+export default function Header({ activeTab, onTabChange, onToggleOnline }) {
+  const { user, timeOffset, clearUser, onlineUsers } = useStore();
   const { t, lang, changeLang } = useI18n();
   const [utcTime, setUtcTime] = useState('');
 
@@ -34,6 +34,7 @@ export default function Header({ activeTab, onTabChange }) {
 
   async function handleLogout() {
     disconnectSocket();
+    await api.logout().catch(() => {});
     clearUser();
   }
 
@@ -69,6 +70,9 @@ export default function Header({ activeTab, onTabChange }) {
                   <option key={l.code} value={l.code}>{l.flag} {l.label}</option>
                 ))}
               </select>
+              <button className="mobile-online-toggle btn btn-sm" onClick={onToggleOnline}>
+                👥 {onlineUsers.length}
+              </button>
               <button className="btn btn-sm" id="logout-btn" onClick={handleLogout}>
                 {t('logout')}
               </button>

@@ -2,6 +2,7 @@
 import { Controller, Post, Delete, Param, Body, UseGuards, ParseIntPipe } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { RalliesService } from './rallies.service';
+import { CreateRallyDto } from './dto/create-rally.dto';
 
 @Controller('rallies')
 @UseGuards(AuthGuard('jwt'))
@@ -9,8 +10,8 @@ export class RalliesController {
   constructor(private service: RalliesService) {}
 
   @Post()
-  add(@Body() body: { name: string; endTimeUTC: number; totalSeconds: number }) {
-    return this.service.add(body);
+  add(@Body() dto: CreateRallyDto) {
+    return this.service.add(dto);
   }
 
   @Delete(':id')

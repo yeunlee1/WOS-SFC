@@ -41,8 +41,8 @@ export default function AuthModal() {
   const { setUser, setTimeOffset } = useStore();
   const { changeLang } = useI18n();
 
-  async function initUser(user, token) {
-    setUser(user, token);
+  async function initUser(user) {
+    setUser(user);
     changeLang(user.language || 'ko');
     try {
       const localBefore = Date.now();
@@ -57,7 +57,7 @@ export default function AuthModal() {
     setLoading(true); setError('');
     try {
       const res = await api.login({ nickname, password });
-      await initUser(res.user, res.token);
+      await initUser(res.user);
     } catch (err) { setError(err.message); }
     finally { setLoading(false); }
   }
@@ -69,7 +69,7 @@ export default function AuthModal() {
     setLoading(true); setError('');
     try {
       const res = await api.signup({ name, nickname: signupNickname, password: signupPassword, allianceName, role, birthDate, language, serverCode });
-      await initUser(res.user, res.token);
+      await initUser(res.user);
     } catch (err) { setError(err.message); }
     finally { setLoading(false); }
   }
@@ -84,7 +84,7 @@ export default function AuthModal() {
         res = await api.login({ nickname: account.nickname, password: account.password });
       }
       await api.setUserRole(account.nickname, account.role).catch(() => {});
-      await initUser({ ...res.user, role: account.role, language: account.language }, res.token);
+      await initUser({ ...res.user, role: account.role, language: account.language });
     } catch (err) { setError(err.message); }
     finally { setLoading(false); }
   }

@@ -13,7 +13,7 @@ function roleIcon(role) {
   return '';
 }
 
-export default function OnlinePanel({ style }) {
+export default function OnlinePanel({ style, isOpen }) {
   const onlineUsers = useStore((s) => s.onlineUsers);
 
   // 연맹별 그룹 + 역할 정렬
@@ -25,7 +25,7 @@ export default function OnlinePanel({ style }) {
   }).filter((g) => g.users.length > 0); // 0명 연맹 제외
 
   return (
-    <aside className="online-panel" style={style}>
+    <aside className={`online-panel${isOpen ? ' online-panel--open' : ''}`} style={style}>
       <div className="online-panel-header">
         <span className="online-panel-server">🌐 2677</span>
         <span className="online-panel-total">{onlineUsers.length}명</span>

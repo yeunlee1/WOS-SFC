@@ -14,42 +14,42 @@ import ChatTab from './components/Chat/ChatTab';
 
 export default function App() {
   const user      = useStore((s) => s.user);
-  const token     = useStore((s) => s.token);
   const setUser   = useStore((s) => s.setUser);
   const clearUser = useStore((s) => s.clearUser);
   const setTimeOffset = useStore((s) => s.setTimeOffset);
   const { changeLang } = useI18n();
   const [activeTab, setActiveTab] = useState('battle');
-  const [hydrating, setHydrating] = useState(!!token && !user);
+  const [hydrating, setHydrating] = useState(true);
+  const [isOnlineOpen, setIsOnlineOpen] = useState(false);
   const { size: sidebarWidth, handleMouseDown: startSidebarResize } =
     useResizable('wos-sidebar-width', 200, { min: 150, max: 450 });
 
-  // 소켓 연결 (로그인 후 유지)
-  useSocket(token);
+  useSocket(user);
 
-  // 페이지 새로고침 시 유저 복원
   useEffect(() => {
-    if (!token || user) { setHydrating(false); return; }
     (async () => {
       try {
         const me = await api.getMe();
-        setUser(me.user, token);
+        setUser(me.user);
         changeLang(me.user.language || 'ko');
-        // 시간 동기화
         try {
           const localBefore = Date.now();
           const res = await api.getTime();
           setTimeOffset(res.utc - Math.round((localBefore + Date.now()) / 2));
         } catch { /* offset 0 유지 */ }
       } catch {
-        clearUser(); // 토큰 만료 → 로그아웃
+        // 유효한 세션 없음 — 로그인 화면 표시
       } finally {
         setHydrating(false);
       }
     })();
+
+    const handleExpiry = () => clearUser();
+    window.addEventListener('auth:expired', handleExpiry);
+    return () => window.removeEventListener('auth:expired', handleExpiry);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (hydrating) return null; // 복원 중 빈 화면 (깜빡임 방지)
+  if (hydrating) return null;
 
   if (!user) {
     return <><Petals /><AuthModal /></>;
@@ -58,7 +58,11 @@ export default function App() {
   return (
     <div className="app-container">
       <Petals />
-      <Header activeTab={activeTab} onTabChange={setActiveTab} />
+      <Header
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        onToggleOnline={() => setIsOnlineOpen((v) => !v)}
+      />
       <div className="main-with-sidebar">
         <main className="tab-content">
           {activeTab === 'battle'    && <BattleTab />}
@@ -69,7 +73,11 @@ export default function App() {
           className="resize-handle resize-handle--vertical"
           onMouseDown={startSidebarResize}
         />
-        <OnlinePanel style={{ width: sidebarWidth }} />
+        {/* 모바일: 오버레이 클릭으로 사이드바 닫기 */}
+        {isOnlineOpen && (
+          <div className="online-overlay" onClick={() => setIsOnlineOpen(false)} />
+        )}
+        <OnlinePanel style={{ width: sidebarWidth }} isOpen={isOnlineOpen} />
       </div>
     </div>
   );

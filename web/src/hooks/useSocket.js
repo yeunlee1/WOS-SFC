@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useStore, ALLIANCES } from '../store';
 import { connectSocket, disconnectSocket } from '../api';
 
-export function useSocket(token) {
+export function useSocket(user) {
   const setNotices    = useStore((s) => s.setNotices);
   const setRallies    = useStore((s) => s.setRallies);
   const setMembers    = useStore((s) => s.setMembers);
@@ -11,10 +11,10 @@ export function useSocket(token) {
   const setBoardPosts = useStore((s) => s.setBoardPosts);
 
   useEffect(() => {
-    if (!token) return;
-    const socket = connectSocket(token);
+    if (!user) return;
+    // httpOnly 쿠키가 자동 전송되므로 토큰 파라미터 불필요
+    const socket = connectSocket();
 
-    // 보드 핸들러 — 참조 보관 후 cleanup에서 동일 참조로 off()
     const boardHandlers = ALLIANCES.map((a) => (posts) => setBoardPosts(a, posts));
 
     socket.on('notices:updated',  setNotices);
@@ -33,5 +33,5 @@ export function useSocket(token) {
       ALLIANCES.forEach((a, i) => socket.off(`board:updated:${a}`, boardHandlers[i]));
       disconnectSocket();
     };
-  }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 }

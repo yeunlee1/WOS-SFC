@@ -53,6 +53,14 @@ wos-sfc-helper/
 - 현재: 메모리(세션 중만 유지)
 - 개선 시: Electron `store` 또는 localStorage 활용 가능
 
+### UI / 반응형 디자인 (필수)
+- **모든 UI 구현은 반드시 모바일 반응형으로 작성할 것** — 데스크톱 전용 금지
+- 브레이크포인트: `768px` (모바일), `480px` (소형 모바일)
+- 고정 px 너비 금지 → `min()`, `clamp()`, `%`, `vw` 사용
+- 2열 이상 그리드는 `@media (max-width: 768px)` 에서 1열로 전환
+- iOS Safari `100vh` 버그 대응: `height: 100dvh` 사용
+- 새 컴포넌트 추가 시 Chrome DevTools 모바일 에뮬레이터(iPhone SE 375px)로 반드시 확인
+
 ### 보안
 - `contextIsolation: true`, `nodeIntegration: false` 유지
 - API 키는 `.env`에만 보관, 렌더러에 절대 노출 금지

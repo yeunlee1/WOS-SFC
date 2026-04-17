@@ -32,6 +32,9 @@ export class User {
   @Column({ type: 'enum', enum: LANGUAGES })
   language: Language;
 
+  @Column({ name: 'refresh_token_hash', nullable: true, length: 255, select: false })
+  refreshTokenHash: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 }

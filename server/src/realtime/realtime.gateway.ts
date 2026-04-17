@@ -18,14 +18,13 @@ interface OnlineUser {
   role: string;
 }
 
-@WebSocketGateway({ cors: { origin: '*' } })
+const WEB_ORIGIN = process.env.WEB_ORIGIN || 'http://localhost:5173';
+
+@WebSocketGateway({ cors: { origin: WEB_ORIGIN, credentials: true } })
 export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer() server: Server;
 
-  // socketId → OnlineUser
   private onlineMap = new Map<string, OnlineUser>();
-
-  // 카운트다운 상태 (인메모리)
   private countdown = { active: false, startedAt: 0, totalSeconds: 0 };
 
   constructor(
@@ -36,10 +35,13 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     @Inject(forwardRef(() => BoardsService)) private boardsService: BoardsService,
   ) {}
 
+  // httpOnly 쿠키에서 access_token 파싱 후 JWT 검증
   private getUserFromSocket(client: Socket): OnlineUser | null {
     try {
-      const token = client.handshake.auth?.token;
-      if (!token) return null;
+      const cookieStr = client.handshake.headers.cookie || '';
+      const match = cookieStr.match(/(?:^|;\s*)access_token=([^;]+)/);
+      if (!match) return null;
+      const token = decodeURIComponent(match[1]);
       const payload = this.jwtService.verify(token);
       return {
         nickname: payload.nickname,
@@ -58,7 +60,6 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     this.onlineMap.set(client.id, user);
     this.broadcastOnline();
 
-    // 초기 데이터 전송
     const [notices, rallies, members, boards] = await Promise.all([
       this.noticesService.findAll(),
       this.ralliesService.findAll(),
@@ -73,7 +74,6 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       client.emit(`board:updated:${alliance}`, posts.map(this.formatBoardPost));
     }
 
-    // 현재 카운트다운 상태 전송
     client.emit('countdown:state', this.countdown);
   }
 

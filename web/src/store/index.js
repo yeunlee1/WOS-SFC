@@ -3,9 +3,8 @@ import { create } from 'zustand';
 export const ALLIANCES = ['KOR', 'NSL', 'JKY', 'GPX', 'UFO'];
 
 export const useStore = create((set) => ({
-  // 인증
-  user: null,  // { id, nickname, role, allianceName, language }
-  token: localStorage.getItem('wos-token'),
+  // 인증 (토큰은 httpOnly 쿠키로 관리 — JS에서 접근 불가)
+  user: null,
   timeOffset: 0,
 
   // 실시간 데이터
@@ -17,14 +16,8 @@ export const useStore = create((set) => ({
   countdown: { active: false, startedAt: 0, totalSeconds: 0 },
 
   // Actions
-  setUser: (user, token) => {
-    localStorage.setItem('wos-token', token);
-    set({ user, token });
-  },
-  clearUser: () => {
-    localStorage.removeItem('wos-token');
-    set({ user: null, token: null });
-  },
+  setUser: (user) => set({ user }),
+  clearUser: () => set({ user: null }),
   setTimeOffset: (timeOffset) => set({ timeOffset }),
   setNotices:    (notices)    => set({ notices }),
   setRallies:    (rallies)    => set({ rallies }),
