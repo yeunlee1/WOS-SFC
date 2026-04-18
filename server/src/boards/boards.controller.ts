@@ -2,6 +2,7 @@
 import { Controller, Post, Delete, Param, Body, UseGuards, ParseIntPipe } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { BoardsService } from './boards.service';
+import { CreateBoardPostDto } from './dto/create-board-post.dto';
 
 @Controller('boards')
 @UseGuards(AuthGuard('jwt'))
@@ -9,8 +10,8 @@ export class BoardsController {
   constructor(private service: BoardsService) {}
 
   @Post()
-  add(@Body() body: { alliance: string; nickname: string; userAlliance: string; content: string; lang?: string }) {
-    return this.service.add(body);
+  add(@Body() dto: CreateBoardPostDto) {
+    return this.service.add(dto);
   }
 
   @Delete(':id')

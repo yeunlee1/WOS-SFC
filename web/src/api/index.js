@@ -1,17 +1,32 @@
 import { io } from 'socket.io-client';
 import { getCachedTranslation, cacheTranslation } from '../i18n';
 
-// Vite 프록시 덕분에 dev/prod 동일하게 relative URL 사용
+// access token 만료 시 자동 refresh 후 재시도 — 실패 시 auth:expired 이벤트 발행
+let refreshPromise = null;
+
 async function apiFetch(path, options = {}) {
-  const token = localStorage.getItem('wos-token');
   const res = await fetch(path, {
     ...options,
+    credentials: 'include', // httpOnly 쿠키 자동 전송
     headers: {
       'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(options.headers || {}),
     },
   });
+
+  if (res.status === 401 && path !== '/auth/refresh' && path !== '/auth/login' && path !== '/auth/logout') {
+    if (!refreshPromise) {
+      refreshPromise = fetch('/auth/refresh', { method: 'POST', credentials: 'include' })
+        .finally(() => { refreshPromise = null; });
+    }
+    const refreshRes = await refreshPromise;
+    if (refreshRes.ok) {
+      return apiFetch(path, options);
+    }
+    window.dispatchEvent(new Event('auth:expired'));
+    throw new Error('세션이 만료되었습니다. 다시 로그인해주세요.');
+  }
+
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.message || `HTTP ${res.status}`);
@@ -23,6 +38,7 @@ export const api = {
   // 인증
   login:   (data) => apiFetch('/auth/login',  { method: 'POST', body: JSON.stringify(data) }),
   signup:  (data) => apiFetch('/auth/signup', { method: 'POST', body: JSON.stringify(data) }),
+  logout:  ()     => apiFetch('/auth/logout', { method: 'POST' }),
   getMe:   ()     => apiFetch('/auth/me'),
   getTime: ()     => apiFetch('/time'),
 
@@ -49,8 +65,16 @@ export const api = {
   // 번역 실행 (Claude API → 서버)
   translate: (text, targetLang) => apiFetch('/translate', { method: 'POST', body: JSON.stringify({ text, targetLang }) }),
 
+  // TTS (Google Cloud TTS → 서버 프록시, /tts-audio/:lang/:key 로 mp3 직접 서빙됨)
+  tts: (text, language = 'ko') => apiFetch('/tts', { method: 'POST', body: JSON.stringify({ text, language }) }),
+
   // 유저 역할
   setUserRole: (nickname, role) => apiFetch(`/users/${encodeURIComponent(nickname)}/role`, { method: 'PATCH', body: JSON.stringify({ role }) }),
+
+  // Admin Panel (developer 전용)
+  adminGetUsers: () => apiFetch('/admin/users'),
+  adminSetRole: (id, role) => apiFetch(`/admin/users/${id}/role`, { method: 'PATCH', body: JSON.stringify({ role }) }),
+  adminBanUser: (id) => apiFetch(`/admin/users/${id}`, { method: 'DELETE' }),
 };
 
 // ── Socket 싱글톤 ──
@@ -58,10 +82,11 @@ let _socket = null;
 
 export function getSocket() { return _socket; }
 
-export function connectSocket(token) {
+export function connectSocket() {
   if (_socket?.connected) return _socket;
   const url = import.meta.env.VITE_API_URL || '/';
-  _socket = io(url, { auth: { token }, path: '/socket.io' });
+  // httpOnly 쿠키가 자동으로 포함됨 (withCredentials: true)
+  _socket = io(url, { withCredentials: true, path: '/socket.io' });
   return _socket;
 }
 
@@ -76,12 +101,10 @@ export async function translateChatMessage(msg, myLang) {
     return msg;
   }
 
-  // 1. 로컬 캐시 확인
   const localCached = getCachedTranslation(msg.content, myLang);
   if (localCached) return { ...msg, translatedContent: localCached };
 
   try {
-    // 2. 서버 캐시 확인
     const cacheKey = `chat:${msg.content.slice(0, 80)}:${msg.language}:${myLang}`;
     const serverCached = await api.getTranslation(cacheKey);
     if (serverCached?.translated) {
@@ -89,7 +112,6 @@ export async function translateChatMessage(msg, myLang) {
       return { ...msg, translatedContent: serverCached.translated };
     }
 
-    // 3. 번역 API 호출
     const res = await api.translate(msg.content, myLang);
     if (res?.translated) {
       cacheTranslation(msg.content, myLang, res.translated);
@@ -123,7 +145,6 @@ export function formatDateTime(date) {
   return `${h}:${m}:${s}`;
 }
 
-// AudioContext 비프음 (집결 타이머 종료 시)
 export function playBeep(frequency = 880, duration = 200) {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();

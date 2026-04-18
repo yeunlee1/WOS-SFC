@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ServeStaticModule } from '@nestjs/serve-static';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { join } from 'path';
 import { AppController } from './app.controller';
 import { User } from './users/users.entity';
@@ -21,10 +22,13 @@ import { BoardsModule } from './boards/boards.module';
 import { TranslationsModule } from './translations/translations.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { TranslateModule } from './translate/translate.module';
+import { TtsModule } from './tts/tts.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    ThrottlerModule.forRoot([{ name: 'default', ttl: 60000, limit: 60 }]),
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
@@ -40,9 +44,9 @@ import { TranslateModule } from './translate/translate.module';
     }),
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', '..', '..', 'web', 'dist'),
-      exclude: ['/auth/(.*)', '/notices/(.*)', '/rallies/(.*)', '/members/(.*)',
-                '/boards/(.*)', '/translations/(.*)', '/users/(.*)',
-                '/translate/(.*)', '/time', '/socket.io/(.*)'],
+      exclude: ['/auth/*path', '/notices/*path', '/rallies/*path', '/members/*path',
+                '/boards/*path', '/translations/*path', '/users/*path',
+                '/translate/*path', '/tts-audio/*path', '/admin/*path', '/time', '/socket.io/*path'],
       serveStaticOptions: { fallthrough: false },
     }),
     UsersModule,
@@ -55,6 +59,8 @@ import { TranslateModule } from './translate/translate.module';
     TranslationsModule,
     RealtimeModule,
     TranslateModule,
+    TtsModule,
+    AdminModule,
   ],
   controllers: [AppController],
 })

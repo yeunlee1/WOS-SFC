@@ -8,52 +8,50 @@ import { getSocket } from '../../api';
 // 캐시 범위: 1~180 (tts-generate로 사전 생성된 파일)
 const TTS_NUM_MAX = 180;
 
-let currentAudio = null; // 현재 재생 중인 Audio 객체
+let lastSpokenKey = null;
+let lastSpokenAt  = 0;
+const DEDUP_WINDOW_MS = 500; // 같은 key 재요청 방어 창
+
+// 단일 공유 오디오 엘리먼트 — 같은 탭 안에서 동시에 두 개 재생되는 물리적 가능성 제거
+let sharedAudio = null;
+function getSharedAudio() {
+  if (!sharedAudio) {
+    sharedAudio = new Audio();
+    sharedAudio.preload = 'auto';
+  }
+  return sharedAudio;
+}
 
 function ttsUrl(lang, key) {
   return `/tts-audio/${lang}/${encodeURIComponent(key)}`;
 }
 
-// I2: 재생은 매번 new Audio() — 같은 HTMLAudioElement 재사용 시 발생하는 play() 충돌 방지
-// 브라우저 HTTP 캐시가 네트워크 요청 중복을 막아줌
+// D1: 전역 중복 방어 — 동일 key가 500ms 내 두 번 들어오면 무시
+// D2: 단일 Audio 엘리먼트의 src를 교체해서 재생 — 이전 재생 자동 중단, 두 소리 겹침 불가능
 function speak(key, lang = 'ko') {
-  // 캐시 범위(1~180) 초과 숫자는 스킵 — API 호출 방지
   if (/^\d+$/.test(key) && parseInt(key, 10) > TTS_NUM_MAX) return;
-  try {
-    // 이전 오디오 정지
-    if (currentAudio) {
-      currentAudio.pause();
-      currentAudio = null;
+
+  const now = performance.now();
+  if (lastSpokenKey === key && (now - lastSpokenAt) < DEDUP_WINDOW_MS) {
+    if (import.meta.env.DEV) {
+      console.warn('[TTS] dedup skip:', key, 'Δ', (now - lastSpokenAt).toFixed(0) + 'ms');
     }
-    const audio = new Audio(ttsUrl(lang, key));
-    currentAudio = audio;
-    // M6: 재생 완료 시 참조 해제 (메모리 GC 대상 처리)
-    audio.addEventListener('ended', () => {
-      if (currentAudio === audio) currentAudio = null;
-    }, { once: true });
+    return;
+  }
+  lastSpokenKey = key;
+  lastSpokenAt  = now;
+
+  try {
+    const audio = getSharedAudio();
+    audio.pause();
+    audio.src = ttsUrl(lang, key);
+    audio.load(); // 대기 중이던 이전 fetch 취소
     audio.play().catch((e) => {
-      // pause()로 인한 play() 중단은 정상 동작 — 무시
       if (e.name === 'AbortError') return;
       if (import.meta.env.DEV) console.warn('[TTS] play 실패:', key, lang, e.message);
     });
   } catch (e) {
     if (import.meta.env.DEV) console.warn('[TTS] speak 오류:', e);
-  }
-}
-
-// I1: "1" 재생이 끝난 뒤 finish 멘트 — 현재 오디오가 재생 중이면 ended 이벤트 대기
-function speakAfterCurrent(key, lang) {
-  const ca = currentAudio;
-  if (ca && !ca.ended && !ca.paused) {
-    const onEnd = () => speak(key, lang);
-    ca.addEventListener('ended', onEnd, { once: true });
-    // 1.5초 내 ended 안 오면 강제 재생 (네트워크 지연 대비)
-    setTimeout(() => {
-      ca.removeEventListener('ended', onEnd);
-      if (currentAudio === ca || currentAudio === null) speak(key, lang);
-    }, 1500);
-  } else {
-    speak(key, lang);
   }
 }
 
@@ -172,7 +170,10 @@ const PRESETS = [
 
 // ── 메인 컴포넌트 ───────────────────────────────
 export default function Countdown() {
-  const { countdown, timeOffset, user } = useStore();
+  // S1: zustand selector로 구독 범위 최소화 — onlineUsers 등 무관한 state 변경으로 인한 재렌더 차단
+  const countdown   = useStore((s) => s.countdown);
+  const timeOffset  = useStore((s) => s.timeOffset);
+  const user        = useStore((s) => s.user);
   const { t, lang } = useI18n();
 
   const [remaining, setRemaining]   = useState(null);
@@ -182,6 +183,11 @@ export default function Countdown() {
   const prevActiveRef  = useRef(countdown.active);
   const initializedRef = useRef(false);
 
+  // D2: timeOffset은 tick 내부에서 읽기 위해 ref로 보관 — deps에서 제외하여 시간 동기화 갱신으로
+  //     Effect 1이 재실행되고 lastSpokenRef가 리셋되어 같은 숫자를 재발성하는 문제 차단.
+  const timeOffsetRef = useRef(timeOffset);
+  useEffect(() => { timeOffsetRef.current = timeOffset; }, [timeOffset]);
+
   // 마운트 / 언어 변경 시 TTS 프리페치
   useEffect(() => { prefetchTts(lang); }, [lang]);
 
@@ -190,15 +196,19 @@ export default function Countdown() {
   const { active, startedAt, totalSeconds } = countdown;
   useEffect(() => {
     clearInterval(intervalRef.current);
-    lastSpokenRef.current = -1;
 
     if (!active) {
       setRemaining(null);
+      lastSpokenRef.current = -1;
       return;
     }
 
+    // 시작 직후 초기 숫자(totalSeconds)는 speak 하지 않음 — Effect 2의 'start' 멘트와 중복 방지
+    // 1초 경과 후 다음 숫자(totalSeconds - 1)부터 순차 재생
+    lastSpokenRef.current = totalSeconds;
+
     function tick() {
-      const now     = Date.now() + timeOffset;
+      const now     = Date.now() + timeOffsetRef.current;
       const elapsed = (now - startedAt) / 1000;
       const rem     = totalSeconds - elapsed;
 
@@ -219,7 +229,7 @@ export default function Countdown() {
     tick();
     intervalRef.current = setInterval(tick, 200);
     return () => clearInterval(intervalRef.current);
-  }, [active, startedAt, totalSeconds, timeOffset, lang]);
+  }, [active, startedAt, totalSeconds, lang]);
 
   // start/stop 멘트
   useEffect(() => {

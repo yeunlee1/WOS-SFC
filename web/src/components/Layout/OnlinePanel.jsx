@@ -13,22 +13,27 @@ function roleIcon(role) {
   return '';
 }
 
-export default function OnlinePanel() {
+export default function OnlinePanel({ style, isOpen }) {
   const onlineUsers = useStore((s) => s.onlineUsers);
+
+  // 같은 유저의 다중 탭/소켓은 1개로 집계
+  const uniqueUsers = Array.from(
+    new Map(onlineUsers.map((u) => [u.nickname, u])).values(),
+  );
 
   // 연맹별 그룹 + 역할 정렬
   const groups = ALLIANCES.map((alliance) => {
-    const users = onlineUsers
+    const users = uniqueUsers
       .filter((u) => u.alliance === alliance)
       .sort((a, b) => (ROLE_ORDER[a.role] ?? 3) - (ROLE_ORDER[b.role] ?? 3));
     return { alliance, users };
   }).filter((g) => g.users.length > 0); // 0명 연맹 제외
 
   return (
-    <aside className="online-panel">
+    <aside className={`online-panel${isOpen ? ' online-panel--open' : ''}`} style={style}>
       <div className="online-panel-header">
         <span className="online-panel-server">🌐 2677</span>
-        <span className="online-panel-total">{onlineUsers.length}명</span>
+        <span className="online-panel-total">{uniqueUsers.length}명</span>
       </div>
 
       <div className="online-panel-body">

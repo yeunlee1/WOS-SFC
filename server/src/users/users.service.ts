@@ -48,4 +48,15 @@ export class UsersService {
     user.role = role;
     return this.usersRepo.save(user);
   }
+
+  async updateRefreshTokenHash(userId: number, hash: string | null): Promise<void> {
+    await this.usersRepo.update(userId, { refreshTokenHash: hash });
+  }
+
+  async findByIdWithRefreshToken(id: number): Promise<User | null> {
+    return this.usersRepo.findOne({
+      where: { id },
+      select: ['id', 'nickname', 'role', 'allianceName', 'language', 'refreshTokenHash'],
+    });
+  }
 }

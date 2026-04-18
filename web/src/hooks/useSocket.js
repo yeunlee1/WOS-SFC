@@ -1,8 +1,10 @@
 import { useEffect } from 'react';
 import { useStore, ALLIANCES } from '../store';
-import { connectSocket, disconnectSocket } from '../api';
+import { connectSocket } from '../api';
 
-export function useSocket(token) {
+// StrictMode 안전: cleanup에서 소켓 자체는 끊지 않고 핸들러만 해제.
+// 실제 disconnect는 로그아웃 시 Header.handleLogout에서 명시적으로 호출됨.
+export function useSocket(user) {
   const setNotices    = useStore((s) => s.setNotices);
   const setRallies    = useStore((s) => s.setRallies);
   const setMembers    = useStore((s) => s.setMembers);
@@ -11,10 +13,10 @@ export function useSocket(token) {
   const setBoardPosts = useStore((s) => s.setBoardPosts);
 
   useEffect(() => {
-    if (!token) return;
-    const socket = connectSocket(token);
+    if (!user) return;
+    // httpOnly 쿠키가 자동 전송되므로 토큰 파라미터 불필요
+    const socket = connectSocket();
 
-    // 보드 핸들러 — 참조 보관 후 cleanup에서 동일 참조로 off()
     const boardHandlers = ALLIANCES.map((a) => (posts) => setBoardPosts(a, posts));
 
     socket.on('notices:updated',  setNotices);
@@ -31,7 +33,8 @@ export function useSocket(token) {
       socket.off('online:updated',   setOnlineUsers);
       socket.off('countdown:state',  setCountdown);
       ALLIANCES.forEach((a, i) => socket.off(`board:updated:${a}`, boardHandlers[i]));
-      disconnectSocket();
+      // disconnect 하지 않음 — StrictMode 이중 cleanup에서 소켓이 잠시 죽었다 살아나며
+      // 서버 handleConnection이 두 번 호출되어 countdown:state 중복 도착하는 문제 방지.
     };
-  }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 }

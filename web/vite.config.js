@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react';
 
 const API_PATHS = [
   '/auth', '/notices', '/rallies', '/members', '/boards',
-  '/translations', '/users', '/translate', '/time',
+  '/translations', '/users', '/translate', '/tts-audio', '/time', '/admin',
 ];
 
 export default defineConfig({

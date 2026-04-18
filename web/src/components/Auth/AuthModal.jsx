@@ -13,6 +13,7 @@ const LANGUAGES = [
 ];
 
 const DEV_ACCOUNTS = [
+  { label: '🛡️ 개발자 (한국)', nickname: 'dev_dev_ko',    password: 'devpass123', role: 'developer', language: 'ko', allianceName: 'KOR', name: '개발자',    birthDate: '1990-01-01' },
   { label: '👑 관리자 (한국)', nickname: 'dev_admin_ko',  password: 'devpass123', role: 'admin',  language: 'ko', allianceName: 'KOR', name: '관리자',    birthDate: '1990-01-01' },
   { label: '🇨🇳 관리자 (중국)', nickname: 'dev_admin_zh',  password: 'devpass123', role: 'admin',  language: 'zh', allianceName: 'KOR', name: '中国管理员', birthDate: '1990-01-01' },
   { label: '🇺🇸 관리자 (영어)', nickname: 'dev_admin_en',  password: 'devpass123', role: 'admin',  language: 'en', allianceName: 'KOR', name: 'EnAdmin',   birthDate: '1990-01-01' },
@@ -41,8 +42,8 @@ export default function AuthModal() {
   const { setUser, setTimeOffset } = useStore();
   const { changeLang } = useI18n();
 
-  async function initUser(user, token) {
-    setUser(user, token);
+  async function initUser(user) {
+    setUser(user);
     changeLang(user.language || 'ko');
     try {
       const localBefore = Date.now();
@@ -57,7 +58,7 @@ export default function AuthModal() {
     setLoading(true); setError('');
     try {
       const res = await api.login({ nickname, password });
-      await initUser(res.user, res.token);
+      await initUser(res.user);
     } catch (err) { setError(err.message); }
     finally { setLoading(false); }
   }
@@ -69,7 +70,7 @@ export default function AuthModal() {
     setLoading(true); setError('');
     try {
       const res = await api.signup({ name, nickname: signupNickname, password: signupPassword, allianceName, role, birthDate, language, serverCode });
-      await initUser(res.user, res.token);
+      await initUser(res.user);
     } catch (err) { setError(err.message); }
     finally { setLoading(false); }
   }
@@ -84,7 +85,7 @@ export default function AuthModal() {
         res = await api.login({ nickname: account.nickname, password: account.password });
       }
       await api.setUserRole(account.nickname, account.role).catch(() => {});
-      await initUser({ ...res.user, role: account.role, language: account.language }, res.token);
+      await initUser({ ...res.user, role: account.role, language: account.language });
     } catch (err) { setError(err.message); }
     finally { setLoading(false); }
   }
@@ -133,14 +134,16 @@ export default function AuthModal() {
           </form>
         )}
 
-        <details className="modal-dev-section">
-          <summary className="modal-dev-summary">🔧 DEV 빠른 로그인</summary>
-          <div style={{ display:'flex', flexDirection:'column', gap:'6px', marginTop:'10px' }}>
-            {DEV_ACCOUNTS.map((acc) => (
-              <button key={acc.nickname} className="dev-login-btn" onClick={() => devLogin(acc)} disabled={loading}>{acc.label}</button>
-            ))}
-          </div>
-        </details>
+        {import.meta.env.DEV && (
+          <details className="modal-dev-section">
+            <summary className="modal-dev-summary">🔧 DEV 빠른 로그인</summary>
+            <div style={{ display:'flex', flexDirection:'column', gap:'6px', marginTop:'10px' }}>
+              {DEV_ACCOUNTS.map((acc) => (
+                <button key={acc.nickname} className="dev-login-btn" onClick={() => devLogin(acc)} disabled={loading}>{acc.label}</button>
+              ))}
+            </div>
+          </details>
+        )}
       </div>
     </div>
   );
