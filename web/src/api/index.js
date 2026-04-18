@@ -65,11 +65,16 @@ export const api = {
   // 번역 실행 (Claude API → 서버)
   translate: (text, targetLang) => apiFetch('/translate', { method: 'POST', body: JSON.stringify({ text, targetLang }) }),
 
-  // TTS (ElevenLabs → 서버 프록시)
+  // TTS (Google Cloud TTS → 서버 프록시, /tts-audio/:lang/:key 로 mp3 직접 서빙됨)
   tts: (text, language = 'ko') => apiFetch('/tts', { method: 'POST', body: JSON.stringify({ text, language }) }),
 
   // 유저 역할
   setUserRole: (nickname, role) => apiFetch(`/users/${encodeURIComponent(nickname)}/role`, { method: 'PATCH', body: JSON.stringify({ role }) }),
+
+  // Admin Panel (developer 전용)
+  adminGetUsers: () => apiFetch('/admin/users'),
+  adminSetRole: (id, role) => apiFetch(`/admin/users/${id}/role`, { method: 'PATCH', body: JSON.stringify({ role }) }),
+  adminBanUser: (id) => apiFetch(`/admin/users/${id}`, { method: 'DELETE' }),
 };
 
 // ── Socket 싱글톤 ──

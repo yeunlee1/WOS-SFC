@@ -13,6 +13,7 @@ const LANGUAGES = [
 ];
 
 const DEV_ACCOUNTS = [
+  { label: '🛡️ 개발자 (한국)', nickname: 'dev_dev_ko',    password: 'devpass123', role: 'developer', language: 'ko', allianceName: 'KOR', name: '개발자',    birthDate: '1990-01-01' },
   { label: '👑 관리자 (한국)', nickname: 'dev_admin_ko',  password: 'devpass123', role: 'admin',  language: 'ko', allianceName: 'KOR', name: '관리자',    birthDate: '1990-01-01' },
   { label: '🇨🇳 관리자 (중국)', nickname: 'dev_admin_zh',  password: 'devpass123', role: 'admin',  language: 'zh', allianceName: 'KOR', name: '中国管理员', birthDate: '1990-01-01' },
   { label: '🇺🇸 관리자 (영어)', nickname: 'dev_admin_en',  password: 'devpass123', role: 'admin',  language: 'en', allianceName: 'KOR', name: 'EnAdmin',   birthDate: '1990-01-01' },

@@ -11,6 +11,7 @@ import OnlinePanel from './components/Layout/OnlinePanel';
 import BattleTab from './components/Battle/BattleTab';
 import CommunityTab from './components/Community/CommunityTab';
 import ChatTab from './components/Chat/ChatTab';
+import AdminTab from './components/AdminTab/AdminTab';
 
 export default function App() {
   const user      = useStore((s) => s.user);
@@ -68,6 +69,7 @@ export default function App() {
           {activeTab === 'battle'    && <BattleTab />}
           {activeTab === 'community' && <CommunityTab />}
           {activeTab === 'chat'      && <ChatTab />}
+          {activeTab === 'admin' && user?.role === 'developer' && <AdminTab />}
         </main>
         <div
           className="resize-handle resize-handle--vertical"

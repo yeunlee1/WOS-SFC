@@ -10,7 +10,11 @@ export default function ChatTab() {
   const myLang = user?.language;
 
   // Critical #1: onlineUsers를 store에서 직접 읽음 (로컬 state + chat:online 구독 제거)
-  const onlineUsers = useStore((s) => s.onlineUsers);
+  const onlineUsersRaw = useStore((s) => s.onlineUsers);
+  // 같은 유저의 다중 탭/소켓은 1개로 집계
+  const onlineUsers = Array.from(
+    new Map(onlineUsersRaw.map((u) => [u.nickname ?? u, u])).values(),
+  );
 
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
