@@ -124,6 +124,17 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     this.server.emit('members:updated', members.map(this.formatMember));
   }
 
+  // 특정 닉네임의 유저 소켓을 강제 종료 (Admin 벤 기능에서 호출)
+  kickUser(nickname: string): void {
+    for (const [socketId, user] of this.onlineMap.entries()) {
+      if (user.nickname === nickname) {
+        const socket = this.server.sockets.sockets.get(socketId);
+        socket?.disconnect();
+        break;
+      }
+    }
+  }
+
   async broadcastBoard(alliance: string) {
     const posts = await this.boardsService.findByAlliance(alliance);
     this.server.emit(`board:updated:${alliance}`, posts.map(this.formatBoardPost));
