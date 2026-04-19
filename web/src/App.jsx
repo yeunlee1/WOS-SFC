@@ -47,31 +47,35 @@ export default function App() {
     // 30초마다 주기적 재동기화
     startPeriodicSync(30_000);
 
-    // 소켓 reconnect 시 재동기화 — 네트워크 단절 후 복구 시 drift 보정
-    let _syncOnConnect = null;
-    function _attachSocketSync() {
-      const sock = getSocket();
-      if (!sock) return;
-      // 이전 리스너 제거 후 등록 (중복 방지)
-      if (_syncOnConnect) sock.off('connect', _syncOnConnect);
-      _syncOnConnect = () => {
+    // 탭 복귀 시 재동기화 — 백그라운드 체류로 인한 drift 보정
+    function onVisible() {
+      if (document.visibilityState === 'visible') {
         syncTime().catch(() => {});
-      };
-      sock.on('connect', _syncOnConnect);
+      }
     }
-    // connectSocket()은 useSocket(user)에서 이미 호출되므로 getSocket()으로 참조
-    // user가 있으면 바로 부착, 없으면 소켓 생성 전이므로 skip (로그인 후 재마운트 시 실행됨)
-    _attachSocketSync();
+    document.addEventListener('visibilitychange', onVisible);
 
     const handleExpiry = () => clearUser();
     window.addEventListener('auth:expired', handleExpiry);
     return () => {
       window.removeEventListener('auth:expired', handleExpiry);
+      document.removeEventListener('visibilitychange', onVisible);
       stopPeriodicSync();
-      const sock = getSocket();
-      if (sock && _syncOnConnect) sock.off('connect', _syncOnConnect);
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 소켓 reconnect 시 재동기화 — user 로그인 이후 소켓이 생성된 뒤에 리스너 부착
+  // (마운트 시점엔 user가 없어 getSocket()이 null일 수 있으므로 user 변경 감지 effect로 분리)
+  useEffect(() => {
+    if (!user) return;
+    const sock = getSocket();
+    if (!sock) return;
+    const syncOnConnect = () => { syncTime().catch(() => {}); };
+    sock.on('connect', syncOnConnect);
+    return () => {
+      sock.off('connect', syncOnConnect);
+    };
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (hydrating) return null;
 
