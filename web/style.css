@@ -1328,13 +1328,26 @@ input, textarea, select, .input {
   accent-color: var(--accent);
 }
 .tts-volume-label {
-  min-width: 34px;
+  min-width: 48px;
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
+.tts-mute-btn {
+  background: transparent;
+  border: none;
+  padding: 2px 4px;
+  font-size: 16px;
+  cursor: pointer;
+  border-radius: 4px;
+  line-height: 1;
+  color: inherit;
+}
+.tts-mute-btn:hover { background: var(--panel-2, rgba(255,255,255,0.06)); }
+.tts-mute-btn[aria-pressed="true"] { opacity: 0.7; }
+.tts-volume-control input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
 @media (max-width: 640px) {
   .tts-volume-control input[type="range"] { width: 70px; }
-  .tts-volume-label { min-width: 28px; }
+  .tts-volume-label { min-width: 40px; }
 }
 
 /* ── 시간 동기화 RTT 뱃지 ── */

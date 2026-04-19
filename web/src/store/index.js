@@ -15,6 +15,15 @@ function _initTtsVolume() {
   }
 }
 
+// ttsMuted 초기값: localStorage 우선, 없으면 false
+function _initTtsMuted() {
+  try {
+    return localStorage.getItem('wos-tts-muted') === '1';
+  } catch {
+    return false;
+  }
+}
+
 export const useStore = create((set) => ({
   // 인증 (토큰은 httpOnly 쿠키로 관리 — JS에서 접근 불가)
   user: null,
@@ -32,6 +41,8 @@ export const useStore = create((set) => ({
 
   // TTS 볼륨 (0~1, 기본 0.3 = 30%)
   ttsVolume: _initTtsVolume(),
+  // TTS 음소거 플래그 (볼륨과 독립 — 스피커 아이콘 토글용)
+  ttsMuted: _initTtsMuted(),
 
   // Actions
   setUser: (user) => set({ user }),
@@ -52,6 +63,18 @@ export const useStore = create((set) => ({
     const n = Number(v);
     const clamped = Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : 0.3;
     try { localStorage.setItem('wos-tts-volume', String(clamped)); } catch { /* 무시 */ }
-    set({ ttsVolume: clamped });
+    // 유저가 슬라이더로 볼륨 > 0 을 움직이면 음소거 자동 해제 (자연스러운 UX)
+    set((s) => ({
+      ttsVolume: clamped,
+      ttsMuted: clamped > 0 ? false : s.ttsMuted,
+    }));
+    if (clamped > 0) {
+      try { localStorage.setItem('wos-tts-muted', '0'); } catch { /* 무시 */ }
+    }
+  },
+  setTtsMuted: (v) => {
+    const muted = !!v;
+    try { localStorage.setItem('wos-tts-muted', muted ? '1' : '0'); } catch { /* 무시 */ }
+    set({ ttsMuted: muted });
   },
 }));

@@ -40,7 +40,7 @@ async function fetchAudio(lang: string, key: string, text: string): Promise<Buff
     {
       input,
       voice: { languageCode: voice.languageCode, name: voice.name },
-      audioConfig: { audioEncoding: 'MP3', speakingRate: 1.3 },
+      audioConfig: { audioEncoding: 'MP3', speakingRate: 1.5 },
     },
     { timeout: 15000 },
   );

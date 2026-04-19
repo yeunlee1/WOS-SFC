@@ -24,7 +24,10 @@ function _rttIcon(rtt) {
 }
 
 export default function Header({ activeTab, onTabChange, onToggleOnline }) {
-  const { user, timeOffset, timeSyncRtt, clearUser, onlineUsers, ttsVolume, setTtsVolume } = useStore();
+  const {
+    user, timeOffset, timeSyncRtt, clearUser, onlineUsers,
+    ttsVolume, setTtsVolume, ttsMuted, setTtsMuted,
+  } = useStore();
   const { t, lang, changeLang } = useI18n();
   const [utcTime, setUtcTime] = useState('');
   const [isMenuOpen, setMenuOpen] = useState(false);
@@ -83,20 +86,33 @@ export default function Header({ activeTab, onTabChange, onToggleOnline }) {
           {_rttIcon(timeSyncRtt)} ±{Math.round(timeSyncRtt)}ms
         </span>
         <div className="tts-volume-control">
-          <span aria-hidden>🔊</span>
+          <button
+            type="button"
+            className="tts-mute-btn"
+            onClick={() => setTtsMuted(!ttsMuted)}
+            aria-label={ttsMuted ? 'TTS 음소거 해제' : 'TTS 음소거'}
+            aria-pressed={ttsMuted}
+            title={ttsMuted ? '음소거 해제' : '음소거'}
+          >
+            {ttsMuted || ttsVolume === 0 ? '🔇' : '🔊'}
+          </button>
           <input
             type="range" min="0" max="100" step="1"
             value={Math.round(ttsVolume * 100)}
             onChange={(e) => setTtsVolume(Number(e.target.value) / 100)}
             aria-label="TTS 볼륨"
-            aria-valuetext={`${Math.round(ttsVolume * 100)}%`}
+            aria-valuetext={`${Math.round(ttsVolume * 100)}%${ttsMuted ? ' (음소거)' : ''}`}
+            disabled={ttsMuted}
           />
-          <span className="tts-volume-label">{Math.round(ttsVolume * 100)}%</span>
+          <span className="tts-volume-label">
+            {ttsMuted ? '음소거' : `${Math.round(ttsVolume * 100)}%`}
+          </span>
           <button
             type="button"
             className="btn btn-ghost btn-sm"
             onClick={() => speak('start', lang, { force: true })}
             aria-label="TTS 테스트"
+            disabled={ttsMuted || ttsVolume === 0}
           >테스트</button>
         </div>
         <button

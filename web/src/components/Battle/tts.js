@@ -10,38 +10,33 @@ let lastSpokenKey = null;
 let lastSpokenAt  = 0;
 const DEDUP_WINDOW_MS = 500;
 
-// ── 오디오 풀 ────────────────────────────────────────
-// 근본 원인 수정: 과거에는 sharedAudio 1개로 pause()+load()+play() 하면서
-//   이전 재생을 강제 중단 → 한국어 3음절 숫자(백팔십 등)가 다음 tick(1s)에 잘리거나,
-//   load() 직전 fetch가 abort되어 특정 숫자가 아예 재생되지 않음.
-// 해결: 고정 크기 풀(POOL_SIZE)을 round-robin으로 사용 →
-//   새 재생이 이전 재생을 건드리지 않음. 자연 감쇠(재생 완료) 대기.
-const POOL_SIZE = 4;
-let audioPool = null;
-let poolIdx = 0;
+// 현재 재생 중인 Audio 인스턴스 추적 — stopAllTts() 에서 모두 중단할 수 있도록
+// WeakSet을 쓰면 반복 순회 불가 → Set으로 직접 관리, ended/error/abort 이벤트로 제거
+const liveAudios = new Set();
 
-function getPool() {
-  if (!audioPool) {
-    audioPool = [];
-    for (let i = 0; i < POOL_SIZE; i++) {
-      const a = new Audio();
-      a.preload = 'auto';
-      audioPool.push(a);
-    }
-  }
-  return audioPool;
-}
-
-// 외부에서 예: 카운트다운 정지 시 강제 침묵을 걸어야 하면 사용
-export function stopAllTts() {
-  if (!audioPool) return;
-  for (const a of audioPool) {
-    try { a.pause(); } catch { /* 무시 */ }
-  }
-}
+// ── 핵심 설계 ───────────────────────────────────────
+// 과거 버전의 근본 원인:
+//   (a) 단일 sharedAudio — 매 호출마다 pause()+load() 하면서 이전 재생을 abort
+//   (b) 4-slot 풀 — rotation이 한 바퀴 돌면 여전히 (a)와 동일한 abort 발생
+// 새 설계:
+//   매 speak 호출마다 "새 HTMLAudioElement" 를 만들어 독립 재생.
+//   각 Audio는 ended/error 이벤트로 자동 해제. GC가 메모리 회수.
+//   → 이전 재생은 새 재생에 의해 절대 abort되지 않는다. 누락·잘림 불가능.
+//   overlap이 발생해도 사용자 입장에서는 "앞·뒤 숫자가 살짝 겹쳐 들림"
+//   정도이며 잘려서 못 들리는 것보다 낫다. 서버 speakingRate=1.5로 재생 시간
+//   단축해 overlap 자체도 최소화.
 
 export function ttsUrl(lang, key) {
   return `/tts-audio/${lang}/${encodeURIComponent(key)}`;
+}
+
+/** 진행 중인 모든 TTS를 즉시 중단 (예: 카운트다운 정지 시) */
+export function stopAllTts() {
+  for (const a of liveAudios) {
+    try { a.pause(); } catch { /* 무시 */ }
+    try { a.src = ''; } catch { /* 무시 */ }
+  }
+  liveAudios.clear();
 }
 
 /**
@@ -54,13 +49,14 @@ export function speak(key, lang = 'ko', opts) {
   // 화이트리스트: 허용 범위 밖 숫자는 무시
   if (/^\d+$/.test(key) && parseInt(key, 10) > TTS_NUM_MAX) return;
 
-  // 근본 원인 수정 (Bug 2): 볼륨 0이면 오디오 파이프라인 자체를 건드리지 않음.
-  //   audio.volume=0 의존 대신 재생 경로 전체를 차단 → 브라우저/OS 단의 예외 케이스 제거.
-  const vol = useStore.getState().ttsVolume;
+  // 근본 원인 수정 (Bug 2): 볼륨 0 또는 음소거 상태면 오디오 파이프라인 자체를 건드리지 않음
+  const state = useStore.getState();
+  const vol = state.ttsVolume;
+  const muted = !!state.ttsMuted;
   const volNum = typeof vol === 'number' && Number.isFinite(vol) ? vol : 0.3;
-  if (volNum <= 0) {
+  if (muted || volNum <= 0) {
     if (import.meta.env.DEV) {
-      console.debug('[TTS] muted (volume=0):', key);
+      console.debug('[TTS] muted or volume=0:', key, { muted, volNum });
     }
     return;
   }
@@ -78,23 +74,25 @@ export function speak(key, lang = 'ko', opts) {
   lastSpokenAt  = now;
 
   try {
-    const pool = getPool();
-    const audio = pool[poolIdx % POOL_SIZE];
-    poolIdx = (poolIdx + 1) % POOL_SIZE;
-
-    // 볼륨은 매번 재설정 (유저가 슬라이더 움직였을 수 있음)
+    // 근본 원인 수정 (Bug 1): 매 호출마다 독립 Audio 인스턴스
+    //   → 이전 재생은 새 재생에 의해 중단되지 않음.
+    const audio = new Audio(ttsUrl(lang, key));
     audio.volume = Math.max(0, Math.min(1, volNum));
-    audio.muted  = false; // 혹시 이전에 muted였다면 해제
+    audio.preload = 'auto';
 
-    // 이 풀 슬롯이 이전에 재생 중이었다면 중단하고 새 src로 재사용.
-    // (POOL_SIZE개를 순회한 후 되돌아올 때만 발생 → 이전 재생은 사실상 완료된 상태)
-    audio.pause();
-    audio.src = ttsUrl(lang, key);
-    audio.currentTime = 0;
-    audio.load();
+    const cleanup = () => {
+      liveAudios.delete(audio);
+      audio.removeEventListener('ended', cleanup);
+      audio.removeEventListener('error', cleanup);
+    };
+    audio.addEventListener('ended', cleanup);
+    audio.addEventListener('error', cleanup);
+    liveAudios.add(audio);
+
     audio.play().catch((e) => {
-      if (e.name === 'AbortError') return;
+      if (e.name === 'AbortError') { cleanup(); return; }
       if (import.meta.env.DEV) console.warn('[TTS] play 실패:', key, lang, e.message);
+      cleanup();
     });
   } catch (e) {
     if (import.meta.env.DEV) console.warn('[TTS] speak 오류:', e);
@@ -143,10 +141,4 @@ export function prefetchTts(lang) {
     current.timer = null;
     for (let i = 11; i <= TTS_NUM_MAX; i++) preload(String(i));
   }, 500);
-}
-
-// 하위 호환: 외부에서 getSharedAudio를 import 하는 코드가 있을 경우 대비 (현재 없음).
-// 풀의 첫 번째 엘리먼트를 돌려줌. 새 코드에서는 쓰지 말 것.
-export function getSharedAudio() {
-  return getPool()[0];
 }
