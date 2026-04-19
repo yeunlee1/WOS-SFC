@@ -30,13 +30,15 @@ export function ttsUrl(lang, key) {
   return `/tts-audio/${lang}/${encodeURIComponent(key)}`;
 }
 
-/** 진행 중인 모든 TTS를 즉시 중단 (예: 카운트다운 정지 시) */
+/** 진행 중인 모든 TTS를 즉시 중단 (예: 음소거 토글, 카운트다운 정지 시) */
 export function stopAllTts() {
-  for (const a of liveAudios) {
+  // 순회 중 Set 돌연변이(이벤트 발화 → cleanup → delete)를 피하기 위해 snapshot
+  const snapshot = [...liveAudios];
+  liveAudios.clear();
+  for (const a of snapshot) {
     try { a.pause(); } catch { /* 무시 */ }
     try { a.src = ''; } catch { /* 무시 */ }
   }
-  liveAudios.clear();
 }
 
 /**

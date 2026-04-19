@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useStore } from '../../store';
 import { useI18n, SUPPORTED_LANGS } from '../../i18n';
 import { api, disconnectSocket } from '../../api';
-import { speak } from '../Battle/tts';
+import { speak, stopAllTts } from '../Battle/tts';
 
 const ALLIANCE_COLORS = {
   KOR: '#3b82f6', NSL: '#22c55e', JKY: '#a855f7',
@@ -89,7 +89,12 @@ export default function Header({ activeTab, onTabChange, onToggleOnline }) {
           <button
             type="button"
             className="tts-mute-btn"
-            onClick={() => setTtsMuted(!ttsMuted)}
+            onClick={() => {
+              const next = !ttsMuted;
+              setTtsMuted(next);
+              // 음소거 ON 시: 이미 재생 중인 숫자도 즉시 정지 (사용자 체감)
+              if (next) stopAllTts();
+            }}
             aria-label={ttsMuted ? 'TTS 음소거 해제' : 'TTS 음소거'}
             aria-pressed={ttsMuted}
             title={ttsMuted ? '음소거 해제' : '음소거'}
@@ -99,7 +104,12 @@ export default function Header({ activeTab, onTabChange, onToggleOnline }) {
           <input
             type="range" min="0" max="100" step="1"
             value={Math.round(ttsVolume * 100)}
-            onChange={(e) => setTtsVolume(Number(e.target.value) / 100)}
+            onChange={(e) => {
+              const v = Number(e.target.value) / 100;
+              setTtsVolume(v);
+              // 슬라이더를 0까지 내리면 현재 재생 중인 오디오도 즉시 정지
+              if (v <= 0) stopAllTts();
+            }}
             aria-label="TTS 볼륨"
             aria-valuetext={`${Math.round(ttsVolume * 100)}%${ttsMuted ? ' (음소거)' : ''}`}
             disabled={ttsMuted}
