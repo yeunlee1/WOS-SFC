@@ -75,6 +75,27 @@ export const api = {
   adminGetUsers: () => apiFetch('/admin/users'),
   adminSetRole: (id, role) => apiFetch(`/admin/users/${id}/role`, { method: 'PATCH', body: JSON.stringify({ role }) }),
   adminBanUser: (id) => apiFetch(`/admin/users/${id}`, { method: 'DELETE' }),
+
+  // 연맹 공지
+  addAllianceNotice:    (data) => apiFetch('/alliance-notices', { method: 'POST', body: JSON.stringify(data) }),
+  deleteAllianceNotice: (id)   => apiFetch(`/alliance-notices/${id}`, { method: 'DELETE' }),
+
+  // 이미지 업로드 (FormData — Content-Type 헤더 제거 필요)
+  uploadBoardImage: async (file) => {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch('/boards/upload', {
+      method: 'POST',
+      credentials: 'include',
+      body: form,
+      // Content-Type 헤더 없음 (브라우저가 multipart boundary 자동 설정)
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || `HTTP ${res.status}`);
+    }
+    return res.json();
+  },
 };
 
 // ── Socket 싱글톤 ──

@@ -13,6 +13,7 @@ export const useStore = create((set) => ({
   members: [],
   onlineUsers: [],
   boards: Object.fromEntries(ALLIANCES.map((a) => [a, []])),
+  allianceNotices: { KOR: [], NSL: [], JKY: [], GPX: [], UFO: [] },
   countdown: { active: false, startedAt: 0, totalSeconds: 0 },
 
   // Actions
@@ -25,5 +26,8 @@ export const useStore = create((set) => ({
   setOnlineUsers:(onlineUsers)=> set({ onlineUsers }),
   setBoardPosts: (alliance, posts) =>
     set((s) => ({ boards: { ...s.boards, [alliance]: posts } })),
+  setAllianceNotices: (alliance, notices) => set((state) => ({
+    allianceNotices: { ...state.allianceNotices, [alliance]: notices },
+  })),
   setCountdown:  (countdown)  => set({ countdown }),
 }));
