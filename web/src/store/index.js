@@ -4,12 +4,15 @@ export const ALLIANCES = ['KOR', 'NSL', 'JKY', 'GPX', 'UFO'];
 
 // ttsVolume 초기값: localStorage 우선, 없으면 0.3 (30%), 0~1 범위 clamp
 function _initTtsVolume() {
-  const raw = localStorage.getItem('wos-tts-volume');
-  if (raw !== null) {
+  try {
+    const raw = localStorage.getItem('wos-tts-volume');
     const v = parseFloat(raw);
-    if (!Number.isNaN(v)) return Math.max(0, Math.min(1, v));
+    if (!Number.isFinite(v)) return 0.3;
+    return Math.max(0, Math.min(1, v));
+  } catch {
+    // localStorage 접근 불가 (프라이버시 모드, iframe sandbox 등)
+    return 0.3;
   }
-  return 0.3;
 }
 
 export const useStore = create((set) => ({
@@ -44,8 +47,9 @@ export const useStore = create((set) => ({
   })),
   setCountdown:  (countdown)  => set({ countdown }),
   setTtsVolume: (v) => {
-    const clamped = Math.max(0, Math.min(1, v));
-    localStorage.setItem('wos-tts-volume', String(clamped));
+    const n = Number(v);
+    const clamped = Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : 0.3;
+    try { localStorage.setItem('wos-tts-volume', String(clamped)); } catch { /* 무시 */ }
     set({ ttsVolume: clamped });
   },
 }));

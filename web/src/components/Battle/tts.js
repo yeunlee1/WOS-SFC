@@ -23,17 +23,19 @@ export function ttsUrl(lang, key) {
   return `/tts-audio/${lang}/${encodeURIComponent(key)}`;
 }
 
-// D1: 전역 중복 방어 — 동일 key가 500ms 내 두 번 들어오면 무시
+// D1: 전역 중복 방어 — 동일 key가 500ms 내 두 번 들어오면 무시 (force=true 시 우회)
 // D2: 단일 Audio 엘리먼트의 src를 교체해서 재생 — 이전 재생 자동 중단, 두 소리 겹침 불가능
-export function speak(key, lang = 'ko') {
+export function speak(key, lang = 'ko', opts) {
   if (/^\d+$/.test(key) && parseInt(key, 10) > TTS_NUM_MAX) return;
 
   const now = performance.now();
-  if (lastSpokenKey === key && (now - lastSpokenAt) < DEDUP_WINDOW_MS) {
-    if (import.meta.env.DEV) {
-      console.warn('[TTS] dedup skip:', key, 'Δ', (now - lastSpokenAt).toFixed(0) + 'ms');
+  if (opts?.force !== true) {
+    if (lastSpokenKey === key && (now - lastSpokenAt) < DEDUP_WINDOW_MS) {
+      if (import.meta.env.DEV) {
+        console.warn('[TTS] dedup skip:', key, 'Δ', (now - lastSpokenAt).toFixed(0) + 'ms');
+      }
+      return;
     }
-    return;
   }
   lastSpokenKey = key;
   lastSpokenAt  = now;
@@ -57,23 +59,24 @@ export function speak(key, lang = 'ko') {
 
 // 프리페치: URL을 미리 브라우저 캐시에 올려 즉시 재생 대비
 // M4: lang 변경 시 이전 lang 캐시를 제거해 메모리 누수 방지
-const prefetchedLangs = new Set();
-const prefetchLinks = new Map(); // lang → Set<link> (관리용)
+// orphan setTimeout 방지: prefetchState에 timer를 함께 관리
+//   Map<lang, { links: Set<HTMLLinkElement>; timer: number | null }>
+const prefetchState = new Map();
 
 export function prefetchTts(lang) {
-  if (prefetchedLangs.has(lang)) return;
-  prefetchedLangs.add(lang);
+  if (prefetchState.has(lang)) return;
 
-  // 이전 lang의 <link rel="prefetch"> 제거
-  for (const [prevLang, links] of prefetchLinks) {
+  // 이전 lang 정리: setTimeout 취소 + DOM <link> 제거
+  for (const [prevLang, state] of prefetchState) {
     if (prevLang !== lang) {
-      links.forEach(el => el.parentNode?.removeChild(el));
-      prefetchLinks.delete(prevLang);
+      if (state.timer !== null) clearTimeout(state.timer);
+      state.links.forEach(el => el.parentNode?.removeChild(el));
+      prefetchState.delete(prevLang);
     }
   }
 
-  const langLinks = new Set();
-  prefetchLinks.set(lang, langLinks);
+  const entry = { links: new Set(), timer: null };
+  prefetchState.set(lang, entry);
 
   const preload = (key) => {
     const link = document.createElement('link');
@@ -81,7 +84,7 @@ export function prefetchTts(lang) {
     link.as = 'fetch';
     link.href = ttsUrl(lang, key);
     document.head.appendChild(link);
-    langLinks.add(link);
+    entry.links.add(link);
   };
 
   // 1~10 + 문구: 즉시 (가장 자주 쓰임)
@@ -89,7 +92,11 @@ export function prefetchTts(lang) {
   preload('start'); preload('stop'); preload('march');
 
   // 11~180: 지연 (UI 블로킹 방지, 백그라운드 로드)
-  setTimeout(() => {
+  entry.timer = setTimeout(() => {
+    // lang이 여전히 활성 상태이고 timer가 유효한지 확인
+    const current = prefetchState.get(lang);
+    if (!current || current.timer === null) return;
+    current.timer = null;
     for (let i = 11; i <= TTS_NUM_MAX; i++) preload(String(i));
   }, 500);
 }

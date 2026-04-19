@@ -75,12 +75,13 @@ export default function Header({ activeTab, onTabChange, onToggleOnline }) {
             value={Math.round(ttsVolume * 100)}
             onChange={(e) => setTtsVolume(Number(e.target.value) / 100)}
             aria-label="TTS 볼륨"
+            aria-valuetext={`${Math.round(ttsVolume * 100)}%`}
           />
           <span className="tts-volume-label">{Math.round(ttsVolume * 100)}%</span>
           <button
             type="button"
             className="btn btn-ghost btn-sm"
-            onClick={() => speak('start', lang)}
+            onClick={() => speak('start', lang, { force: true })}
             aria-label="TTS 테스트"
           >테스트</button>
         </div>
