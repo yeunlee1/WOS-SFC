@@ -16,6 +16,9 @@ export default function PersonalPanel() {
   const [marchSeconds, setMarchSeconds] = useState(null);
   const [inputVal,     setInputVal]     = useState('');
   const [saving,       setSaving]       = useState(false);
+  const [saveError,    setSaveError]    = useState(null);  // 저장 실패 메시지
+  const [loading,      setLoading]      = useState(true);  // 초기 로딩 상태
+  const saveErrorTimerRef = useRef(null);
 
   // D2 패턴: timeOffset을 ref로 보관해 effect 재실행 방지
   const timeOffsetRef = useRef(timeOffset);
@@ -47,6 +50,9 @@ export default function PersonalPanel() {
           setMarchSeconds(fallback);
           setInputVal(String(fallback));
         }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
   }, []);
@@ -69,19 +75,27 @@ export default function PersonalPanel() {
       }
     } catch (e) {
       if (import.meta.env.DEV) console.warn('[PersonalPanel] 저장 실패:', e);
+      const msg = e?.message || '저장 실패';
+      setSaveError(msg);
+      // 5초 뒤 자동 clear
+      clearTimeout(saveErrorTimerRef.current);
+      saveErrorTimerRef.current = setTimeout(() => setSaveError(null), 5000);
     } finally {
       setSaving(false);
     }
   }
 
-  // ── TTS 트리거: 카운트다운 tick 감시 ──────────────────────────
+  // ── 통합 tick: TTS 트리거 + "내 출발까지 N초" 표시 ───────────
   const intervalRef  = useRef(null);
   const lastFiredRef = useRef(-1);
 
   const { active, startedAt, totalSeconds } = countdown;
 
+  const [myRemaining, setMyRemaining] = useState(null);
+
   useEffect(() => {
     clearInterval(intervalRef.current);
+    setMyRemaining(null);
 
     // active 상태 변경 시 lastFiredRef 리셋 (새 카운트다운 시작)
     lastFiredRef.current = -1;
@@ -95,46 +109,25 @@ export default function PersonalPanel() {
       const rem = totalSeconds - (Date.now() + timeOffsetRef.current - startedAt) / 1000;
       if (rem <= 0) {
         clearInterval(intervalRef.current);
+        setMyRemaining(0);
         return;
       }
+
+      // TTS 트리거
       const sec = Math.ceil(rem);
       if (sec === marchSeconds && lastFiredRef.current !== marchSeconds) {
         lastFiredRef.current = marchSeconds;
         speak('march', lang);
       }
+
+      // 내 출발까지 남은 시간 = rem - marchSeconds
+      setMyRemaining(rem - marchSeconds);
     }
 
+    tick();
     intervalRef.current = setInterval(tick, 200);
     return () => clearInterval(intervalRef.current);
   }, [active, startedAt, totalSeconds, marchSeconds, lang]);
-
-  // ── 표시용 계산 ─────────────────────────────────────────────
-  // "내 출발까지 N초" 실시간 표시용 별도 tick state
-  const [myRemaining, setMyRemaining] = useState(null);
-  const myIntervalRef = useRef(null);
-
-  useEffect(() => {
-    clearInterval(myIntervalRef.current);
-    setMyRemaining(null);
-
-    if (!active || marchSeconds === null || marchSeconds < 1 || marchSeconds > 180) return;
-
-    function updateRemaining() {
-      const rem = totalSeconds - (Date.now() + timeOffsetRef.current - startedAt) / 1000;
-      if (rem <= 0) {
-        clearInterval(myIntervalRef.current);
-        setMyRemaining(0);
-        return;
-      }
-      // 내 출발까지 남은 시간 = rem - marchSeconds
-      const untilMarch = rem - marchSeconds;
-      setMyRemaining(untilMarch);
-    }
-
-    updateRemaining();
-    myIntervalRef.current = setInterval(updateRemaining, 200);
-    return () => clearInterval(myIntervalRef.current);
-  }, [active, startedAt, totalSeconds, marchSeconds]);
 
   // ── UI 렌더 ─────────────────────────────────────────────────
   const parsedInput  = parseInt(inputVal, 10);
@@ -148,9 +141,26 @@ export default function PersonalPanel() {
   // active 중 출발까지 표시
   const showStatus = active && marchSeconds !== null && marchSeconds >= 1 && marchSeconds <= 180;
 
+  // 로딩 중 스켈레톤
+  if (loading) {
+    return (
+      <section className="personal-panel">
+        <h3>개인 현황판</h3>
+        <p className="march-status">불러오는 중...</p>
+      </section>
+    );
+  }
+
   return (
     <section className="personal-panel">
       <h3>개인 현황판</h3>
+
+      {/* 저장 실패 에러 배너 */}
+      {saveError && (
+        <div className="march-error" role="alert" id="personal-save-error">
+          {saveError}
+        </div>
+      )}
 
       {/* 미설정 안내 */}
       {marchSeconds === null && (
@@ -177,13 +187,18 @@ export default function PersonalPanel() {
 
       {/* 입력 행 */}
       <div className="march-input-row">
+        <label htmlFor="march-seconds-input" style={{ fontSize: 12, color: 'var(--text-3)' }}>
+          행군 시간
+        </label>
         <input
+          id="march-seconds-input"
           className="input march-input"
           type="number"
           min={0}
           max={180}
           placeholder="0~180"
           value={inputVal}
+          disabled={saving}
           onChange={(e) => setInputVal(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !saving) handleSave();
@@ -195,6 +210,7 @@ export default function PersonalPanel() {
           style={{ padding: '5px 12px', fontSize: 13 }}
           onClick={handleSave}
           disabled={saving}
+          aria-describedby={saveError ? 'personal-save-error' : undefined}
         >
           {saving ? '저장 중...' : '저장'}
         </button>
