@@ -21,6 +21,9 @@ export class BoardPost {
   @Column({ length: 10, default: 'ko' })
   lang: string;
 
+  @Column({ name: 'image_urls', type: 'simple-json', nullable: true, default: null })
+  imageUrls: string[] | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 }

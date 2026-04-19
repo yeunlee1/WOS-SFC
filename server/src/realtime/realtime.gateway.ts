@@ -202,6 +202,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       userAlliance: p.userAlliance,
       content: p.content,
       lang: p.lang,
+      imageUrls: p.imageUrls || [],
       createdAt: p.createdAt instanceof Date
         ? p.createdAt.toLocaleString('ko-KR', { dateStyle: 'short', timeStyle: 'short' })
         : String(p.createdAt),
