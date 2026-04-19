@@ -399,6 +399,60 @@ input:focus, select:focus, textarea:focus, .input:focus {
 ════════════════════════════════════ */
 .battle-tab { display: flex; flex-direction: column; align-items: center; padding: 16px; height: 100%; overflow-y: auto; }
 
+/* ── 6분할 그리드 레이아웃 ── */
+.battle-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+  gap: 12px;
+  padding: 12px;
+  min-height: calc(100vh - var(--header-h, 60px));
+}
+.battle-slot {
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  overflow: auto;
+}
+.battle-slot.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-3);
+  opacity: 0.4;
+}
+.battle-slot.empty::after {
+  content: '빈 슬롯';
+  font-size: 14px;
+}
+@media (max-width: 768px) {
+  .battle-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+    min-height: auto;
+  }
+  .battle-slot.empty { min-height: 80px; }
+}
+
+/* ── PersonalPanel 전용 ── */
+.personal-panel h3 { margin: 0 0 8px; font-size: 15px; }
+.personal-panel .march-input-row {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+}
+.personal-panel .march-input { width: 80px; }
+.personal-panel .march-status {
+  font-size: 13px; color: var(--text-2);
+  padding: 6px 8px; border-radius: 6px;
+  background: rgba(0,0,0,0.04);
+  margin: 0 0 8px;
+}
+.personal-panel .march-warning {
+  background: rgba(234, 179, 8, 0.15);
+  border-left: 3px solid #eab308;
+  color: #92660a;
+}
+
 /* ── 카운트다운 섹션 ── */
 .cd-section {
   display: flex; flex-direction: column; align-items: center; gap: 28px;

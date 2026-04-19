@@ -31,7 +31,10 @@ async function apiFetch(path, options = {}) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.message || `HTTP ${res.status}`);
   }
-  return res.status === 204 ? null : res.json();
+  if (res.status === 204) return null;
+  const text = await res.text();
+  if (!text) return null;
+  try { return JSON.parse(text); } catch { return null; }
 }
 
 export const api = {
@@ -71,6 +74,13 @@ export const api = {
   // 유저 역할
   setUserRole: (nickname, role) => apiFetch(`/users/${encodeURIComponent(nickname)}/role`, { method: 'PATCH', body: JSON.stringify({ role }) }),
 
+  // 개인 전투 설정
+  getBattleSettings:  ()     => apiFetch('/me/battle-settings'),
+  saveBattleSettings: (data) => apiFetch('/me/battle-settings', {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }),
+
   // Admin Panel (developer 전용)
   adminGetUsers: () => apiFetch('/admin/users'),
   adminSetRole: (id, role) => apiFetch(`/admin/users/${id}/role`, { method: 'PATCH', body: JSON.stringify({ role }) }),
@@ -80,21 +90,44 @@ export const api = {
   addAllianceNotice:    (data) => apiFetch('/alliance-notices', { method: 'POST', body: JSON.stringify(data) }),
   deleteAllianceNotice: (id)   => apiFetch(`/alliance-notices/${id}`, { method: 'DELETE' }),
 
-  // 이미지 업로드 (FormData — Content-Type 헤더 제거 필요)
+  // 이미지 업로드 (FormData — Content-Type 헤더 제거 필요, 401 refresh 포함)
   uploadBoardImage: async (file) => {
-    const form = new FormData();
-    form.append('file', file);
-    const res = await fetch('/boards/upload', {
-      method: 'POST',
-      credentials: 'include',
-      body: form,
-      // Content-Type 헤더 없음 (브라우저가 multipart boundary 자동 설정)
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || `HTTP ${res.status}`);
+    // apiFetch는 Content-Type: application/json을 강제하므로 직접 fetch 사용하되
+    // 401 시 refresh 후 재시도 로직은 동일하게 구현
+    // FormData는 스트림이라 재사용 시 비어버릴 수 있으므로 호출마다 새로 생성
+    async function doUpload() {
+      const form = new FormData();
+      form.append('file', file);
+      return fetch('/boards/upload', {
+        method: 'POST',
+        credentials: 'include',
+        body: form,
+        // Content-Type 헤더 없음 (브라우저가 multipart boundary 자동 설정)
+      });
     }
-    return res.json();
+
+    let res = await doUpload();
+
+    // 401이면 refresh 후 재시도
+    if (res.status === 401) {
+      const refreshRes = await fetch('/auth/refresh', { method: 'POST', credentials: 'include' });
+      if (refreshRes.ok) {
+        res = await doUpload();
+      } else {
+        window.dispatchEvent(new Event('auth:expired'));
+        throw new Error('세션이 만료되었습니다. 다시 로그인해주세요.');
+      }
+    }
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      let errMsg = `HTTP ${res.status}`;
+      try { errMsg = JSON.parse(errText).message || errMsg; } catch { /* 무시 */ }
+      throw new Error(errMsg);
+    }
+    const text = await res.text();
+    if (!text) return null;
+    try { return JSON.parse(text); } catch { return null; }
   },
 };
 
