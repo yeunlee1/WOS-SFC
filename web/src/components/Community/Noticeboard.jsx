@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useStore } from '../../store';
 import { useI18n } from '../../i18n';
 import { api } from '../../api';
-import { getCachedTranslation, cacheTranslation } from '../../i18n';
 
 const SOURCE_ICON  = { discord: '💬', kakao: '🟡', game: '🎮' };
 const SOURCE_LABEL = { discord: '💬 Discord', kakao: '🟡 KakaoTalk', game: '🎮 In-game' };
@@ -22,47 +21,32 @@ export default function Noticeboard() {
   const [content, setContent] = useState('');
   const [posting, setPosting] = useState(false);
 
-  // 상세 뷰 번역 상태 Map<noticeId, translatedText | null>
+  // 번역 상태 Map<noticeId, translatedText>
   const [translations, setTranslations] = useState({});
+  const [translating,  setTranslating]  = useState({});
 
   // lang 변경 시 번역 캐시 리셋
   useEffect(() => { setTranslations({}); }, [lang]);
 
-  // 상세 열릴 때 번역 실행
-  useEffect(() => {
-    if (view !== 'detail' || !detailId) return;
-    const notice = notices.find((n) => String(n.id) === String(detailId));
-    if (!notice) { setView('list'); return; }
+  // 쓰기 권한: admin 또는 developer이면서 KOR 연맹
+  const canWrite = user &&
+    (user.role === 'admin' || user.role === 'developer') &&
+    user.allianceName === 'KOR';
 
-    const postLang = notice.lang || 'ko';
-    if (postLang === lang) return; // 번역 불필요
-
-    // 로컬 캐시 확인
-    const local = getCachedTranslation(notice.content, lang);
-    if (local) {
-      setTranslations((prev) => ({ ...prev, [detailId]: local }));
-      return;
+  // 수동 번역
+  async function handleTranslate(noticeId, noticeContent) {
+    if (translations[noticeId] || translating[noticeId]) return;
+    setTranslating((prev) => ({ ...prev, [noticeId]: true }));
+    try {
+      const res = await api.translate(noticeContent, lang);
+      if (res?.translated) {
+        setTranslations((prev) => ({ ...prev, [noticeId]: res.translated }));
+      }
+    } catch { /* 실패 시 원문 유지 */ }
+    finally {
+      setTranslating((prev) => ({ ...prev, [noticeId]: false }));
     }
-
-    // 비동기 번역 (서버 캐시 → Claude API)
-    (async () => {
-      try {
-        const cacheKey = `notice:${notice.content.slice(0, 80)}:${postLang}:${lang}`;
-        const server = await api.getTranslation(cacheKey);
-        if (server?.translated) {
-          cacheTranslation(notice.content, lang, server.translated);
-          setTranslations((prev) => ({ ...prev, [detailId]: server.translated }));
-          return;
-        }
-        const res = await api.translate(notice.content, lang);
-        if (res?.translated) {
-          cacheTranslation(notice.content, lang, res.translated);
-          api.setTranslation(cacheKey, res.translated).catch(() => {});
-          setTranslations((prev) => ({ ...prev, [detailId]: res.translated }));
-        }
-      } catch { /* 실패 시 원문 유지 */ }
-    })();
-  }, [view, detailId, notices, lang]);
+  }
 
   // 공지 추가
   async function handlePost() {
@@ -90,9 +74,11 @@ export default function Noticeboard() {
       <section className="section">
         <div className="section-header">
           <h2 className="section-title">{t('noticeboard')}</h2>
-          <button className="btn btn-primary" onClick={() => setView('write')}>
-            {t('noticePin')}
-          </button>
+          {canWrite && (
+            <button className="btn btn-primary" onClick={() => setView('write')}>
+              {t('noticePin')}
+            </button>
+          )}
         </div>
         <p className="section-desc">{t('noticeboardDesc')}</p>
 
@@ -157,12 +143,13 @@ export default function Noticeboard() {
 
   // ─── 상세 뷰 ─────────────────────────────────
   const notice = notices.find((n) => String(n.id) === detailId);
-  // notice 없으면 useEffect에서 setView('list') 처리 — 렌더 중 직접 호출 금지
+  // notice 없으면 list로 복귀 — 렌더 중 직접 호출 금지, null 반환으로 처리
   if (view === 'detail' && !notice) return null;
 
-  const postLang        = notice.lang || 'ko';
+  const postLang         = notice.lang || 'ko';
   const needsTranslation = postLang !== lang;
   const translated       = translations[detailId];
+  const isTranslating    = translating[detailId];
   const isAdmin = user?.role === 'admin' || user?.role === 'developer';
 
   return (
@@ -199,9 +186,17 @@ export default function Noticeboard() {
             </details>
           </>
         ) : (
-          <div className="notice-detail-text translating">
-            {t('translating')}
-          </div>
+          <>
+            <div className="notice-detail-text">{notice.content}</div>
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => handleTranslate(detailId, notice.content)}
+              disabled={isTranslating}
+              style={{ marginTop: '8px' }}
+            >
+              {isTranslating ? '번역 중...' : '🌐 번역'}
+            </button>
+          </>
         )}
       </div>
     </section>
