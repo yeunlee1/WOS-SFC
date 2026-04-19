@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useStore } from '../../store';
 import { useI18n, SUPPORTED_LANGS } from '../../i18n';
 import { api, disconnectSocket } from '../../api';
+import { speak } from '../Battle/tts';
 
 const ALLIANCE_COLORS = {
   KOR: '#3b82f6', NSL: '#22c55e', JKY: '#a855f7',
@@ -16,7 +17,7 @@ const TAB_KEYS = [
 ];
 
 export default function Header({ activeTab, onTabChange, onToggleOnline }) {
-  const { user, timeOffset, clearUser, onlineUsers } = useStore();
+  const { user, timeOffset, clearUser, onlineUsers, ttsVolume, setTtsVolume } = useStore();
   const { t, lang, changeLang } = useI18n();
   const [utcTime, setUtcTime] = useState('');
   const [isMenuOpen, setMenuOpen] = useState(false);
@@ -67,6 +68,22 @@ export default function Header({ activeTab, onTabChange, onToggleOnline }) {
             <option key={l.code} value={l.code}>{l.flag} {l.label}</option>
           ))}
         </select>
+        <div className="tts-volume-control">
+          <span aria-hidden>🔊</span>
+          <input
+            type="range" min="0" max="100" step="1"
+            value={Math.round(ttsVolume * 100)}
+            onChange={(e) => setTtsVolume(Number(e.target.value) / 100)}
+            aria-label="TTS 볼륨"
+          />
+          <span className="tts-volume-label">{Math.round(ttsVolume * 100)}%</span>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => speak('start', lang)}
+            aria-label="TTS 테스트"
+          >테스트</button>
+        </div>
         <button
           className="mobile-online-toggle btn btn-sm"
           onClick={onToggleOnline}
