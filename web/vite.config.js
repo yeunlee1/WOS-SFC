@@ -2,8 +2,9 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
 const API_PATHS = [
-  '/auth', '/notices', '/rallies', '/members', '/boards',
-  '/translations', '/users', '/translate', '/tts-audio', '/time', '/admin',
+  '/auth', '/notices', '/alliance-notices', '/rallies', '/members', '/boards',
+  '/uploads', '/translations', '/users', '/translate', '/tts-audio', '/time', '/admin',
+  '/me',
 ];
 
 export default defineConfig({
