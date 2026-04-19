@@ -16,8 +16,15 @@ const TAB_KEYS = [
   { id: 'chat',      key: 'tabChat' },
 ];
 
+/** RTT 값에 따른 아이콘 반환 */
+function _rttIcon(rtt) {
+  if (rtt >= 300) return '🔴';
+  if (rtt >= 100) return '🟡';
+  return '🟢';
+}
+
 export default function Header({ activeTab, onTabChange, onToggleOnline }) {
-  const { user, timeOffset, clearUser, onlineUsers, ttsVolume, setTtsVolume } = useStore();
+  const { user, timeOffset, timeSyncRtt, clearUser, onlineUsers, ttsVolume, setTtsVolume } = useStore();
   const { t, lang, changeLang } = useI18n();
   const [utcTime, setUtcTime] = useState('');
   const [isMenuOpen, setMenuOpen] = useState(false);
@@ -68,6 +75,13 @@ export default function Header({ activeTab, onTabChange, onToggleOnline }) {
             <option key={l.code} value={l.code}>{l.flag} {l.label}</option>
           ))}
         </select>
+        <span
+          className="time-sync-badge"
+          title={`시간 동기화 RTT: ${Math.round(timeSyncRtt)}ms`}
+          aria-label={`시간 동기화 RTT ${Math.round(timeSyncRtt)}밀리초`}
+        >
+          {_rttIcon(timeSyncRtt)} ±{Math.round(timeSyncRtt)}ms
+        </span>
         <div className="tts-volume-control">
           <span aria-hidden>🔊</span>
           <input

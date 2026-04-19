@@ -19,6 +19,7 @@ export const useStore = create((set) => ({
   // 인증 (토큰은 httpOnly 쿠키로 관리 — JS에서 접근 불가)
   user: null,
   timeOffset: 0,
+  timeSyncRtt: 0, // 진단용 — 마지막 동기화 RTT(ms)
 
   // 실시간 데이터
   notices: [],
@@ -36,6 +37,7 @@ export const useStore = create((set) => ({
   setUser: (user) => set({ user }),
   clearUser: () => set({ user: null }),
   setTimeOffset: (timeOffset) => set({ timeOffset }),
+  setTimeSyncRtt: (timeSyncRtt) => set({ timeSyncRtt }),
   setNotices:    (notices)    => set({ notices }),
   setRallies:    (rallies)    => set({ rallies }),
   setMembers:    (members)    => set({ members }),
