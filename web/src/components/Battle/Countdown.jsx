@@ -97,8 +97,13 @@ export default function Countdown() {
   // 마지막으로 적용된 timeOffset — 리스케줄 필요 여부 판단
   const lastOffsetRef  = useRef(timeOffset);
 
-  // 마운트 / 언어 변경 시 TTS 프리페치 (기존 prefetchTts는 1~180 전체 prefetch)
-  useEffect(() => { prefetchTts(lang); }, [lang]);
+  // 마운트 / 언어 변경 시 TTS 프리페치 (카운트다운에서 쓸 숫자 + 문구 키)
+  useEffect(() => {
+    const prefetchKeys = [];
+    for (let n = 1; n <= 180; n++) prefetchKeys.push(n);
+    prefetchKeys.push('start', 'stop', 'march');
+    prefetchTts(prefetchKeys, lang);
+  }, [lang]);
 
   // ── TTS 타이머 정리 헬퍼 ──────────────────────
   function clearAllTimers() {
@@ -111,10 +116,14 @@ export default function Countdown() {
   // "서버 시각 기준 startedAt + (totalSeconds - N) * 1000" 에 speak(N) 실행 예약.
   // drift가 발생해도 브라우저가 예약 시각에 보정하여 콜백 실행 → 누락 차단.
   function scheduleTts(startedAt, totalSeconds, lang, offset) {
+    // Issue 5: startedAt/totalSeconds guard
+    if (!startedAt || !totalSeconds) return;
     clearAllTimers();
 
     const timers = [];
     let skipped = 0;
+    let firstPlayAt = null;
+    let lastPlayAt  = null;
 
     for (let n = totalSeconds - 1; n >= 1; n--) {
       // 해당 숫자가 발음될 서버 시각 (ms)
@@ -128,6 +137,10 @@ export default function Countdown() {
         continue;
       }
 
+      // Issue 6: 실제 예약된 타이머 기준으로 first/lastPlayAt 수집
+      if (firstPlayAt === null || playServerTime < firstPlayAt) firstPlayAt = playServerTime;
+      if (lastPlayAt  === null || playServerTime > lastPlayAt)  lastPlayAt  = playServerTime;
+
       const capturedN = n;
       const id = setTimeout(() => {
         if (import.meta.env.DEV) {
@@ -140,19 +153,16 @@ export default function Countdown() {
 
     timersRef.current = timers;
 
-    const scheduledCount = timers.length;
-    const now = Date.now();
-    // N=totalSeconds-1 → 1초 후 첫 발음, N=1 → totalSeconds-1초 후 마지막 발음
-    const firstPlayAt = startedAt + 1 * 1000;               // N=totalSeconds-1 발음 시각
-    const lastPlayAt  = startedAt + (totalSeconds - 1) * 1000; // N=1 발음 시각
-
-    console.info('[Countdown] scheduled', {
-      totalSeconds,
-      firstPlayAt: Math.round(firstPlayAt),
-      lastPlayAt:  Math.round(lastPlayAt),
-      timerCount:  scheduledCount,
-      skipped,
-    });
+    // Issue 7: DEV 가드 + Issue 4: 미사용 `const now` 제거
+    if (import.meta.env.DEV) {
+      console.info('[Countdown] scheduled', {
+        totalSeconds,
+        firstPlayAt: firstPlayAt !== null ? Math.round(firstPlayAt) : null,
+        lastPlayAt:  lastPlayAt  !== null ? Math.round(lastPlayAt)  : null,
+        timerCount:  timers.length,
+        skipped,
+      });
+    }
   }
 
   // countdown 상태 변경 → interval(화면) 재설정 + TTS 스케줄 예약
@@ -195,18 +205,19 @@ export default function Countdown() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, startedAt, totalSeconds, lang]);
 
-  // timeOffset 변경 시 리스케줄 (>50ms 차이일 때만)
+  // timeOffset 변경 시 리스케줄 (스케줄에 반영된 offset 대비 >50ms 차이일 때만)
+  // ※ lastOffsetRef는 리스케줄을 실제 수행한 시점에만 업데이트
+  //   → 40ms씩 연속 변화해도 누적 드리프트를 감지할 수 있음
   useEffect(() => {
-    const deltaMs = Math.abs(timeOffset - lastOffsetRef.current);
-    lastOffsetRef.current = timeOffset;
-
     if (!active || !startedAt || !totalSeconds) return;
-    if (deltaMs <= 50) return;
+    const deltaMs = Math.abs(timeOffset - lastOffsetRef.current);
+    if (deltaMs <= 50) return; // 마지막 스케줄 반영 시점 대비 50ms 이내면 무시
 
-    console.info('[Countdown] reschedule due to offset change', deltaMs);
+    if (import.meta.env.DEV) console.info('[Countdown] reschedule due to offset change', deltaMs, 'ms');
     scheduleTts(startedAt, totalSeconds, lang, timeOffset);
+    lastOffsetRef.current = timeOffset; // 리스케줄 수행 후에만 업데이트
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timeOffset]);
+  }, [timeOffset, active, startedAt]);
 
   // start/stop 멘트
   useEffect(() => {

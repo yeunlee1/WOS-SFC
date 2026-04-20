@@ -102,45 +102,27 @@ export function speak(key, lang = 'ko', opts) {
 }
 
 // 프리페치: URL을 미리 브라우저 캐시에 올려 즉시 재생 대비
-// M4: lang 변경 시 이전 lang 캐시를 제거해 메모리 누수 방지
-// orphan setTimeout 방지: prefetchState에 timer를 함께 관리
-//   Map<lang, { links: Set<HTMLLinkElement>; timer: number | null }>
-const prefetchState = new Map();
+// fetch() 기반으로 전환 — <link rel="prefetch">는 Safari/iOS에서 신뢰성이 낮음
+// prefetched 키를 Map<lang, Set<key>>로 추적하여 중복 prefetch 방지
 
-export function prefetchTts(lang) {
-  if (prefetchState.has(lang)) return;
+const prefetchedKeys = new Map(); // Map<lang, Set<string>>
 
-  // 이전 lang 정리: setTimeout 취소 + DOM <link> 제거
-  for (const [prevLang, state] of prefetchState) {
-    if (prevLang !== lang) {
-      if (state.timer !== null) clearTimeout(state.timer);
-      state.links.forEach(el => el.parentNode?.removeChild(el));
-      prefetchState.delete(prevLang);
-    }
+/**
+ * 지정한 키 배열을 prefetch (fetch()로 브라우저 캐시에 올림).
+ * @param {Array<string|number>} keys - prefetch할 키 목록
+ * @param {string} lang - 'ko'|'en'|'ja'|'zh'
+ */
+export function prefetchTts(keys, lang = 'ko') {
+  if (!prefetchedKeys.has(lang)) {
+    prefetchedKeys.set(lang, new Set());
   }
+  const done = prefetchedKeys.get(lang);
 
-  const entry = { links: new Set(), timer: null };
-  prefetchState.set(lang, entry);
-
-  const preload = (key) => {
-    const link = document.createElement('link');
-    link.rel = 'prefetch';
-    link.as = 'fetch';
-    link.href = ttsUrl(lang, key);
-    document.head.appendChild(link);
-    entry.links.add(link);
-  };
-
-  // 1~10 + 문구: 즉시 (가장 자주 쓰임)
-  for (let i = 1; i <= 10; i++) preload(String(i));
-  preload('start'); preload('stop'); preload('march');
-
-  // 11~180: 지연 (UI 블로킹 방지, 백그라운드 로드)
-  entry.timer = setTimeout(() => {
-    // lang이 여전히 활성 상태이고 timer가 유효한지 확인
-    const current = prefetchState.get(lang);
-    if (!current || current.timer === null) return;
-    current.timer = null;
-    for (let i = 11; i <= TTS_NUM_MAX; i++) preload(String(i));
-  }, 500);
+  for (const k of keys) {
+    const strKey = String(k);
+    if (done.has(strKey)) continue;
+    done.add(strKey);
+    const url = ttsUrl(lang, strKey);
+    fetch(url, { credentials: 'same-origin' }).catch(() => { /* 네트워크 오류 무시 */ });
+  }
 }
