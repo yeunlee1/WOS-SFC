@@ -132,9 +132,12 @@ export class TtsService implements OnModuleInit {
     const voice = GOOGLE_VOICES[lang] ?? GOOGLE_VOICES['ko'];
     const isNumber = /^\d+$/.test(key);
 
+    // <prosody pitch="0st"> — Wavenet의 음정을 baseline으로 고정.
+    // 같은 톤·볼륨·발음속도로 발화되어 숫자별 길이 편차와 음정 요동이 최소화된다.
+    // Chirp3-HD에서는 무시되던 태그이며 Wavenet에서만 유효하다.
     const input = isNumber
-      ? { ssml: `<speak><say-as interpret-as="cardinal">${text}</say-as></speak>` }
-      : { text };
+      ? { ssml: `<speak><prosody pitch="0st" rate="1.0" volume="medium"><say-as interpret-as="cardinal">${text}</say-as></prosody></speak>` }
+      : { ssml: `<speak><prosody pitch="0st" rate="1.0" volume="medium">${text}</prosody></speak>` };
 
     try {
       const res = await axios.post(

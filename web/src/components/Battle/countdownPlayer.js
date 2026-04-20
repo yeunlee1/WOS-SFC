@@ -131,10 +131,13 @@ export async function primeCountdownAudio(keys, lang = 'ko') {
  *
  * @param {{totalSeconds:number, startedAt:number, timeOffset:number, lang?:string, volume:number, muted:boolean}} params
  */
-export function scheduleCountdown({ totalSeconds, startedAt, timeOffset, lang = 'ko', volume, muted }) {
+export async function scheduleCountdown({ totalSeconds, startedAt, timeOffset, lang = 'ko', volume, muted }) {
   const c = ensureContext();
   if (!c) return;
   if (!startedAt || !totalSeconds) return;
+  // totalSeconds < 2 이면 재생할 슬롯이 없음 (firstSlot = totalSeconds - 1 = 0)
+  // 가드 없으면 loadBuffer(lang, 0) → /tts-audio/ko/0 404 발생
+  if (totalSeconds < 2) return;
 
   stopCountdownAudio();  // 기존 스케줄 정리 (latestScheduleId는 stop 내에서 증가)
   const myId = ++latestScheduleId;
@@ -148,14 +151,27 @@ export function scheduleCountdown({ totalSeconds, startedAt, timeOffset, lang = 
   scheduleLog.items = [];
   dispatchedLog.length = 0;
 
+  // 첫 슬롯 버퍼 워밍업 — 최대 500ms.
+  // 첫 슬롯은 fireAt ≈ 1000ms 에 발화되므로, 이 구간 안에 버퍼가 도착하지 않으면
+  // setTimeout 콜백에서 .then 대기 동안 발화가 밀린다 (10초 카운트다운에서
+  // "9"가 849ms 늦게 나온 감독관 보고의 근본 원인).
+  // Promise.race 로 워밍업하되 500ms 초과 시 즉시 스케줄링으로 진행해 "20부터
+  // 센다" 류의 전체 블로킹 버그 재발을 방지한다. 동시에 남은 모든 키의 로드도
+  // 백그라운드로 시작해 후속 슬롯 준비를 앞당긴다.
+  const firstSlot = totalSeconds - 1;
+  for (let n = totalSeconds - 1; n >= 1; n--) loadBuffer(lang, n);
+  await Promise.race([
+    loadBuffer(lang, firstSlot),
+    new Promise((r) => setTimeout(r, 500)),
+  ]);
+  if (myId !== latestScheduleId) return;
+
+  // 버퍼 워밍업 후 시점으로 serverNow 재계산 → whenCtx 정확도 확보
+  const serverNow = Date.now() + timeOffset;
   let scheduled = 0;
   let skippedPastDue = 0;
-  const serverNow = Date.now() + timeOffset;
 
   for (let n = totalSeconds - 1; n >= 1; n--) {
-    // 버퍼 로딩은 백그라운드 — 반환 Promise를 기다리지 않는다.
-    loadBuffer(lang, n);
-
     const playServerTime = startedAt + (totalSeconds - n) * 1000;
     const delayMs = playServerTime - serverNow;
 
@@ -215,7 +231,7 @@ function playNow(buffer, label) {
     src.start(0);
     activeSources.add(src);
     dispatchedCount.value += 1;
-    dispatchedLog.push({ label, at: performance.now() });
+    if (import.meta.env.DEV) dispatchedLog.push({ label, at: performance.now() });
   } catch (e) {
     if (import.meta.env.DEV) console.warn('[CountdownPlayer] playNow fail', label, e.message);
   }

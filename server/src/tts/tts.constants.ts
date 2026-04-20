@@ -3,12 +3,19 @@
 export const LANGS = ['ko', 'en', 'ja', 'zh'] as const;
 export type TtsLang = typeof LANGS[number];
 
-// Google Cloud TTS Chirp3-HD 음성 매핑 (4개 언어 동일 모델 패밀리 사용)
+// Google Cloud TTS 음성 매핑 — Wavenet 계열 (SSML <prosody> 태그 완전 지원)
+//
+// 왜 Chirp3-HD 대신 Wavenet인가:
+//   사용자 요청 "모든 숫자 음정 일정하게" 구현을 위해 <prosody pitch="0st">
+//   사용이 필수인데, Chirp3-HD는 SSML prosody 를 지원하지 않아 pitch 강제가
+//   불가능하다. Wavenet은 prosody/rate/pitch/volume 모두 지원.
+//   음질은 Chirp3 > Wavenet 이지만 카운트다운 숫자 읽기 용도에서는 Wavenet도
+//   충분히 자연스럽다.
 export const GOOGLE_VOICES: Record<string, { languageCode: string; name: string }> = {
-  ko: { languageCode: 'ko-KR', name: 'ko-KR-Chirp3-HD-Aoede' },
-  en: { languageCode: 'en-US', name: 'en-US-Chirp3-HD-Aoede' },
-  ja: { languageCode: 'ja-JP', name: 'ja-JP-Chirp3-HD-Aoede' },
-  zh: { languageCode: 'cmn-CN', name: 'cmn-CN-Chirp3-HD-Aoede' },
+  ko: { languageCode: 'ko-KR', name: 'ko-KR-Wavenet-A' },
+  en: { languageCode: 'en-US', name: 'en-US-Wavenet-F' },
+  ja: { languageCode: 'ja-JP', name: 'ja-JP-Wavenet-B' },
+  zh: { languageCode: 'cmn-CN', name: 'cmn-CN-Wavenet-A' },
 };
 
 // 카운트다운 문구 (서비스·컨트롤러 공통 사용)

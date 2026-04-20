@@ -28,23 +28,35 @@ if (!API_KEY) {
 if (!fs.existsSync(CACHE_DIR)) fs.mkdirSync(CACHE_DIR, { recursive: true });
 
 // ── Google TTS 호출 ────────────────────────────────────────────────────────
-async function fetchAudio(lang: string, key: string, text: string): Promise<Buffer> {
+async function fetchAudio(lang: string, key: string, text: string, attempt = 1): Promise<Buffer> {
   const voice = GOOGLE_VOICES[lang] ?? GOOGLE_VOICES['ko'];
   const isNumber = /^\d+$/.test(key);
+  // Wavenet prosody 고정 — 숫자별 pitch 요동 최소화 (tts.service.ts와 동일 규칙)
   const input = isNumber
-    ? { ssml: `<speak><say-as interpret-as="cardinal">${text}</say-as></speak>` }
-    : { text };
+    ? { ssml: `<speak><prosody pitch="0st" rate="1.0" volume="medium"><say-as interpret-as="cardinal">${text}</say-as></prosody></speak>` }
+    : { ssml: `<speak><prosody pitch="0st" rate="1.0" volume="medium">${text}</prosody></speak>` };
 
-  const res = await axios.post(
-    `https://texttospeech.googleapis.com/v1/text:synthesize?key=${API_KEY}`,
-    {
-      input,
-      voice: { languageCode: voice.languageCode, name: voice.name },
-      audioConfig: { audioEncoding: 'MP3', speakingRate: 1.5 },
-    },
-    { timeout: 15000 },
-  );
-  return Buffer.from(res.data.audioContent as string, 'base64');
+  try {
+    const res = await axios.post(
+      `https://texttospeech.googleapis.com/v1/text:synthesize?key=${API_KEY}`,
+      {
+        input,
+        voice: { languageCode: voice.languageCode, name: voice.name },
+        audioConfig: { audioEncoding: 'MP3', speakingRate: 1.5 },
+      },
+      { timeout: 15000 },
+    );
+    return Buffer.from(res.data.audioContent as string, 'base64');
+  } catch (e) {
+    const status = (e as { response?: { status?: number } })?.response?.status;
+    // 429(레이트 리밋) / 5xx(서버 에러) → 지수 백오프 재시도 (최대 5회)
+    if ((status === 429 || (status !== undefined && status >= 500)) && attempt < 5) {
+      const waitMs = Math.min(30000, 1000 * Math.pow(2, attempt - 1));
+      await new Promise(r => setTimeout(r, waitMs));
+      return fetchAudio(lang, key, text, attempt + 1);
+    }
+    throw e;
+  }
 }
 
 // ── 단일 파일 생성 (이미 있으면 스킵) ─────────────────────────────────────
