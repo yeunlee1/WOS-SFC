@@ -93,11 +93,19 @@ export class TtsService implements OnModuleInit {
     return promise;
   }
 
+  // Google TTS가 간혹 거의 빈 MP3(무음)를 반환하는 것을 감지하기 위한 최소 바이트.
+  // 관찰값: 손상 파일 ≤900~3000 bytes / 정상 파일 3000+bytes.
+  // 짧은 문자열의 정상 오디오도 2KB 이상 나오므로 1000 bytes 미만은 손상으로 간주.
+  private static readonly MIN_MP3_BYTES = 1000;
+
   // 실제 파일 생성
   private async generateFile(lang: string, key: string, fp: string, text: string): Promise<string> {
     const tmpFp = `${fp}.tmp`;
     try {
       const buf = await this.fetchFromGoogleTts(lang, key, text);
+      if (buf.length < TtsService.MIN_MP3_BYTES) {
+        throw new Error(`TTS 응답이 비정상적으로 작음 (${buf.length} bytes) — 무음 가능성`);
+      }
       await fsPromises.writeFile(tmpFp, buf);
       await fsPromises.rename(tmpFp, fp);
       return fp;

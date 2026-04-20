@@ -3,6 +3,12 @@ import { useStore } from '../../store';
 import { useI18n } from '../../i18n';
 import { getSocket } from '../../api';
 import { speak, stopAllTts, prefetchTts } from './tts';
+import {
+  primeCountdownAudio,
+  scheduleCountdown,
+  stopCountdownAudio,
+  setCountdownVolume,
+} from './countdownPlayer';
 
 // ── SVG 원형 프로그레스 링 ──────────────────────
 const RADIUS = 120;
@@ -90,86 +96,40 @@ export default function Countdown() {
   const [inputSec,  setInputSec]    = useState('');
   // 화면 업데이트용 interval
   const intervalRef    = useRef(null);
-  // TTS 스케줄 타이머 배열 — 카운트다운 종료/정리 시 전부 clearTimeout
-  const timersRef      = useRef([]);
   const prevActiveRef  = useRef(countdown.active);
   const initializedRef = useRef(false);
   // 마지막으로 적용된 timeOffset — 리스케줄 필요 여부 판단
   const lastOffsetRef  = useRef(timeOffset);
 
-  // 마운트 / 언어 변경 시 TTS 프리페치 (카운트다운에서 쓸 숫자 + 문구 키)
+  // 마운트 / 언어 변경 시 비카운트다운 문구만 prefetch (카운트다운 숫자는 countdownPlayer가 decode 캐시)
   useEffect(() => {
-    const prefetchKeys = [];
-    for (let n = 1; n <= 180; n++) prefetchKeys.push(n);
-    prefetchKeys.push('start', 'stop', 'march');
-    prefetchTts(prefetchKeys, lang);
+    prefetchTts(['start', 'stop', 'march'], lang);
+    // 백그라운드에서 1~180 버퍼를 미리 decode해 둠 (AudioContext)
+    const keys = [];
+    for (let n = 1; n <= 180; n++) keys.push(n);
+    // primeCountdownAudio는 AudioContext 언락도 시도하지만 사용자 제스처 전에는 suspended 유지
+    // decodeAudioData는 제스처 없이도 가능 → 버퍼만 우선 준비해 둠
+    primeCountdownAudio(keys, lang).catch(() => { /* 네트워크/디코드 실패 무시 */ });
   }, [lang]);
 
-  // ── TTS 타이머 정리 헬퍼 ──────────────────────
-  function clearAllTimers() {
-    for (const id of timersRef.current) clearTimeout(id);
-    timersRef.current = [];
-  }
-
-  // ── TTS 스케줄 예약 (스케줄 기반 재설계) ─────
-  // totalSeconds-1 부터 1 까지 각 정수 N에 대해
-  // "서버 시각 기준 startedAt + (totalSeconds - N) * 1000" 에 speak(N) 실행 예약.
-  // drift가 발생해도 브라우저가 예약 시각에 보정하여 콜백 실행 → 누락 차단.
-  function scheduleTts(startedAt, totalSeconds, lang, offset) {
-    // Issue 5: startedAt/totalSeconds guard
-    if (!startedAt || !totalSeconds) return;
-    clearAllTimers();
-
-    const timers = [];
-    let skipped = 0;
-    let firstPlayAt = null;
-    let lastPlayAt  = null;
-
-    for (let n = totalSeconds - 1; n >= 1; n--) {
-      // 해당 숫자가 발음될 서버 시각 (ms)
-      const playServerTime = startedAt + (totalSeconds - n) * 1000;
-      // 로컬 기준 지연
-      const delay = playServerTime - (Date.now() + offset);
-
-      if (delay < 0) {
-        // 이미 지난 과거 (중간 진입) — 스킵
-        skipped++;
-        continue;
-      }
-
-      // Issue 6: 실제 예약된 타이머 기준으로 first/lastPlayAt 수집
-      if (firstPlayAt === null || playServerTime < firstPlayAt) firstPlayAt = playServerTime;
-      if (lastPlayAt  === null || playServerTime > lastPlayAt)  lastPlayAt  = playServerTime;
-
-      const capturedN = n;
-      const id = setTimeout(() => {
-        if (import.meta.env.DEV) {
-          console.debug('[Countdown] speak', capturedN, 'at', Date.now());
-        }
-        speak(String(capturedN), lang);
-      }, delay);
-      timers.push(id);
-    }
-
-    timersRef.current = timers;
-
-    // Issue 7: DEV 가드 + Issue 4: 미사용 `const now` 제거
-    if (import.meta.env.DEV) {
-      console.info('[Countdown] scheduled', {
-        totalSeconds,
-        firstPlayAt: firstPlayAt !== null ? Math.round(firstPlayAt) : null,
-        lastPlayAt:  lastPlayAt  !== null ? Math.round(lastPlayAt)  : null,
-        timerCount:  timers.length,
-        skipped,
-      });
-    }
-  }
+  // ttsVolume/ttsMuted 변경 → countdownPlayer 마스터 게인 실시간 반영
+  useEffect(() => {
+    const apply = () => {
+      const s = useStore.getState();
+      setCountdownVolume(s.ttsVolume, s.ttsMuted);
+    };
+    apply();
+    const unsub = useStore.subscribe((s, prev) => {
+      if (s.ttsVolume !== prev.ttsVolume || s.ttsMuted !== prev.ttsMuted) apply();
+    });
+    return unsub;
+  }, []);
 
   // countdown 상태 변경 → interval(화면) 재설정 + TTS 스케줄 예약
   const { active, startedAt, totalSeconds } = countdown;
   useEffect(() => {
     clearInterval(intervalRef.current);
-    clearAllTimers();
+    stopCountdownAudio();
 
     if (!active) {
       setRemaining(null);
@@ -177,8 +137,23 @@ export default function Countdown() {
       return;
     }
 
-    // 시작 시 TTS 스케줄 예약
-    scheduleTts(startedAt, totalSeconds, lang, timeOffset);
+    // 사용자 제스처에서 AudioContext 언락 (카운트다운 시작 버튼 클릭 등)
+    // 필요한 키만 즉시 prime (이미 decode되었다면 no-op).
+    // 언락은 비동기이지만 scheduleCountdown 내부에서 이미 decode된 버퍼는 즉시 예약,
+    // 미완료 버퍼는 로드 완료 시 예약되므로 prime을 기다릴 필요 없다.
+    const neededKeys = [];
+    for (let n = 1; n < totalSeconds; n++) neededKeys.push(n);
+    primeCountdownAudio(neededKeys, lang).catch(() => { /* 무시 */ });
+
+    const { ttsVolume, ttsMuted } = useStore.getState();
+    scheduleCountdown({
+      totalSeconds,
+      startedAt,
+      timeOffset,
+      lang,
+      volume: ttsVolume,
+      muted: ttsMuted,
+    });
     lastOffsetRef.current = timeOffset;
 
     // ── 화면 렌더링용 tick (speak 호출 없음) ────
@@ -199,23 +174,35 @@ export default function Countdown() {
     intervalRef.current = setInterval(tick, 200);
     return () => {
       clearInterval(intervalRef.current);
-      clearAllTimers();
+      stopCountdownAudio();
       stopAllTts();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, startedAt, totalSeconds, lang]);
 
-  // timeOffset 변경 시 리스케줄 (스케줄에 반영된 offset 대비 >50ms 차이일 때만)
-  // ※ lastOffsetRef는 리스케줄을 실제 수행한 시점에만 업데이트
-  //   → 40ms씩 연속 변화해도 누적 드리프트를 감지할 수 있음
+  // timeOffset 변경 시 리스케줄
+  //
+  // Web Audio API 스케줄은 AudioContext.currentTime(모노토닉) 기반이라
+  // 한 번 예약된 발화는 Date.now() drift와 무관하게 정확히 재생된다.
+  // 따라서 일반적인 RTT 변동으로 인한 작은 offset 변화(수백 ms 이내)는
+  // 무시해야 한다 — 재스케줄 사이사이 await로 인해 오히려 슬롯이 누락될 수 있다.
+  // 시스템 클록이 실제로 점프한 경우(예: 수동 시간 변경)에만 재스케줄.
   useEffect(() => {
     if (!active || !startedAt || !totalSeconds) return;
     const deltaMs = Math.abs(timeOffset - lastOffsetRef.current);
-    if (deltaMs <= 50) return; // 마지막 스케줄 반영 시점 대비 50ms 이내면 무시
+    if (deltaMs <= 1000) return; // 1초 이내의 변동은 무시 (AudioContext가 이미 정확히 스케줄함)
 
-    if (import.meta.env.DEV) console.info('[Countdown] reschedule due to offset change', deltaMs, 'ms');
-    scheduleTts(startedAt, totalSeconds, lang, timeOffset);
-    lastOffsetRef.current = timeOffset; // 리스케줄 수행 후에만 업데이트
+    if (import.meta.env.DEV) console.info('[Countdown] reschedule due to large offset jump', deltaMs, 'ms');
+    const { ttsVolume, ttsMuted } = useStore.getState();
+    scheduleCountdown({
+      totalSeconds,
+      startedAt,
+      timeOffset,
+      lang,
+      volume: ttsVolume,
+      muted: ttsMuted,
+    });
+    lastOffsetRef.current = timeOffset;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeOffset, active, startedAt]);
 
