@@ -5,9 +5,11 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToMany,
-  Index,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
 import { RallyGroupMember } from './rally-group-member.entity';
+import { User } from '../users/users.entity';
 
 export type RallyGroupState = 'idle' | 'running' | 'finished';
 
@@ -19,8 +21,12 @@ export class RallyGroup {
   @Column({ length: 40 })
   name: string;
 
-  @Column({ name: 'created_by_id' })
-  createdById: string;
+  @Column({ name: 'created_by_id', type: 'int' })
+  createdById: number;
+
+  @ManyToOne(() => User)
+  @JoinColumn({ name: 'created_by_id' })
+  createdBy?: User;
 
   @Column({ name: 'broadcast_all', default: false })
   broadcastAll: boolean;
