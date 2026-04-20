@@ -34,6 +34,11 @@ const activeTimeouts = new Set();
 // 스케줄 호출 식별자 — 늦게 도착한 버퍼 완료 콜백이 이전 스케줄의 결과를 재생하는 것 방지
 let latestScheduleId = 0;
 
+// captain 오디오 버스 — AudioContext 시각으로 다음 captain을 재생할 수 있는 시각.
+// march 차이가 TTS 오디오 길이(~1.5초)보다 작으면 두 captain 음성이 겹쳐 들린다.
+// AudioContext.currentTime 기준으로 이전 captain이 끝난 뒤에 다음 captain을 시작해 방지.
+let captainBusUntil = 0;
+
 // DEV 감독관용 텔레메트리
 const dispatchedCount = { value: 0 };
 const scheduleLog = { items: [] };
@@ -235,25 +240,29 @@ function scheduleSlot(delayMs, key, lang, myId) {
 }
 
 function dispatchSlot(lang, key, myId) {
+  const isCaptain = key.startsWith('captain_');
+  // captain이 재생 중인 구간에 숫자가 발화되면 겹침 → skip
+  if (!isCaptain && ctx && ctx.currentTime < captainBusUntil) {
+    if (import.meta.env.DEV) console.info('[RallyGroupPlayer] skip number during captain', key);
+    return;
+  }
+  const playFn = isCaptain ? playCaptain : playNow;
   const entry = bufferCache.get(`${lang}:${key}`);
   if (entry && typeof entry === 'object' && 'numberOfChannels' in entry) {
-    // 이미 디코드된 AudioBuffer
-    playNow(entry, key);
+    playFn(entry, key);
     return;
   }
   if (entry && typeof entry.then === 'function') {
-    // 아직 로딩 중 — 완료되면 즉시 재생
     entry.then((buf) => {
       if (myId !== latestScheduleId) return;
-      if (buf) playNow(buf, key);
+      if (buf) playFn(buf, key);
       else if (import.meta.env.DEV) console.warn('[RallyGroupPlayer] slot buf null', key);
     });
     return;
   }
-  // 캐시에 없음 — 지금이라도 로드 시도
   loadBuffer(lang, key).then((buf) => {
     if (myId !== latestScheduleId) return;
-    if (buf) playNow(buf, key);
+    if (buf) playFn(buf, key);
   });
 }
 
@@ -273,8 +282,28 @@ function playNow(buffer, label) {
   }
 }
 
+function playCaptain(buffer, key) {
+  if (!ctx || !masterGain) return;
+  // 이전 captain이 아직 재생 중이면 끝난 직후에 시작
+  const startWhen = Math.max(ctx.currentTime, captainBusUntil);
+  const src = ctx.createBufferSource();
+  src.buffer = buffer;
+  src.connect(masterGain);
+  src.onended = () => { activeSources.delete(src); };
+  try {
+    src.start(startWhen);
+    captainBusUntil = startWhen + buffer.duration;
+    activeSources.add(src);
+    dispatchedCount.value += 1;
+    if (import.meta.env.DEV) dispatchedLog.push({ label: key, at: performance.now(), startWhen });
+  } catch (e) {
+    if (import.meta.env.DEV) console.warn('[RallyGroupPlayer] playCaptain fail', key, e.message);
+  }
+}
+
 export function stopRallyCountdown() {
   latestScheduleId++;
+  captainBusUntil = 0;
   for (const id of activeTimeouts) {
     try { clearTimeout(id); } catch { /* noop */ }
   }
