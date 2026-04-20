@@ -406,7 +406,10 @@ input:focus, select:focus, textarea:focus, .input:focus {
   grid-template-rows: repeat(2, 1fr);
   gap: 12px;
   padding: 12px;
-  min-height: calc(100vh - var(--header-h, 60px));
+  min-height: calc(100dvh - var(--header-h, 60px));
+}
+@supports not (height: 100dvh) {
+  .battle-grid { min-height: calc(100vh - var(--header-h, 60px)); }
 }
 .battle-slot {
   background: var(--bg-card);
@@ -431,8 +434,39 @@ input:focus, select:focus, textarea:focus, .input:focus {
     grid-template-columns: 1fr;
     grid-template-rows: auto;
     min-height: auto;
+    padding: 8px;
+    gap: 8px;
   }
+  .battle-slot { padding: 10px; }
   .battle-slot.empty { min-height: 80px; }
+  .battle-tab { padding: 8px; }
+
+  /* Countdown 모바일 여백/폰트 축소 */
+  .cd-section { gap: 18px; }
+  .cd-center .countdown-number { font-size: clamp(44px, 14vw, 72px); }
+  #countdown-number, .countdown-number { font-size: clamp(56px, 18vw, 88px); }
+
+  /* 입력 행 wrap — 좁은 화면에서 버튼이 줄바꿈 */
+  .cd-input-row { flex-wrap: wrap; }
+  .cd-input-row .cd-input { flex: 1 1 100%; }
+  .cd-btn-start, .cd-btn-stop { flex: 1 1 calc(50% - 5px); min-width: 0; }
+
+  /* PersonalPanel 입력 영역 — 고정폭 제거, wrap */
+  .personal-panel .march-input-row { flex-wrap: wrap; gap: 6px; }
+  .personal-panel .march-input { width: auto; flex: 1 1 80px; min-width: 60px; }
+
+  /* Dispatch/RallyTimer 공용 short input — 고정폭 완화 */
+  .input-short { width: auto !important; flex: 1 1 64px !important; min-width: 56px !important; max-width: 96px; }
+
+  /* Rally card 그리드 최소폭 축소 */
+  #rally-list { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+}
+
+@media (max-width: 480px) {
+  .battle-tab { padding: 4px; }
+  .battle-grid { padding: 4px; gap: 6px; }
+  .cd-section { gap: 14px; padding: 14px 10px; }
+  #rally-list { grid-template-columns: 1fr; }
 }
 
 /* ── PersonalPanel 전용 ── */
@@ -465,8 +499,9 @@ input:focus, select:focus, textarea:focus, .input:focus {
 /* ── 카운트다운 섹션 ── */
 .cd-section {
   display: flex; flex-direction: column; align-items: center; gap: 28px;
-  width: 100%; max-width: 480px; padding: 32px 24px;
+  width: 100%; max-width: min(480px, 100%); padding: clamp(16px, 4vw, 32px) clamp(12px, 3vw, 24px);
   animation: slideUp .4s cubic-bezier(.22,1,.36,1) both;
+  box-sizing: border-box;
 }
 
 /* 상태 뱃지 */
