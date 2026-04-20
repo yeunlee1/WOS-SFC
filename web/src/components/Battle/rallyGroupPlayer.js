@@ -157,9 +157,15 @@ export async function scheduleRallyCountdown({ startedAtServerMs, fireOffsets, t
 
   stopRallyCountdown();  // 기존 스케줄 정리 (latestScheduleId는 stop 내에서 증가)
   const myId = ++latestScheduleId;
-  setRallyVolume(volume, muted);
 
-  if (c.state === 'suspended') c.resume().catch(() => { /* noop */ });
+  // fire-and-forget(이전 코드)와 달리 await — 정지 후 재시작 시 컨텍스트가
+  // 아직 suspended이면 소스 노드 start()가 무음이 되는 버그를 방지.
+  // resume 완료 후 setRallyVolume을 호출해 ctx.currentTime이 정확한 시점에
+  // gain ramp를 적용한다 (suspended 중 currentTime은 정지됨).
+  if (c.state === 'suspended') {
+    try { await c.resume(); } catch { /* noop */ }
+  }
+  setRallyVolume(volume, muted);
 
   dispatchedCount.value = 0;
   scheduleLog.items = [];
@@ -196,6 +202,12 @@ export async function scheduleRallyCountdown({ startedAtServerMs, fireOffsets, t
     loadBuffer(lang, '3'),
     new Promise((r) => setTimeout(r, 500)),
   ]);
+  if (myId !== latestScheduleId) return;
+
+  // 워밍업 대기 중 컨텍스트가 다시 suspended 됐을 가능성을 방어
+  if (c.state === 'suspended') {
+    try { await c.resume(); } catch { /* noop */ }
+  }
   if (myId !== latestScheduleId) return;
 
   // 워밍업 후 serverNow 재계산 → whenCtx 정확도 확보
