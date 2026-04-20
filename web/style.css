@@ -1504,8 +1504,39 @@ input, textarea, select, .input {
   border-radius: 6px; background: var(--bg-card); color: var(--text-1);
 }
 
+.rally-local-mute-btn {
+  margin-top: 10px;
+  min-height: 44px;
+  padding: 8px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  border: 1.5px solid var(--accent);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+  touch-action: manipulation;
+}
+.rally-local-mute-btn:hover {
+  background: var(--bg-subtle);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+.rally-local-mute-btn--muted {
+  background: var(--bg-subtle);
+  color: var(--text-2);
+  border-color: var(--border);
+}
+.rally-local-mute-btn--muted:hover {
+  background: var(--bg-card);
+  color: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
 @media (max-width: 768px) {
   .rally-group-countdown__remain { font-size: 42px; }
   .rally-group-card__actions { width: 100%; }
   .rally-member-row { font-size: 13px; }
+  .rally-local-mute-btn { width: 100%; font-size: 15px; }
 }

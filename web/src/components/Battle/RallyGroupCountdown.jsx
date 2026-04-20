@@ -20,7 +20,13 @@ export default function RallyGroupCountdown({ group, countdown }) {
   const [now, setNow] = useState(Date.now());
   const [editingOverride, setEditingOverride] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [localMuted, setLocalMuted] = useState(false);
   const schedKeyRef = useRef('');
+
+  // countdown payload가 새로 시작되면 로컬 음소거 자동 해제
+  useEffect(() => {
+    setLocalMuted(false);
+  }, [countdown?.startedAtServerMs]);
 
   // Schedule audio when countdown payload arrives or member march times change
   useEffect(() => {
@@ -80,6 +86,29 @@ export default function RallyGroupCountdown({ group, countdown }) {
     return upcoming[0] ?? null;
   }, [countdown, serverNow]);
 
+  function handleLocalMuteToggle() {
+    if (!localMuted) {
+      // 로컬 음성만 즉시 중지 — 서버 state 및 다른 사용자에게 영향 없음
+      stopRallyCountdown();
+      setLocalMuted(true);
+    } else {
+      // 재개: 현재 countdown 기준으로 남은 슬롯 재스케줄
+      if (countdown) {
+        primeRallyAudio(countdown.fireOffsets, lang).then(() => {
+          scheduleRallyCountdown({
+            startedAtServerMs: countdown.startedAtServerMs,
+            fireOffsets: countdown.fireOffsets,
+            timeOffset,
+            lang,
+            volume: ttsVolume,
+            muted: ttsMuted,
+          });
+        });
+      }
+      setLocalMuted(false);
+    }
+  }
+
   async function saveOverride(memberId) {
     const parsed = parseInt(editingOverride?.value ?? '', 10);
     const value = Number.isFinite(parsed) && parsed >= 1 && parsed <= 600 ? parsed : null;
@@ -106,6 +135,13 @@ export default function RallyGroupCountdown({ group, countdown }) {
               : ''}
           </div>
         )}
+        <button
+          type="button"
+          className={`rally-local-mute-btn${localMuted ? ' rally-local-mute-btn--muted' : ''}`}
+          onClick={handleLocalMuteToggle}
+        >
+          {localMuted ? '🔊 음성 재개' : '🔇 음성 중지'}
+        </button>
       </div>
 
       <ul className="rally-timeline">
