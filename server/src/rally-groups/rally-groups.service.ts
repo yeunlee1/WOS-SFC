@@ -4,6 +4,7 @@ import { DataSource, In, Repository } from 'typeorm';
 import { RallyGroup } from './rally-group.entity';
 import { RallyGroupMember } from './rally-group-member.entity';
 import { UserBattleSettings } from '../users/user-battle-settings.entity';
+import { User } from '../users/users.entity';
 import { CreateRallyGroupDto } from './dto/create-rally-group.dto';
 import { RallyGroupsGateway } from './rally-groups.gateway';
 
@@ -53,9 +54,17 @@ export class RallyGroupsService {
     @InjectRepository(RallyGroup) private groupRepo: Repository<RallyGroup>,
     @InjectRepository(RallyGroupMember) private memberRepo: Repository<RallyGroupMember>,
     @InjectRepository(UserBattleSettings) private settingsRepo: Repository<UserBattleSettings>,
+    @InjectRepository(User) private userRepo: Repository<User>,
     private gateway: RallyGroupsGateway,
     private dataSource: DataSource,
   ) {}
+
+  async listAssignableUsers() {
+    return this.userRepo.find({
+      select: ['id', 'nickname', 'allianceName', 'role', 'language'],
+      order: { allianceName: 'ASC', nickname: 'ASC' },
+    });
+  }
 
   async listAll(): Promise<RallyGroup[]> {
     const groups = await this.groupRepo.find({

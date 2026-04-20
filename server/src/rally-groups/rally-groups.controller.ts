@@ -35,6 +35,12 @@ export class RallyGroupsController {
     return this.service.listAll();
   }
 
+  @Get('assignable-users')
+  @UseGuards(RallyAdminGuard)
+  listAssignableUsers() {
+    return this.service.listAssignableUsers();
+  }
+
   @Delete(':id')
   @UseGuards(RallyAdminGuard)
   remove(@Param('id') id: string) {

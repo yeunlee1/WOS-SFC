@@ -90,6 +90,17 @@ export const api = {
   addAllianceNotice:    (data) => apiFetch('/alliance-notices', { method: 'POST', body: JSON.stringify(data) }),
   deleteAllianceNotice: (id)   => apiFetch(`/alliance-notices/${id}`, { method: 'DELETE' }),
 
+  // 집결 그룹 (Rally Group Sync)
+  listRallyGroups:           ()                                     => apiFetch('/rally-groups'),
+  listAssignableUsers:       ()                                     => apiFetch('/rally-groups/assignable-users'),
+  createRallyGroup:          (data)                                 => apiFetch('/rally-groups', { method: 'POST', body: JSON.stringify(data) }),
+  deleteRallyGroup:          (id)                                   => apiFetch(`/rally-groups/${id}`, { method: 'DELETE' }),
+  addRallyGroupMember:       (id, userId)                           => apiFetch(`/rally-groups/${id}/members`, { method: 'POST', body: JSON.stringify({ userId }) }),
+  removeRallyGroupMember:    (id, memberId)                         => apiFetch(`/rally-groups/${id}/members/${memberId}`, { method: 'DELETE' }),
+  updateRallyMarchOverride:  (id, memberId, marchSecondsOverride)   => apiFetch(`/rally-groups/${id}/members/${memberId}/march-override`, { method: 'PATCH', body: JSON.stringify({ marchSecondsOverride }) }),
+  startRallyGroup:           (id)                                   => apiFetch(`/rally-groups/${id}/start`, { method: 'POST' }),
+  stopRallyGroup:            (id)                                   => apiFetch(`/rally-groups/${id}/stop`, { method: 'POST' }),
+
   // 이미지 업로드 (FormData — Content-Type 헤더 제거 필요, 401 refresh 포함)
   uploadBoardImage: async (file) => {
     // apiFetch는 Content-Type: application/json을 강제하므로 직접 fetch 사용하되

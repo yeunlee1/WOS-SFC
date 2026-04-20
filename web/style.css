@@ -1362,3 +1362,156 @@ input, textarea, select, .input {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+
+/* ── Rally Group Sync ── */
+.battle-slot--rally {
+  grid-column: 1 / -1;
+}
+
+.rally-group-panel {
+  display: flex; flex-direction: column; gap: 12px;
+  width: 100%;
+}
+.rally-group-panel__header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 4px;
+}
+.rally-group-panel__header h3 { margin: 0; font-size: 16px; }
+
+.rally-btn {
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  color: var(--text-1);
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+.rally-btn:hover:not(:disabled) { background: var(--bg-subtle); border-color: var(--text-3); }
+.rally-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.rally-btn--primary { background: #3b82f6; color: #fff; border-color: #3b82f6; }
+.rally-btn--primary:hover:not(:disabled) { background: #2563eb; border-color: #2563eb; }
+.rally-btn--warn { background: #eab308; color: #1a1300; border-color: #eab308; }
+.rally-btn--danger { background: rgba(239,68,68,0.12); color: #ef4444; border-color: rgba(239,68,68,0.3); }
+.rally-btn--danger:hover:not(:disabled) { background: rgba(239,68,68,0.2); }
+
+.rally-create-form {
+  display: flex; gap: 8px;
+}
+.rally-create-form input {
+  flex: 1; padding: 6px 10px; border: 1.5px solid var(--border); border-radius: 8px;
+  background: var(--bg-card); color: var(--text-1); font-size: 14px;
+}
+
+.rally-error {
+  background: rgba(239,68,68,0.12); color: #ef4444; border-left: 3px solid #ef4444;
+  padding: 6px 10px; border-radius: 6px; font-size: 13px;
+}
+.rally-empty, .rally-empty-small {
+  color: var(--text-3); font-size: 13px; padding: 12px; text-align: center;
+}
+.rally-empty-small { padding: 6px; font-size: 12px; }
+
+.rally-group-list {
+  list-style: none; padding: 0; margin: 0;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.rally-group-card {
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: var(--bg-card);
+}
+.rally-group-card.running {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59,130,246,0.15);
+}
+.rally-group-card__top {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 8px; margin-bottom: 8px; flex-wrap: wrap;
+}
+.rally-group-card__name { font-weight: 700; margin-right: 8px; }
+.rally-group-card__actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.rally-badge {
+  font-size: 11px; padding: 2px 8px; border-radius: 999px;
+  text-transform: uppercase; letter-spacing: .05em; font-weight: 700;
+}
+.rally-badge--idle     { background: var(--bg-subtle); color: var(--text-3); }
+.rally-badge--running  { background: rgba(59,130,246,0.15); color: #3b82f6; }
+.rally-badge--finished { background: rgba(34,197,94,0.15); color: #22c55e; }
+
+.rally-member-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.rally-member-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 0; flex-wrap: wrap;
+}
+.rally-member-order {
+  font-weight: 700; min-width: 36px; font-size: 13px;
+  color: #3b82f6;
+}
+.rally-member-name { flex: 1; font-size: 13px; }
+.rally-member-march { font-size: 12px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+
+/* 모달 */
+.rally-modal-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1000; padding: 12px;
+}
+.rally-modal {
+  background: var(--bg-1, #1a1a1a); border: 1.5px solid var(--border);
+  border-radius: 12px; padding: 16px; max-width: 520px; width: 100%;
+  max-height: 90vh; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.rally-modal__header {
+  display: flex; justify-content: space-between; align-items: center;
+}
+.rally-modal__header h3 { margin: 0; font-size: 16px; }
+.rally-modal__section h4 { margin: 0 0 6px; font-size: 13px; color: var(--text-2); }
+.rally-search {
+  width: 100%; padding: 6px 10px; border: 1.5px solid var(--border);
+  border-radius: 8px; background: var(--bg-card); color: var(--text-1);
+  font-size: 14px; margin-bottom: 6px; box-sizing: border-box;
+}
+.rally-user-list { list-style: none; padding: 0; margin: 0; max-height: 260px; overflow-y: auto; }
+.rally-user-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 0; border-bottom: 1px solid var(--border);
+}
+.rally-user-role { font-size: 11px; color: var(--text-3); text-transform: uppercase; }
+
+/* Countdown running view */
+.rally-countdown { display: flex; flex-direction: column; gap: 10px; }
+.rally-countdown__main {
+  display: flex; flex-direction: column; align-items: center;
+  background: var(--bg-subtle);
+  border-radius: 10px; padding: 16px;
+}
+.rally-countdown__remain {
+  font-size: 56px; font-weight: 800; font-variant-numeric: tabular-nums;
+  color: #3b82f6; line-height: 1;
+}
+.rally-countdown__next {
+  margin-top: 6px; font-size: 13px; color: var(--text-2);
+}
+.rally-timeline { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.rally-timeline__row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px; border-radius: 6px;
+  background: var(--bg-card); border: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.rally-timeline__row.fired { opacity: 0.5; background: var(--bg-subtle); }
+.rally-march-input {
+  width: 70px; padding: 4px 6px; border: 1.5px solid var(--border);
+  border-radius: 6px; background: var(--bg-card); color: var(--text-1);
+}
+
+@media (max-width: 768px) {
+  .rally-countdown__remain { font-size: 42px; }
+  .rally-group-card__actions { width: 100%; }
+  .rally-member-row { font-size: 13px; }
+}

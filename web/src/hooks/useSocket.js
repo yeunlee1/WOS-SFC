@@ -12,6 +12,10 @@ export function useSocket(user) {
   const setCountdown      = useStore((s) => s.setCountdown);
   const setBoardPosts     = useStore((s) => s.setBoardPosts);
   const setAllianceNotices= useStore((s) => s.setAllianceNotices);
+  const upsertRallyGroup    = useStore((s) => s.upsertRallyGroup);
+  const removeRallyGroup    = useStore((s) => s.removeRallyGroup);
+  const setRallyCountdown   = useStore((s) => s.setRallyCountdown);
+  const clearRallyCountdown = useStore((s) => s.clearRallyCountdown);
 
   useEffect(() => {
     if (!user) return;
@@ -20,11 +24,20 @@ export function useSocket(user) {
 
     const boardHandlers = ALLIANCES.map((a) => (posts) => setBoardPosts(a, posts));
 
+    const onRallyUpdated = (group) => upsertRallyGroup(group);
+    const onRallyRemoved = ({ groupId }) => removeRallyGroup(groupId);
+    const onRallyCountdownStart = (payload) => setRallyCountdown(payload.groupId, payload);
+    const onRallyCountdownStop = ({ groupId }) => clearRallyCountdown(groupId);
+
     socket.on('notices:updated',  setNotices);
     socket.on('rallies:updated',  setRallies);
     socket.on('members:updated',  setMembers);
     socket.on('online:updated',   setOnlineUsers);
     socket.on('countdown:state',  setCountdown);
+    socket.on('rallyGroup:updated', onRallyUpdated);
+    socket.on('rallyGroup:removed', onRallyRemoved);
+    socket.on('rallyGroup:countdown:start', onRallyCountdownStart);
+    socket.on('rallyGroup:countdown:stop', onRallyCountdownStop);
     ALLIANCES.forEach((a, i) => socket.on(`board:updated:${a}`, boardHandlers[i]));
     ALLIANCES.forEach((a) => {
       socket.on(`alliance-notice:updated:${a}`, (notices) => setAllianceNotices(a, notices));
@@ -36,6 +49,10 @@ export function useSocket(user) {
       socket.off('members:updated',  setMembers);
       socket.off('online:updated',   setOnlineUsers);
       socket.off('countdown:state',  setCountdown);
+      socket.off('rallyGroup:updated', onRallyUpdated);
+      socket.off('rallyGroup:removed', onRallyRemoved);
+      socket.off('rallyGroup:countdown:start', onRallyCountdownStart);
+      socket.off('rallyGroup:countdown:stop', onRallyCountdownStop);
       ALLIANCES.forEach((a, i) => socket.off(`board:updated:${a}`, boardHandlers[i]));
       ALLIANCES.forEach((a) => {
         socket.off(`alliance-notice:updated:${a}`);
