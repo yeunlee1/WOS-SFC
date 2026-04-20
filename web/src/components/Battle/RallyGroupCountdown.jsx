@@ -20,55 +20,50 @@ export default function RallyGroupCountdown({ group, countdown }) {
   const [now, setNow] = useState(Date.now());
   const [editingOverride, setEditingOverride] = useState(null);
   const [saving, setSaving] = useState(false);
-  const schedKeyRef = useRef('');
   const lastOffsetRef = useRef(timeOffset);
 
   // 언마운트(정지 버튼 등으로 컴포넌트 제거) 시 오디오 즉시 정리
   useEffect(() => () => stopRallyCountdown(), []);
 
-  // Schedule audio when countdown payload arrives or member march times change
+  // countdown 페이로드 또는 언어 변경 시 전체 리스케줄.
+  // ttsVolume/ttsMuted는 별도 effect로 분리 — schedule effect deps에 두면 볼륨 슬라이더 조작 시
+  // 재생 중 오디오가 끊기며 재스케줄된다. schedKeyRef 기반 dedup은 StrictMode 이중 invocation에서
+  // 첫 setup이 set한 key가 cleanup 이후 re-setup의 early-return을 유발해 stop→restart 시
+  // 완전 미동작하는 버그를 일으켜 제거. scheduleRallyCountdown 내부에서 기존 스케줄을
+  // stopRallyCountdown()으로 취소하므로 재호출은 idempotent.
   useEffect(() => {
     if (!countdown) {
       stopRallyCountdown();
-      schedKeyRef.current = '';
       return;
     }
-    const key = `${countdown.startedAtServerMs}:${countdown.fireOffsets.map((f) => `${f.orderIndex}-${f.offsetMs}`).join(',')}`;
-    if (schedKeyRef.current === key) return;
-    schedKeyRef.current = key;
-
-    // 1번(countdownPlayer) 패턴과 동일: prime은 fire-and-forget, schedule은 즉시 호출.
-    // prime을 await하면 Promise.all(criticalKeys)가 수 초 blocking → 초반 슬롯 skip 버그 재현.
-    // scheduleRallyCountdown 내부의 500ms Promise.race 워밍업이 타이밍을 보호한다.
+    const { ttsVolume: vol, ttsMuted: mut } = useStore.getState();
     primeRallyAudio(countdown.fireOffsets, lang).catch(() => {});
     scheduleRallyCountdown({
       startedAtServerMs: countdown.startedAtServerMs,
       fireOffsets: countdown.fireOffsets,
       timeOffset,
       lang,
-      volume: ttsVolume,
-      muted: ttsMuted,
+      volume: vol,
+      muted: mut,
     });
     lastOffsetRef.current = timeOffset;
-
-    return () => { /* next run will cancel via schedule */ };
-  // timeOffset은 별도 effect에서 1초 이상 급변 시에만 리스케줄 (잦은 RTT 변동으로 인한 불필요한 재스케줄 방지)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [countdown, lang, ttsVolume, ttsMuted]);
+  }, [countdown, lang]);
 
   // timeOffset 급변(1초 이상) 시 리스케줄 — 1번(Countdown.jsx) 패턴과 동일
   useEffect(() => {
     if (!countdown) return;
     const deltaMs = Math.abs(timeOffset - lastOffsetRef.current);
     if (deltaMs <= 1000) return;
+    const { ttsVolume: vol, ttsMuted: mut } = useStore.getState();
     primeRallyAudio(countdown.fireOffsets, lang).catch(() => {});
     scheduleRallyCountdown({
       startedAtServerMs: countdown.startedAtServerMs,
       fireOffsets: countdown.fireOffsets,
       timeOffset,
       lang,
-      volume: ttsVolume,
-      muted: ttsMuted,
+      volume: vol,
+      muted: mut,
     });
     lastOffsetRef.current = timeOffset;
   // eslint-disable-next-line react-hooks/exhaustive-deps
