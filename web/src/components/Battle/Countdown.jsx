@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useStore } from '../../store';
 import { useI18n } from '../../i18n';
 import { getSocket } from '../../api';
-import { speak, prefetchTts } from './tts';
+import { speak, stopAllTts, prefetchTts } from './tts';
 
 // ── SVG 원형 프로그레스 링 ──────────────────────
 const RADIUS = 120;
@@ -88,37 +88,92 @@ export default function Countdown() {
 
   const [remaining, setRemaining]   = useState(null);
   const [inputSec,  setInputSec]    = useState('');
+  // 화면 업데이트용 interval
   const intervalRef    = useRef(null);
-  const lastSpokenRef  = useRef(-1);
+  // TTS 스케줄 타이머 배열 — 카운트다운 종료/정리 시 전부 clearTimeout
+  const timersRef      = useRef([]);
   const prevActiveRef  = useRef(countdown.active);
   const initializedRef = useRef(false);
+  // 마지막으로 적용된 timeOffset — 리스케줄 필요 여부 판단
+  const lastOffsetRef  = useRef(timeOffset);
 
-  // D2: timeOffset은 tick 내부에서 읽기 위해 ref로 보관 — deps에서 제외하여 시간 동기화 갱신으로
-  //     Effect 1이 재실행되고 lastSpokenRef가 리셋되어 같은 숫자를 재발성하는 문제 차단.
-  const timeOffsetRef = useRef(timeOffset);
-  useEffect(() => { timeOffsetRef.current = timeOffset; }, [timeOffset]);
-
-  // 마운트 / 언어 변경 시 TTS 프리페치
+  // 마운트 / 언어 변경 시 TTS 프리페치 (기존 prefetchTts는 1~180 전체 prefetch)
   useEffect(() => { prefetchTts(lang); }, [lang]);
 
-  // countdown 상태 변경 → interval 재설정
-  // 의존성을 객체 전체 대신 개별 값으로 분리 — 참조만 바뀌는 경우의 불필요한 재실행 방지
+  // ── TTS 타이머 정리 헬퍼 ──────────────────────
+  function clearAllTimers() {
+    for (const id of timersRef.current) clearTimeout(id);
+    timersRef.current = [];
+  }
+
+  // ── TTS 스케줄 예약 (스케줄 기반 재설계) ─────
+  // totalSeconds-1 부터 1 까지 각 정수 N에 대해
+  // "서버 시각 기준 startedAt + (totalSeconds - N) * 1000" 에 speak(N) 실행 예약.
+  // drift가 발생해도 브라우저가 예약 시각에 보정하여 콜백 실행 → 누락 차단.
+  function scheduleTts(startedAt, totalSeconds, lang, offset) {
+    clearAllTimers();
+
+    const timers = [];
+    let skipped = 0;
+
+    for (let n = totalSeconds - 1; n >= 1; n--) {
+      // 해당 숫자가 발음될 서버 시각 (ms)
+      const playServerTime = startedAt + (totalSeconds - n) * 1000;
+      // 로컬 기준 지연
+      const delay = playServerTime - (Date.now() + offset);
+
+      if (delay < 0) {
+        // 이미 지난 과거 (중간 진입) — 스킵
+        skipped++;
+        continue;
+      }
+
+      const capturedN = n;
+      const id = setTimeout(() => {
+        if (import.meta.env.DEV) {
+          console.debug('[Countdown] speak', capturedN, 'at', Date.now());
+        }
+        speak(String(capturedN), lang);
+      }, delay);
+      timers.push(id);
+    }
+
+    timersRef.current = timers;
+
+    const scheduledCount = timers.length;
+    const now = Date.now();
+    // N=totalSeconds-1 → 1초 후 첫 발음, N=1 → totalSeconds-1초 후 마지막 발음
+    const firstPlayAt = startedAt + 1 * 1000;               // N=totalSeconds-1 발음 시각
+    const lastPlayAt  = startedAt + (totalSeconds - 1) * 1000; // N=1 발음 시각
+
+    console.info('[Countdown] scheduled', {
+      totalSeconds,
+      firstPlayAt: Math.round(firstPlayAt),
+      lastPlayAt:  Math.round(lastPlayAt),
+      timerCount:  scheduledCount,
+      skipped,
+    });
+  }
+
+  // countdown 상태 변경 → interval(화면) 재설정 + TTS 스케줄 예약
   const { active, startedAt, totalSeconds } = countdown;
   useEffect(() => {
     clearInterval(intervalRef.current);
+    clearAllTimers();
 
     if (!active) {
       setRemaining(null);
-      lastSpokenRef.current = -1;
+      stopAllTts();
       return;
     }
 
-    // 시작 직후 초기 숫자(totalSeconds)는 speak 하지 않음 — Effect 2의 'start' 멘트와 중복 방지
-    // 1초 경과 후 다음 숫자(totalSeconds - 1)부터 순차 재생
-    lastSpokenRef.current = totalSeconds;
+    // 시작 시 TTS 스케줄 예약
+    scheduleTts(startedAt, totalSeconds, lang, timeOffset);
+    lastOffsetRef.current = timeOffset;
 
+    // ── 화면 렌더링용 tick (speak 호출 없음) ────
     function tick() {
-      const now     = Date.now() + timeOffsetRef.current;
+      const now     = Date.now() + lastOffsetRef.current;
       const elapsed = (now - startedAt) / 1000;
       const rem     = totalSeconds - elapsed;
 
@@ -128,18 +183,30 @@ export default function Countdown() {
         return;
       }
       setRemaining(rem);
-
-      const currentSec = Math.ceil(rem);
-      if (currentSec !== lastSpokenRef.current) {
-        lastSpokenRef.current = currentSec;
-        speak(String(currentSec), lang);
-      }
     }
 
     tick();
     intervalRef.current = setInterval(tick, 200);
-    return () => clearInterval(intervalRef.current);
+    return () => {
+      clearInterval(intervalRef.current);
+      clearAllTimers();
+      stopAllTts();
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, startedAt, totalSeconds, lang]);
+
+  // timeOffset 변경 시 리스케줄 (>50ms 차이일 때만)
+  useEffect(() => {
+    const deltaMs = Math.abs(timeOffset - lastOffsetRef.current);
+    lastOffsetRef.current = timeOffset;
+
+    if (!active || !startedAt || !totalSeconds) return;
+    if (deltaMs <= 50) return;
+
+    console.info('[Countdown] reschedule due to offset change', deltaMs);
+    scheduleTts(startedAt, totalSeconds, lang, timeOffset);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeOffset]);
 
   // start/stop 멘트
   useEffect(() => {
