@@ -1,23 +1,27 @@
 // rallyGroupPlayer.js — Rally Group Sync 전용 TTS 스케줄러
 //
-// 설계(countdownPlayer.js와 동일한 파이프라인):
-//   각 발화 슬롯을 독립된 setTimeout으로 스케줄한다. 버퍼 로딩은 백그라운드에서
-//   병렬로 진행하며 스케줄링을 블로킹하지 않는다. 타임아웃 콜백 시점에 버퍼가
-//   준비돼 있으면 즉시 playNow, 아직 로딩 중이면 완료 후 즉시 재생한다.
+// 설계(Web Audio 클럭 직접 예약):
+//   모든 슬롯을 `src.start(ctxTimeAtPlay)` 절대 시각으로 오디오 스레드에 예약한다.
+//   setTimeout 기반 디스패치 체인(setTimeout → dispatchSlot → start(0))을 제거해
+//   JS 타이머 드리프트, 탭 백그라운드 throttle, dispatch race를 모두 차단.
 //
-// countdownPlayer와의 차이:
-//   숫자 연속 카운팅(1 ~ maxOffsetSec) + captain_N 혼합 스케줄.
-//   captainSeconds에 해당하는 초는 숫자 대신 captain_N 발화로 대체.
-//   첫 슬롯 워밍업 대상은 가장 일찍 발화할 슬롯("3" 프리카운트).
+// 왜 setTimeout을 버렸나:
+//   이전 구현은 `setTimeout(..., fireAt)` 콜백에서 `src.start(0)`를 호출했다.
+//   이 파이프라인은 3개 레이어(JS 타이머 → JS 실행 → 오디오 재생)를 거치며,
+//   각 레이어마다 지연이 누적됐다. captain(1.5초)+숫자(1초 간격) 혼합 시나리오에서
+//   드리프트가 누적되면 겹침/스킵으로 불안정 체감을 유발.
+//   Web Audio API의 `start(when)`은 오디오 하드웨어 스레드가 샘플 단위로 예약을
+//   처리하므로 JS 실행 상태와 독립적이다.
 //
-// captain 겹침 정책:
-//   모든 슬롯(숫자/captain)을 예정 시각에 그대로 재생한다. 과거 captainBusUntil
-//   큐로 뒤 captain을 밀면 그 구간의 숫자가 스킵돼 "음성 불안정" 체감을 일으켰다.
-//   같은 초에 captain이 밀집한 드문 경우의 청각 겹침은 누락보다 낫다고 판단.
+// 버퍼 로딩 처리:
+//   1) 이미 디코드된 경우 즉시 `src.start(ctxTimeAtPlay)` 예약
+//   2) Promise 상태인 경우 `.then`에서 시각 재검사 후 예약
+//   3) 미로드 상태인 경우 `loadBuffer` 후 동일 처리
+//   세 경우 모두 `ctxTimeAtPlay`가 이미 과거면(> 200ms 지남) skip, 약간 지났으면
+//   `Math.max(ctxTimeAtPlay, ctx.currentTime)`로 즉시 재생.
 //
 // ⚠️ 싱글톤 가정: 이 모듈은 한 번에 하나의 집결 그룹만 스케줄링한다.
 //   scheduleRallyCountdown 호출 시 이전 스케줄을 즉시 취소한다.
-//   여러 집결 그룹이 동시에 카운트다운 중이면 마지막 호출만 유효하다.
 //   다중 그룹 동시 지원이 필요하면 인스턴스 기반으로 리팩토링 필요.
 //
 // 공개 API:
@@ -35,11 +39,8 @@ let analyser = null;
 // Map<"lang:key", AudioBuffer | Promise<AudioBuffer|null>>
 const bufferCache = new Map();
 
-// 재생 중인 SourceNode 추적 (stop 시 일괄 중단)
+// 재생 예약/중인 SourceNode 추적 (stop 시 일괄 중단 — 미래 시각 예약도 src.stop()으로 취소 가능)
 const activeSources = new Set();
-
-// 예약된 setTimeout id 추적 (stop 시 일괄 취소)
-const activeTimeouts = new Set();
 
 // 스케줄 호출 식별자 — 늦게 도착한 버퍼 완료 콜백이 이전 스케줄의 결과를 재생하는 것 방지
 let latestScheduleId = 0;
@@ -60,7 +61,6 @@ function ensureContext() {
   }
   masterGain = ctx.createGain();
   masterGain.gain.value = 0.3;
-  // countdownPlayer와 동일한 AnalyserNode 체인: masterGain → analyser → destination
   analyser = ctx.createAnalyser();
   analyser.fftSize = 2048;
   masterGain.connect(analyser);
@@ -122,7 +122,6 @@ export async function primeRallyAudio(fireOffsets, lang = 'ko') {
     src.start(0);
   } catch { /* noop */ }
 
-  // 초당 카운팅에 필요한 숫자 키 계산
   const offsets = fireOffsets ?? [];
   const rawMax = offsets.length > 0
     ? Math.max(...offsets.map((f) => Math.round(f.offsetMs / 1000)))
@@ -139,7 +138,6 @@ export async function primeRallyAudio(fireOffsets, lang = 'ko') {
     }
   }
 
-  // 핵심 키(프리카운트 + captain)는 await, 숫자는 백그라운드
   const criticalKeys = ['3', '2', '1', ...offsets.map((f) => `captain_${f.orderIndex}`)];
   await Promise.all(criticalKeys.map((k) => loadBuffer(lang, k)));
   for (const k of numberKeys) loadBuffer(lang, k);
@@ -158,10 +156,6 @@ export async function scheduleRallyCountdown({ startedAtServerMs, fireOffsets, t
   stopRallyCountdown();  // 기존 스케줄 정리 (latestScheduleId는 stop 내에서 증가)
   const myId = ++latestScheduleId;
 
-  // fire-and-forget(이전 코드)와 달리 await — 정지 후 재시작 시 컨텍스트가
-  // 아직 suspended이면 소스 노드 start()가 무음이 되는 버그를 방지.
-  // resume 완료 후 setRallyVolume을 호출해 ctx.currentTime이 정확한 시점에
-  // gain ramp를 적용한다 (suspended 중 currentTime은 정지됨).
   if (c.state === 'suspended') {
     try { await c.resume(); } catch { /* noop */ }
   }
@@ -177,7 +171,6 @@ export async function scheduleRallyCountdown({ startedAtServerMs, fireOffsets, t
     window.__rallyScheduleLog = scheduleLog;
   }
 
-  // maxOffsetSec 계산 (TTS 상한 180초로 제한)
   const rawMax = fireOffsets.length > 0
     ? Math.max(...fireOffsets.map((f) => Math.round(f.offsetMs / 1000)))
     : 0;
@@ -186,11 +179,10 @@ export async function scheduleRallyCountdown({ startedAtServerMs, fireOffsets, t
   }
   const maxOffsetSec = Math.min(rawMax, 180);
 
-  // 집결장 발화 시각 집합 (초 단위, 중복 방지)
   const captainSeconds = new Set(fireOffsets.map((f) => Math.round(f.offsetMs / 1000)));
 
-  // 첫 슬롯 워밍업 — 가장 일찍 발화할 슬롯("3" 프리카운트)을 최대 500ms 기다림.
-  // 동시에 나머지 키들도 백그라운드 로드 시작.
+  // 첫 슬롯 워밍업 — 가장 일찍 발화할 "3" 프리카운트를 최대 500ms 기다림.
+  // ctx 클럭 기반 예약이라도 버퍼가 제시각 지나 도착하면 slot 유실되므로 유지.
   for (const k of ['3', '2', '1']) loadBuffer(lang, k);
   for (const f of fireOffsets) loadBuffer(lang, `captain_${f.orderIndex}`);
   if (maxOffsetSec > 0) {
@@ -204,33 +196,31 @@ export async function scheduleRallyCountdown({ startedAtServerMs, fireOffsets, t
   ]);
   if (myId !== latestScheduleId) return;
 
-  // 워밍업 대기 중 컨텍스트가 다시 suspended 됐을 가능성을 방어
   if (c.state === 'suspended') {
     try { await c.resume(); } catch { /* noop */ }
   }
   if (myId !== latestScheduleId) return;
 
-  // 워밍업 후 serverNow 재계산 → whenCtx 정확도 확보
+  // 앵커: startedAtServerMs 순간의 ctx.currentTime
+  // 이후 모든 슬롯은 ctxAnchor + offsetSec로 절대 시각 계산
   const serverNow = Date.now() + timeOffset;
+  const ctxAnchor = c.currentTime + (startedAtServerMs - serverNow) / 1000;
 
   // 프리카운트: T-3, T-2, T-1
   for (const n of [3, 2, 1]) {
-    const playAt = startedAtServerMs - n * 1000;
-    scheduleSlot(playAt - serverNow, String(n), lang, myId);
+    schedulePlay(lang, String(n), ctxAnchor - n, myId);
   }
 
-  // 집결장 순번 발화 (captainSeconds와 겹치는 초를 대체)
+  // 집결장 순번 발화
   for (const f of fireOffsets) {
-    const playAt = startedAtServerMs + f.offsetMs;
-    scheduleSlot(playAt - serverNow, `captain_${f.orderIndex}`, lang, myId);
+    schedulePlay(lang, `captain_${f.orderIndex}`, ctxAnchor + f.offsetMs / 1000, myId);
   }
 
-  // 초당 카운팅: t=1 ~ maxOffsetSec, 집결장 발화 초는 skip
+  // 초당 카운팅
   if (maxOffsetSec > 0) {
     for (let t = 1; t <= maxOffsetSec; t++) {
-      if (captainSeconds.has(t)) continue; // captain 발화가 해당 초를 대체
-      const playAt = startedAtServerMs + t * 1000;
-      scheduleSlot(playAt - serverNow, String(t), lang, myId);
+      if (captainSeconds.has(t)) continue;
+      schedulePlay(lang, String(t), ctxAnchor + t, myId);
     }
   }
 
@@ -239,74 +229,61 @@ export async function scheduleRallyCountdown({ startedAtServerMs, fireOffsets, t
       maxOffsetSec,
       captainCount: fireOffsets.length,
       scheduledSlots: scheduleLog.items.length,
+      ctxAnchor,
     });
   }
 }
 
-function scheduleSlot(delayMs, key, lang, myId) {
-  // -200ms 이상 과거 → 진짜로 놓쳤으므로 스킵. 그보다 작은 음수는 즉시 재생 시도.
-  if (delayMs < -200) return;
-  const fireAt = Math.max(0, delayMs);
-  scheduleLog.items.push({ key, delayMs: Math.round(delayMs), fireAt });
-  const timeoutId = window.setTimeout(() => {
-    activeTimeouts.delete(timeoutId);
-    if (myId !== latestScheduleId) return;
-    dispatchSlot(lang, key, myId);
-  }, fireAt);
-  activeTimeouts.add(timeoutId);
-}
+/**
+ * 단일 슬롯 재생 예약 — Web Audio 클럭 `src.start(ctxTimeAtPlay)` 직접 호출.
+ * 버퍼가 로딩 중이면 도착 후 시각을 재검사해 예약, 과거면 skip.
+ */
+function schedulePlay(lang, key, ctxTimeAtPlay, myId) {
+  if (!ctx) return;
+  scheduleLog.items.push({ key, ctxTimeAtPlay });
 
-function dispatchSlot(lang, key, myId) {
-  // captain/number 모두 동일하게 즉시 재생한다. 이전 구현은 captainBusUntil
-  // 큐로 captain 연속 재생 시 뒤의 captain을 밀고 그 구간의 숫자를 스킵했는데,
-  // march가 가까운(예: 38초/37초) 시나리오에서 숫자가 누락돼 "불안정" 체감의
-  // 주원인이었다. captainSeconds로 겹치는 초는 이미 숫자에서 제거되므로
-  // 여기서는 모든 슬롯을 예정 시각에 재생한다. 같은 1초 안에 여러 captain이
-  // 겹치는 드문 경우의 청각 겹침은 받아들인다 — 누락보다 낫다.
+  const startSource = (buffer) => {
+    if (myId !== latestScheduleId) return;
+    if (!ctx || !masterGain) return;
+    if (!buffer) { if (import.meta.env.DEV) console.warn('[RallyGroupPlayer] slot buf null', key); return; }
+    // 버퍼 도착 시점에서 예정 시각 재검사
+    const now = ctx.currentTime;
+    if (ctxTimeAtPlay < now - 0.2) {
+      if (import.meta.env.DEV) console.warn('[RallyGroupPlayer] slot past due', key, { ctxTimeAtPlay, now });
+      return;
+    }
+    const when = Math.max(ctxTimeAtPlay, now);
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    src.connect(masterGain);
+    src.onended = () => { activeSources.delete(src); };
+    try {
+      src.start(when);
+      activeSources.add(src);
+      dispatchedCount.value += 1;
+      if (import.meta.env.DEV) dispatchedLog.push({ label: key, at: performance.now(), when });
+    } catch (e) {
+      if (import.meta.env.DEV) console.warn('[RallyGroupPlayer] start fail', key, e.message);
+    }
+  };
+
   const entry = bufferCache.get(`${lang}:${key}`);
   if (entry && typeof entry === 'object' && 'numberOfChannels' in entry) {
-    playNow(entry, key);
+    startSource(entry);
     return;
   }
   if (entry && typeof entry.then === 'function') {
-    entry.then((buf) => {
-      if (myId !== latestScheduleId) return;
-      if (!buf) { if (import.meta.env.DEV) console.warn('[RallyGroupPlayer] slot buf null', key); return; }
-      playNow(buf, key);
-    });
+    entry.then(startSource);
     return;
   }
-  loadBuffer(lang, key).then((buf) => {
-    if (myId !== latestScheduleId) return;
-    if (!buf) return;
-    playNow(buf, key);
-  });
-}
-
-function playNow(buffer, label) {
-  if (!ctx || !masterGain) return;
-  const src = ctx.createBufferSource();
-  src.buffer = buffer;
-  src.connect(masterGain);
-  src.onended = () => { activeSources.delete(src); };
-  try {
-    src.start(0);
-    activeSources.add(src);
-    dispatchedCount.value += 1;
-    if (import.meta.env.DEV) dispatchedLog.push({ label, at: performance.now() });
-  } catch (e) {
-    if (import.meta.env.DEV) console.warn('[RallyGroupPlayer] playNow fail', label, e.message);
-  }
+  loadBuffer(lang, key).then(startSource);
 }
 
 export function stopRallyCountdown() {
   latestScheduleId++;
-  for (const id of activeTimeouts) {
-    try { clearTimeout(id); } catch { /* noop */ }
-  }
-  activeTimeouts.clear();
+  // src.stop()은 이미 시작된 것은 중단, 미래 시각으로 예약된 것은 취소
   for (const src of activeSources) {
-    try { src.stop(); } catch { /* already stopped */ }
+    try { src.stop(); } catch { /* already stopped or not started */ }
     try { src.disconnect(); } catch { /* noop */ }
   }
   activeSources.clear();
