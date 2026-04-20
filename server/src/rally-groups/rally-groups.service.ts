@@ -8,7 +8,7 @@ import { CreateRallyGroupDto } from './dto/create-rally-group.dto';
 import { RallyGroupsGateway } from './rally-groups.gateway';
 
 const MAX_GROUP_MEMBERS = 10;
-const COUNTDOWN_LEAD_MS = 3000;
+const COUNTDOWN_LEAD_MS = 4000;
 
 function sanitizeUser(u: any) {
   if (!u) return u;

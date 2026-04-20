@@ -68,8 +68,29 @@ export async function primeRallyAudio(fireOffsets, lang = 'ko') {
     src.start(0);
   } catch { /* noop */ }
 
-  const keys = ['3', '2', '1', ...(fireOffsets ?? []).map((f) => `captain_${f.orderIndex}`)];
-  await Promise.all(keys.map((k) => loadBuffer(lang, k)));
+  // 초당 카운팅에 필요한 숫자 키 계산
+  const offsets = fireOffsets ?? [];
+  const rawMax = offsets.length > 0
+    ? Math.max(...offsets.map((f) => Math.round(f.offsetMs / 1000)))
+    : 0;
+  const maxOffsetSec = Math.min(rawMax, 180);
+
+  const numberKeys = [];
+  if (maxOffsetSec > 0) {
+    const captainSeconds = new Set(offsets.map((f) => Math.round(f.offsetMs / 1000)));
+    for (let t = 1; t <= maxOffsetSec; t++) {
+      if (!captainSeconds.has(t)) {
+        numberKeys.push(String(t));
+      }
+    }
+  }
+
+  // 핵심 키(프리카운트 + captain)만 await — 숫자 180개 기다리면 lead time을 초과해
+  // 프리카운트가 -200ms 컷에 걸려 누락됨. 숫자는 백그라운드 프리로드 후, 미도달 시
+  // dispatchSlot이 폴백으로 즉시 재요청.
+  const criticalKeys = ['3', '2', '1', ...offsets.map((f) => `captain_${f.orderIndex}`)];
+  await Promise.all(criticalKeys.map((k) => loadBuffer(lang, k)));
+  for (const k of numberKeys) loadBuffer(lang, k);
 }
 
 /**
@@ -88,10 +109,33 @@ export function scheduleRallyCountdown({ startedAtServerMs, fireOffsets, timeOff
 
   if (c.state === 'suspended') c.resume().catch(() => { /* noop */ });
 
+  // DEV 전용 디스패치 로그 초기화
+  if (import.meta.env.DEV) {
+    window.__rallyDispatchLog = [];
+  }
+
+  // maxOffsetSec 계산 (TTS 상한 180초로 제한)
+  const rawMax = fireOffsets.length > 0
+    ? Math.max(...fireOffsets.map((f) => Math.round(f.offsetMs / 1000)))
+    : 0;
+  if (rawMax > 180) {
+    if (import.meta.env.DEV) {
+      console.warn('[RallyGroupPlayer] maxOffsetSec', rawMax, '> 180, capping at 180');
+    }
+  }
+  const maxOffsetSec = Math.min(rawMax, 180);
+
+  // 집결장 발화 시각 집합 (초 단위, 중복 방지)
+  const captainSeconds = new Set(fireOffsets.map((f) => Math.round(f.offsetMs / 1000)));
+
   // 프리로드 — 백그라운드
-  const preKeys = ['3', '2', '1'];
-  for (const k of preKeys) loadBuffer(lang, k);
+  for (const k of ['3', '2', '1']) loadBuffer(lang, k);
   for (const f of fireOffsets) loadBuffer(lang, `captain_${f.orderIndex}`);
+  if (maxOffsetSec > 0) {
+    for (let t = 1; t <= maxOffsetSec; t++) {
+      if (!captainSeconds.has(t)) loadBuffer(lang, String(t));
+    }
+  }
 
   const serverNow = Date.now() + timeOffset;
 
@@ -100,10 +144,20 @@ export function scheduleRallyCountdown({ startedAtServerMs, fireOffsets, timeOff
     const playAt = startedAtServerMs - n * 1000;
     scheduleSlot(playAt - serverNow, String(n), lang, myId);
   }
-  // 집결장 순번 발화
+
+  // 집결장 순번 발화 (captainSeconds와 겹치는 초를 대체)
   for (const f of fireOffsets) {
     const playAt = startedAtServerMs + f.offsetMs;
     scheduleSlot(playAt - serverNow, `captain_${f.orderIndex}`, lang, myId);
+  }
+
+  // 초당 카운팅: t=1 ~ maxOffsetSec, 집결장 발화 초는 skip
+  if (maxOffsetSec > 0) {
+    for (let t = 1; t <= maxOffsetSec; t++) {
+      if (captainSeconds.has(t)) continue; // captain 발화가 해당 초를 대체
+      const playAt = startedAtServerMs + t * 1000;
+      scheduleSlot(playAt - serverNow, String(t), lang, myId);
+    }
   }
 }
 
@@ -119,6 +173,10 @@ function scheduleSlot(delayMs, key, lang, myId) {
 }
 
 function dispatchSlot(lang, key, myId) {
+  if (import.meta.env.DEV) {
+    window.__rallyDispatchLog = window.__rallyDispatchLog ?? [];
+    window.__rallyDispatchLog.push({ t: Date.now(), key });
+  }
   const entry = bufferCache.get(`${lang}:${key}`);
   if (entry && typeof entry === 'object' && 'numberOfChannels' in entry) {
     playNow(entry);
