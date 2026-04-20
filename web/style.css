@@ -421,23 +421,11 @@ input:focus, select:focus, textarea:focus, .input:focus {
   padding: 12px;
   min-width: 0;
 }
-.battle-slot.empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-3);
-  opacity: 0.4;
-}
-.battle-slot.empty::after {
-  content: '빈 슬롯';
-  font-size: 14px;
-}
 @media (max-width: 768px) {
   .battle-grid {
     grid-template-columns: 1fr;
     grid-auto-rows: auto;
   }
-  .battle-slot.empty { min-height: 80px; }
 }
 
 /* ── PersonalPanel 전용 ── */
@@ -1370,7 +1358,7 @@ input, textarea, select, .input {
 
 /* ── Rally Group Sync ── */
 .battle-slot--rally {
-  grid-column: 1 / -1;
+  overflow-y: auto;
 }
 
 .rally-group-panel {
@@ -1395,8 +1383,8 @@ input, textarea, select, .input {
 }
 .rally-btn:hover:not(:disabled) { background: var(--bg-subtle); border-color: var(--text-3); }
 .rally-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.rally-btn--primary { background: #3b82f6; color: #fff; border-color: #3b82f6; }
-.rally-btn--primary:hover:not(:disabled) { background: #2563eb; border-color: #2563eb; }
+.rally-btn--primary { background: var(--grad-sakura); color: white; border-color: var(--accent); box-shadow: 0 3px 10px rgba(217,70,168,.3); background-size: 200% 200%; animation: gradientShift 4s ease infinite; }
+.rally-btn--primary:hover:not(:disabled) { box-shadow: 0 6px 20px rgba(217,70,168,.5); border-color: var(--accent-hover); }
 .rally-btn--warn { background: #eab308; color: #1a1300; border-color: #eab308; }
 .rally-btn--danger { background: rgba(239,68,68,0.12); color: #ef4444; border-color: rgba(239,68,68,0.3); }
 .rally-btn--danger:hover:not(:disabled) { background: rgba(239,68,68,0.2); }
@@ -1429,8 +1417,8 @@ input, textarea, select, .input {
   background: var(--bg-card);
 }
 .rally-group-card.running {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 2px rgba(59,130,246,0.15);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(217,70,168,0.15);
 }
 .rally-group-card__top {
   display: flex; justify-content: space-between; align-items: center;
@@ -1444,7 +1432,7 @@ input, textarea, select, .input {
   text-transform: uppercase; letter-spacing: .05em; font-weight: 700;
 }
 .rally-badge--idle     { background: var(--bg-subtle); color: var(--text-3); }
-.rally-badge--running  { background: rgba(59,130,246,0.15); color: #3b82f6; }
+.rally-badge--running  { background: rgba(217,70,168,0.15); color: var(--accent); }
 .rally-badge--finished { background: rgba(34,197,94,0.15); color: #22c55e; }
 
 .rally-member-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
@@ -1454,7 +1442,7 @@ input, textarea, select, .input {
 }
 .rally-member-order {
   font-weight: 700; min-width: 36px; font-size: 13px;
-  color: #3b82f6;
+  color: var(--accent);
 }
 .rally-member-name { flex: 1; font-size: 13px; }
 .rally-member-march { font-size: 12px; color: var(--text-2); font-variant-numeric: tabular-nums; }
@@ -1466,7 +1454,7 @@ input, textarea, select, .input {
   z-index: 1000; padding: 12px;
 }
 .rally-modal {
-  background: var(--bg-1, #1a1a1a); border: 1.5px solid var(--border);
+  background: var(--bg-card); border: 1.5px solid var(--border);
   border-radius: 12px; padding: 16px; max-width: 520px; width: 100%;
   max-height: 90vh; overflow-y: auto;
   display: flex; flex-direction: column; gap: 12px;
@@ -1497,7 +1485,7 @@ input, textarea, select, .input {
 }
 .rally-countdown__remain {
   font-size: 56px; font-weight: 800; font-variant-numeric: tabular-nums;
-  color: #3b82f6; line-height: 1;
+  color: var(--accent); line-height: 1;
 }
 .rally-countdown__next {
   margin-top: 6px; font-size: 13px; color: var(--text-2);

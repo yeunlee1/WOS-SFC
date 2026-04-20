@@ -8,7 +8,6 @@ export default function BattleTab() {
     <div className="battle-grid">
       <div className="battle-slot"><Countdown /></div>
       <div className="battle-slot"><PersonalPanel /></div>
-      <div className="battle-slot empty" aria-hidden="true" />
       <div className="battle-slot battle-slot--rally"><RallyGroupPanel /></div>
     </div>
   );
