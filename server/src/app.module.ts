@@ -26,6 +26,7 @@ import { TranslateModule } from './translate/translate.module';
 import { TtsModule } from './tts/tts.module';
 import { AdminModule } from './admin/admin.module';
 import { AllianceNoticesModule } from './alliance-notices/alliance-notices.module';
+import { MeModule } from './me/me.module';
 
 @Module({
   imports: [
@@ -49,7 +50,7 @@ import { AllianceNoticesModule } from './alliance-notices/alliance-notices.modul
       exclude: ['/auth/*path', '/notices/*path', '/rallies/*path', '/members/*path',
                 '/boards/*path', '/translations/*path', '/users/*path',
                 '/translate/*path', '/tts-audio/*path', '/admin/*path',
-                '/alliance-notices/*path', '/time', '/socket.io/*path',
+                '/alliance-notices/*path', '/me/*path', '/time', '/socket.io/*path',
                 '/uploads/*path'],
       serveStaticOptions: { fallthrough: false },
     }),
@@ -71,6 +72,7 @@ import { AllianceNoticesModule } from './alliance-notices/alliance-notices.modul
     TtsModule,
     AdminModule,
     AllianceNoticesModule,
+    MeModule,
   ],
   controllers: [AppController],
 })

@@ -59,4 +59,8 @@ export class UsersService {
       select: ['id', 'nickname', 'role', 'allianceName', 'language', 'refreshTokenHash'],
     });
   }
+
+  async updateMarchSeconds(userId: number, marchSeconds: number | null): Promise<void> {
+    await this.usersRepo.update(userId, { marchSeconds });
+  }
 }
