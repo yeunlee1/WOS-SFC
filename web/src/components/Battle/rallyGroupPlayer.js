@@ -10,6 +10,11 @@
 //   captainSeconds에 해당하는 초는 숫자 대신 captain_N 발화로 대체.
 //   첫 슬롯 워밍업 대상은 가장 일찍 발화할 슬롯("3" 프리카운트).
 //
+// ⚠️ 싱글톤 가정: 이 모듈은 한 번에 하나의 집결 그룹만 스케줄링한다.
+//   scheduleRallyCountdown 호출 시 이전 스케줄을 즉시 취소한다.
+//   여러 집결 그룹이 동시에 카운트다운 중이면 마지막 호출만 유효하다.
+//   다중 그룹 동시 지원이 필요하면 인스턴스 기반으로 리팩토링 필요.
+//
 // 공개 API:
 //   primeRallyAudio(fireOffsets, lang)
 //   scheduleRallyCountdown({startedAtServerMs, fireOffsets, timeOffset, lang, volume, muted})
@@ -243,7 +248,7 @@ function dispatchSlot(lang, key, myId) {
   const isCaptain = key.startsWith('captain_');
   // captain이 재생 중인 구간에 숫자가 발화되면 겹침 → skip
   if (!isCaptain && ctx && ctx.currentTime < captainBusUntil) {
-    if (import.meta.env.DEV) console.info('[RallyGroupPlayer] skip number during captain', key);
+    if (import.meta.env.DEV) console.warn('[RallyGroupPlayer] skip number during captain', key);
     return;
   }
   const playFn = isCaptain ? playCaptain : playNow;
@@ -255,14 +260,21 @@ function dispatchSlot(lang, key, myId) {
   if (entry && typeof entry.then === 'function') {
     entry.then((buf) => {
       if (myId !== latestScheduleId) return;
-      if (buf) playFn(buf, key);
-      else if (import.meta.env.DEV) console.warn('[RallyGroupPlayer] slot buf null', key);
+      if (!buf) { if (import.meta.env.DEV) console.warn('[RallyGroupPlayer] slot buf null', key); return; }
+      // 버퍼 로딩 대기 중 captain이 먼저 시작했을 수 있으므로 재검사
+      if (!isCaptain && ctx && ctx.currentTime < captainBusUntil) {
+        if (import.meta.env.DEV) console.warn('[RallyGroupPlayer] skip number (late resolve) during captain', key);
+        return;
+      }
+      playFn(buf, key);
     });
     return;
   }
   loadBuffer(lang, key).then((buf) => {
     if (myId !== latestScheduleId) return;
-    if (buf) playFn(buf, key);
+    if (!buf) return;
+    if (!isCaptain && ctx && ctx.currentTime < captainBusUntil) return;
+    playFn(buf, key);
   });
 }
 
