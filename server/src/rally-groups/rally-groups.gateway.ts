@@ -18,4 +18,8 @@ export class RallyGroupsGateway {
   emitCountdownStop(groupId: string) {
     this.server.emit('rallyGroup:countdown:stop', { groupId });
   }
+
+  emitGroupRemoved(groupId: string) {
+    this.server.emit('rallyGroup:removed', { groupId });
+  }
 }

@@ -6,7 +6,7 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { RallyGroup } from './rally-group.entity';
 import { RallyGroupMember } from './rally-group-member.entity';
 import { UserBattleSettings } from '../users/user-battle-settings.entity';
@@ -20,6 +20,7 @@ export class RallyGroupsService {
     @InjectRepository(RallyGroupMember) private memberRepo: Repository<RallyGroupMember>,
     @InjectRepository(UserBattleSettings) private settingsRepo: Repository<UserBattleSettings>,
     @Inject(forwardRef(() => RallyGroupsGateway)) private gateway: RallyGroupsGateway,
+    private dataSource: DataSource,
   ) {}
 
   async listAll(): Promise<RallyGroup[]> {
@@ -55,18 +56,18 @@ export class RallyGroupsService {
     const group = await this.groupRepo.findOne({ where: { id } });
     if (!group) throw new NotFoundException('RallyGroup not found');
     await this.groupRepo.remove(group);
+    this.gateway.emitGroupRemoved(id);
   }
 
   async addMember(groupId: string, userId: number): Promise<RallyGroupMember> {
-    const group = await this.getFullGroup(groupId);
-
-    const existing = group.members.find((m) => m.userId === userId);
-    if (existing) throw new BadRequestException('User already in group');
-    if (group.members.length >= 10) throw new BadRequestException('Group is full (max 10)');
-
-    const orderIndex = group.members.length + 1;
-    const member = this.memberRepo.create({ groupId, userId, orderIndex, marchSecondsOverride: null });
-    const saved = await this.memberRepo.save(member);
+    const saved = await this.dataSource.transaction(async (mgr) => {
+      const count = await mgr.count(RallyGroupMember, { where: { groupId } });
+      if (count >= 10) throw new BadRequestException('Group is full (max 10)');
+      const duplicate = await mgr.findOne(RallyGroupMember, { where: { groupId, userId } });
+      if (duplicate) throw new BadRequestException('User already in group');
+      const member = mgr.create(RallyGroupMember, { groupId, userId, orderIndex: count + 1, marchSecondsOverride: null });
+      return mgr.save(member);
+    });
 
     const full = await this.getFullGroup(groupId);
     this.gateway.emitGroupUpdated(full);
