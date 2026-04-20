@@ -103,7 +103,7 @@ export default function Header({ activeTab, onTabChange, onToggleOnline }) {
           </button>
           <input
             type="range" min="0" max="100" step="1"
-            value={Math.round(ttsVolume * 100)}
+            value={ttsMuted ? 0 : Math.round(ttsVolume * 100)}
             onChange={(e) => {
               const v = Number(e.target.value) / 100;
               setTtsVolume(v);
@@ -112,7 +112,6 @@ export default function Header({ activeTab, onTabChange, onToggleOnline }) {
             }}
             aria-label="TTS 볼륨"
             aria-valuetext={`${Math.round(ttsVolume * 100)}%${ttsMuted ? ' (음소거)' : ''}`}
-            disabled={ttsMuted}
           />
           <span className="tts-volume-label">
             {ttsMuted ? '음소거' : `${Math.round(ttsVolume * 100)}%`}

@@ -4,6 +4,7 @@ import { api } from '../../api';
 import { formatUser } from '../../utils/formatUser';
 import RallyGroupEditor from './RallyGroupEditor';
 import RallyGroupCountdown from './RallyGroupCountdown';
+import { stopRallyCountdown } from './rallyGroupPlayer';
 
 const canAdmin = (role) => role === 'admin' || role === 'developer';
 
@@ -49,6 +50,7 @@ export default function RallyGroupPanel() {
   }
 
   async function handleStop(id) {
+    stopRallyCountdown(); // 서버 응답 전에 클라이언트에서 즉시 오디오 정지
     try { await api.stopRallyGroup(id); }
     catch (err) { setError(err?.message || '정지 실패'); }
   }
