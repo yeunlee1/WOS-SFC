@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useStore } from '../../store';
 import { useI18n, SUPPORTED_LANGS } from '../../i18n';
 import { api, disconnectSocket } from '../../api';
+import { speak, stopAllTts } from '../Battle/tts';
 
 const ALLIANCE_COLORS = {
   KOR: '#3b82f6', NSL: '#22c55e', JKY: '#a855f7',
@@ -15,8 +16,18 @@ const TAB_KEYS = [
   { id: 'chat',      key: 'tabChat' },
 ];
 
+/** RTT 값에 따른 아이콘 반환 */
+function _rttIcon(rtt) {
+  if (rtt >= 300) return '🔴';
+  if (rtt >= 100) return '🟡';
+  return '🟢';
+}
+
 export default function Header({ activeTab, onTabChange, onToggleOnline }) {
-  const { user, timeOffset, clearUser, onlineUsers } = useStore();
+  const {
+    user, timeOffset, timeSyncRtt, clearUser, onlineUsers,
+    ttsVolume, setTtsVolume, ttsMuted, setTtsMuted,
+  } = useStore();
   const { t, lang, changeLang } = useI18n();
   const [utcTime, setUtcTime] = useState('');
   const [isMenuOpen, setMenuOpen] = useState(false);
@@ -67,6 +78,53 @@ export default function Header({ activeTab, onTabChange, onToggleOnline }) {
             <option key={l.code} value={l.code}>{l.flag} {l.label}</option>
           ))}
         </select>
+        <span
+          className="time-sync-badge"
+          title={`시간 동기화 RTT: ${Math.round(timeSyncRtt)}ms`}
+          aria-label={`시간 동기화 RTT ${Math.round(timeSyncRtt)}밀리초`}
+        >
+          {_rttIcon(timeSyncRtt)} ±{Math.round(timeSyncRtt)}ms
+        </span>
+        <div className="tts-volume-control">
+          <button
+            type="button"
+            className="tts-mute-btn"
+            onClick={() => {
+              const next = !ttsMuted;
+              setTtsMuted(next);
+              // 음소거 ON 시: 이미 재생 중인 숫자도 즉시 정지 (사용자 체감)
+              if (next) stopAllTts();
+            }}
+            aria-label={ttsMuted ? 'TTS 음소거 해제' : 'TTS 음소거'}
+            aria-pressed={ttsMuted}
+            title={ttsMuted ? '음소거 해제' : '음소거'}
+          >
+            {ttsMuted || ttsVolume === 0 ? '🔇' : '🔊'}
+          </button>
+          <input
+            type="range" min="0" max="100" step="1"
+            value={Math.round(ttsVolume * 100)}
+            onChange={(e) => {
+              const v = Number(e.target.value) / 100;
+              setTtsVolume(v);
+              // 슬라이더를 0까지 내리면 현재 재생 중인 오디오도 즉시 정지
+              if (v <= 0) stopAllTts();
+            }}
+            aria-label="TTS 볼륨"
+            aria-valuetext={`${Math.round(ttsVolume * 100)}%${ttsMuted ? ' (음소거)' : ''}`}
+            disabled={ttsMuted}
+          />
+          <span className="tts-volume-label">
+            {ttsMuted ? '음소거' : `${Math.round(ttsVolume * 100)}%`}
+          </span>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => speak('start', lang, { force: true })}
+            aria-label="TTS 테스트"
+            disabled={ttsMuted || ttsVolume === 0}
+          >테스트</button>
+        </div>
         <button
           className="mobile-online-toggle btn btn-sm"
           onClick={onToggleOnline}

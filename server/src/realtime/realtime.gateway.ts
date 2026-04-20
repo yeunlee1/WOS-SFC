@@ -11,6 +11,7 @@ import { NoticesService } from '../notices/notices.service';
 import { RalliesService } from '../rallies/rallies.service';
 import { MembersService } from '../members/members.service';
 import { BoardsService } from '../boards/boards.service';
+import { AllianceNoticesService } from '../alliance-notices/alliance-notices.service';
 
 interface OnlineUser {
   nickname: string;
@@ -33,6 +34,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     @Inject(forwardRef(() => RalliesService)) private ralliesService: RalliesService,
     @Inject(forwardRef(() => MembersService)) private membersService: MembersService,
     @Inject(forwardRef(() => BoardsService)) private boardsService: BoardsService,
+    @Inject(forwardRef(() => AllianceNoticesService)) private allianceNoticesService: AllianceNoticesService,
   ) {}
 
   // httpOnly 쿠키에서 access_token 파싱 후 JWT 검증
@@ -72,6 +74,11 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     client.emit('members:updated', members.map(this.formatMember));
     for (const [alliance, posts] of Object.entries(boards)) {
       client.emit(`board:updated:${alliance}`, posts.map(this.formatBoardPost));
+    }
+
+    for (const a of ['KOR', 'NSL', 'JKY', 'GPX', 'UFO']) {
+      const allianceNotices = await this.allianceNoticesService.findByAlliance(a);
+      client.emit(`alliance-notice:updated:${a}`, allianceNotices.map(this.formatAllianceNotice));
     }
 
     client.emit('countdown:state', this.countdown);
@@ -140,6 +147,26 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     this.server.emit(`board:updated:${alliance}`, posts.map(this.formatBoardPost));
   }
 
+  async broadcastAllianceNotice(alliance: string) {
+    const notices = await this.allianceNoticesService.findByAlliance(alliance);
+    this.server.emit(`alliance-notice:updated:${alliance}`, notices.map(this.formatAllianceNotice));
+  }
+
+  private formatAllianceNotice(n: any) {
+    return {
+      id: n.id,
+      alliance: n.alliance,
+      source: n.source,
+      title: n.title,
+      content: n.content,
+      authorNick: n.authorNick,
+      lang: n.lang,
+      createdAt: n.createdAt instanceof Date
+        ? n.createdAt.toLocaleString('ko-KR', { dateStyle: 'short', timeStyle: 'short' })
+        : String(n.createdAt),
+    };
+  }
+
   private formatNotice(n: any) {
     return {
       id: n.id,
@@ -175,6 +202,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       userAlliance: p.userAlliance,
       content: p.content,
       lang: p.lang,
+      imageUrls: p.imageUrls || [],
       createdAt: p.createdAt instanceof Date
         ? p.createdAt.toLocaleString('ko-KR', { dateStyle: 'short', timeStyle: 'short' })
         : String(p.createdAt),

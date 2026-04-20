@@ -93,11 +93,19 @@ export class TtsService implements OnModuleInit {
     return promise;
   }
 
+  // Google TTS가 간혹 거의 빈 MP3(무음)를 반환하는 것을 감지하기 위한 최소 바이트.
+  // 관찰값: 손상 파일 ≤900~3000 bytes / 정상 파일 3000+bytes.
+  // 짧은 문자열의 정상 오디오도 2KB 이상 나오므로 1000 bytes 미만은 손상으로 간주.
+  private static readonly MIN_MP3_BYTES = 1000;
+
   // 실제 파일 생성
   private async generateFile(lang: string, key: string, fp: string, text: string): Promise<string> {
     const tmpFp = `${fp}.tmp`;
     try {
       const buf = await this.fetchFromGoogleTts(lang, key, text);
+      if (buf.length < TtsService.MIN_MP3_BYTES) {
+        throw new Error(`TTS 응답이 비정상적으로 작음 (${buf.length} bytes) — 무음 가능성`);
+      }
       await fsPromises.writeFile(tmpFp, buf);
       await fsPromises.rename(tmpFp, fp);
       return fp;
@@ -124,9 +132,12 @@ export class TtsService implements OnModuleInit {
     const voice = GOOGLE_VOICES[lang] ?? GOOGLE_VOICES['ko'];
     const isNumber = /^\d+$/.test(key);
 
+    // <prosody pitch="0st"> — Wavenet의 음정을 baseline으로 고정.
+    // 같은 톤·볼륨·발음속도로 발화되어 숫자별 길이 편차와 음정 요동이 최소화된다.
+    // Chirp3-HD에서는 무시되던 태그이며 Wavenet에서만 유효하다.
     const input = isNumber
-      ? { ssml: `<speak><say-as interpret-as="cardinal">${text}</say-as></speak>` }
-      : { text };
+      ? { ssml: `<speak><prosody pitch="0st" rate="1.0" volume="medium"><say-as interpret-as="cardinal">${text}</say-as></prosody></speak>` }
+      : { ssml: `<speak><prosody pitch="0st" rate="1.0" volume="medium">${text}</prosody></speak>` };
 
     try {
       const res = await axios.post(
@@ -134,7 +145,7 @@ export class TtsService implements OnModuleInit {
         {
           input,
           voice: { languageCode: voice.languageCode, name: voice.name },
-          audioConfig: { audioEncoding: 'MP3', speakingRate: 1.3 },
+          audioConfig: { audioEncoding: 'MP3', speakingRate: 1.5 },
         },
         { timeout: 10000 },
       );

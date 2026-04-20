@@ -7,6 +7,7 @@ import { NoticesModule } from '../notices/notices.module';
 import { RalliesModule } from '../rallies/rallies.module';
 import { MembersModule } from '../members/members.module';
 import { BoardsModule } from '../boards/boards.module';
+import { AllianceNoticesModule } from '../alliance-notices/alliance-notices.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { BoardsModule } from '../boards/boards.module';
     forwardRef(() => RalliesModule),
     forwardRef(() => MembersModule),
     forwardRef(() => BoardsModule),
+    forwardRef(() => AllianceNoticesModule),
   ],
   providers: [RealtimeGateway],
   exports: [RealtimeGateway],

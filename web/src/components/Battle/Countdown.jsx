@@ -2,97 +2,13 @@ import { useState, useEffect, useRef } from 'react';
 import { useStore } from '../../store';
 import { useI18n } from '../../i18n';
 import { getSocket } from '../../api';
-
-// ── TTS — 서버 캐시된 mp3 직접 재생 ─────────────
-// 키 규칙: 숫자는 숫자 그대로(1~180), 문구는 start/stop
-// 캐시 범위: 1~180 (tts-generate로 사전 생성된 파일)
-const TTS_NUM_MAX = 180;
-
-let lastSpokenKey = null;
-let lastSpokenAt  = 0;
-const DEDUP_WINDOW_MS = 500; // 같은 key 재요청 방어 창
-
-// 단일 공유 오디오 엘리먼트 — 같은 탭 안에서 동시에 두 개 재생되는 물리적 가능성 제거
-let sharedAudio = null;
-function getSharedAudio() {
-  if (!sharedAudio) {
-    sharedAudio = new Audio();
-    sharedAudio.preload = 'auto';
-  }
-  return sharedAudio;
-}
-
-function ttsUrl(lang, key) {
-  return `/tts-audio/${lang}/${encodeURIComponent(key)}`;
-}
-
-// D1: 전역 중복 방어 — 동일 key가 500ms 내 두 번 들어오면 무시
-// D2: 단일 Audio 엘리먼트의 src를 교체해서 재생 — 이전 재생 자동 중단, 두 소리 겹침 불가능
-function speak(key, lang = 'ko') {
-  if (/^\d+$/.test(key) && parseInt(key, 10) > TTS_NUM_MAX) return;
-
-  const now = performance.now();
-  if (lastSpokenKey === key && (now - lastSpokenAt) < DEDUP_WINDOW_MS) {
-    if (import.meta.env.DEV) {
-      console.warn('[TTS] dedup skip:', key, 'Δ', (now - lastSpokenAt).toFixed(0) + 'ms');
-    }
-    return;
-  }
-  lastSpokenKey = key;
-  lastSpokenAt  = now;
-
-  try {
-    const audio = getSharedAudio();
-    audio.pause();
-    audio.src = ttsUrl(lang, key);
-    audio.load(); // 대기 중이던 이전 fetch 취소
-    audio.play().catch((e) => {
-      if (e.name === 'AbortError') return;
-      if (import.meta.env.DEV) console.warn('[TTS] play 실패:', key, lang, e.message);
-    });
-  } catch (e) {
-    if (import.meta.env.DEV) console.warn('[TTS] speak 오류:', e);
-  }
-}
-
-// 프리페치: URL을 미리 브라우저 캐시에 올려 즉시 재생 대비
-// M4: lang 변경 시 이전 lang 캐시를 제거해 메모리 누수 방지
-const prefetchedLangs = new Set();
-const prefetchLinks = new Map(); // lang → Set<key> (관리용)
-
-function prefetchTts(lang) {
-  if (prefetchedLangs.has(lang)) return;
-  prefetchedLangs.add(lang);
-
-  // 이전 lang의 <link rel="prefetch"> 제거
-  for (const [prevLang, links] of prefetchLinks) {
-    if (prevLang !== lang) {
-      links.forEach(el => el.parentNode?.removeChild(el));
-      prefetchLinks.delete(prevLang);
-    }
-  }
-
-  const langLinks = new Set();
-  prefetchLinks.set(lang, langLinks);
-
-  const preload = (key) => {
-    const link = document.createElement('link');
-    link.rel = 'prefetch';
-    link.as = 'fetch';
-    link.href = ttsUrl(lang, key);
-    document.head.appendChild(link);
-    langLinks.add(link);
-  };
-
-  // 1~10 + 문구: 즉시 (가장 자주 쓰임)
-  for (let i = 1; i <= 10; i++) preload(String(i));
-  preload('start'); preload('stop');
-
-  // 11~180: 지연 (UI 블로킹 방지, 백그라운드 로드)
-  setTimeout(() => {
-    for (let i = 11; i <= TTS_NUM_MAX; i++) preload(String(i));
-  }, 500);
-}
+import { speak, stopAllTts, prefetchTts } from './tts';
+import {
+  primeCountdownAudio,
+  scheduleCountdown,
+  stopCountdownAudio,
+  setCountdownVolume,
+} from './countdownPlayer';
 
 // ── SVG 원형 프로그레스 링 ──────────────────────
 const RADIUS = 120;
@@ -178,37 +94,71 @@ export default function Countdown() {
 
   const [remaining, setRemaining]   = useState(null);
   const [inputSec,  setInputSec]    = useState('');
+  // 화면 업데이트용 interval
   const intervalRef    = useRef(null);
-  const lastSpokenRef  = useRef(-1);
   const prevActiveRef  = useRef(countdown.active);
   const initializedRef = useRef(false);
+  // 마지막으로 적용된 timeOffset — 리스케줄 필요 여부 판단
+  const lastOffsetRef  = useRef(timeOffset);
 
-  // D2: timeOffset은 tick 내부에서 읽기 위해 ref로 보관 — deps에서 제외하여 시간 동기화 갱신으로
-  //     Effect 1이 재실행되고 lastSpokenRef가 리셋되어 같은 숫자를 재발성하는 문제 차단.
-  const timeOffsetRef = useRef(timeOffset);
-  useEffect(() => { timeOffsetRef.current = timeOffset; }, [timeOffset]);
+  // 마운트 / 언어 변경 시 비카운트다운 문구만 prefetch (카운트다운 숫자는 countdownPlayer가 decode 캐시)
+  useEffect(() => {
+    prefetchTts(['start', 'stop', 'march'], lang);
+    // 백그라운드에서 1~180 버퍼를 미리 decode해 둠 (AudioContext)
+    const keys = [];
+    for (let n = 1; n <= 180; n++) keys.push(n);
+    // primeCountdownAudio는 AudioContext 언락도 시도하지만 사용자 제스처 전에는 suspended 유지
+    // decodeAudioData는 제스처 없이도 가능 → 버퍼만 우선 준비해 둠
+    primeCountdownAudio(keys, lang).catch(() => { /* 네트워크/디코드 실패 무시 */ });
+  }, [lang]);
 
-  // 마운트 / 언어 변경 시 TTS 프리페치
-  useEffect(() => { prefetchTts(lang); }, [lang]);
+  // ttsVolume/ttsMuted 변경 → countdownPlayer 마스터 게인 실시간 반영
+  useEffect(() => {
+    const apply = () => {
+      const s = useStore.getState();
+      setCountdownVolume(s.ttsVolume, s.ttsMuted);
+    };
+    apply();
+    const unsub = useStore.subscribe((s, prev) => {
+      if (s.ttsVolume !== prev.ttsVolume || s.ttsMuted !== prev.ttsMuted) apply();
+    });
+    return unsub;
+  }, []);
 
-  // countdown 상태 변경 → interval 재설정
-  // 의존성을 객체 전체 대신 개별 값으로 분리 — 참조만 바뀌는 경우의 불필요한 재실행 방지
+  // countdown 상태 변경 → interval(화면) 재설정 + TTS 스케줄 예약
   const { active, startedAt, totalSeconds } = countdown;
   useEffect(() => {
     clearInterval(intervalRef.current);
+    stopCountdownAudio();
 
     if (!active) {
       setRemaining(null);
-      lastSpokenRef.current = -1;
+      stopAllTts();
       return;
     }
 
-    // 시작 직후 초기 숫자(totalSeconds)는 speak 하지 않음 — Effect 2의 'start' 멘트와 중복 방지
-    // 1초 경과 후 다음 숫자(totalSeconds - 1)부터 순차 재생
-    lastSpokenRef.current = totalSeconds;
+    // 사용자 제스처에서 AudioContext 언락 (카운트다운 시작 버튼 클릭 등)
+    // 필요한 키만 즉시 prime (이미 decode되었다면 no-op).
+    // 언락은 비동기이지만 scheduleCountdown 내부에서 이미 decode된 버퍼는 즉시 예약,
+    // 미완료 버퍼는 로드 완료 시 예약되므로 prime을 기다릴 필요 없다.
+    const neededKeys = [];
+    for (let n = 1; n < totalSeconds; n++) neededKeys.push(n);
+    primeCountdownAudio(neededKeys, lang).catch(() => { /* 무시 */ });
 
+    const { ttsVolume, ttsMuted } = useStore.getState();
+    scheduleCountdown({
+      totalSeconds,
+      startedAt,
+      timeOffset,
+      lang,
+      volume: ttsVolume,
+      muted: ttsMuted,
+    });
+    lastOffsetRef.current = timeOffset;
+
+    // ── 화면 렌더링용 tick (speak 호출 없음) ────
     function tick() {
-      const now     = Date.now() + timeOffsetRef.current;
+      const now     = Date.now() + lastOffsetRef.current;
       const elapsed = (now - startedAt) / 1000;
       const rem     = totalSeconds - elapsed;
 
@@ -218,18 +168,43 @@ export default function Countdown() {
         return;
       }
       setRemaining(rem);
-
-      const currentSec = Math.ceil(rem);
-      if (currentSec !== lastSpokenRef.current) {
-        lastSpokenRef.current = currentSec;
-        speak(String(currentSec), lang);
-      }
     }
 
     tick();
     intervalRef.current = setInterval(tick, 200);
-    return () => clearInterval(intervalRef.current);
+    return () => {
+      clearInterval(intervalRef.current);
+      stopCountdownAudio();
+      stopAllTts();
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, startedAt, totalSeconds, lang]);
+
+  // timeOffset 변경 시 리스케줄
+  //
+  // Web Audio API 스케줄은 AudioContext.currentTime(모노토닉) 기반이라
+  // 한 번 예약된 발화는 Date.now() drift와 무관하게 정확히 재생된다.
+  // 따라서 일반적인 RTT 변동으로 인한 작은 offset 변화(수백 ms 이내)는
+  // 무시해야 한다 — 재스케줄 사이사이 await로 인해 오히려 슬롯이 누락될 수 있다.
+  // 시스템 클록이 실제로 점프한 경우(예: 수동 시간 변경)에만 재스케줄.
+  useEffect(() => {
+    if (!active || !startedAt || !totalSeconds) return;
+    const deltaMs = Math.abs(timeOffset - lastOffsetRef.current);
+    if (deltaMs <= 1000) return; // 1초 이내의 변동은 무시 (AudioContext가 이미 정확히 스케줄함)
+
+    if (import.meta.env.DEV) console.info('[Countdown] reschedule due to large offset jump', deltaMs, 'ms');
+    const { ttsVolume, ttsMuted } = useStore.getState();
+    scheduleCountdown({
+      totalSeconds,
+      startedAt,
+      timeOffset,
+      lang,
+      volume: ttsVolume,
+      muted: ttsMuted,
+    });
+    lastOffsetRef.current = timeOffset;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeOffset, active, startedAt]);
 
   // start/stop 멘트
   useEffect(() => {

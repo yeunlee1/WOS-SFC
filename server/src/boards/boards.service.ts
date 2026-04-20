@@ -30,8 +30,15 @@ export class BoardsService {
     return result;
   }
 
-  async add(data: Partial<BoardPost>): Promise<BoardPost> {
-    const post = this.repo.create(data);
+  async add(dto: import('./dto/create-board-post.dto').CreateBoardPostDto): Promise<BoardPost> {
+    const post = this.repo.create({
+      alliance: dto.alliance,
+      nickname: dto.nickname,
+      userAlliance: dto.userAlliance,
+      content: dto.content,
+      lang: dto.lang || 'ko',
+      imageUrls: dto.imageUrls || null,
+    });
     const saved = await this.repo.save(post);
     await this.gateway.broadcastBoard(saved.alliance);
     return saved;

@@ -12,6 +12,7 @@ import { Rally } from './rallies/rally.entity';
 import { Member } from './members/member.entity';
 import { BoardPost } from './boards/board-post.entity';
 import { Translation } from './translations/translation.entity';
+import { AllianceNotice } from './alliance-notices/alliance-notice.entity';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { ChatModule } from './chat/chat.module';
@@ -24,6 +25,8 @@ import { RealtimeModule } from './realtime/realtime.module';
 import { TranslateModule } from './translate/translate.module';
 import { TtsModule } from './tts/tts.module';
 import { AdminModule } from './admin/admin.module';
+import { AllianceNoticesModule } from './alliance-notices/alliance-notices.module';
+import { MeModule } from './me/me.module';
 
 @Module({
   imports: [
@@ -38,7 +41,7 @@ import { AdminModule } from './admin/admin.module';
         username: configService.get<string>('DATABASE_USER'),
         password: configService.get<string>('DATABASE_PASSWORD'),
         database: configService.get<string>('DATABASE_NAME'),
-        entities: [User, Message, Notice, Rally, Member, BoardPost, Translation],
+        entities: [User, Message, Notice, Rally, Member, BoardPost, Translation, AllianceNotice],
         synchronize: configService.get<string>('NODE_ENV') !== 'production',
       }),
     }),
@@ -46,8 +49,15 @@ import { AdminModule } from './admin/admin.module';
       rootPath: join(__dirname, '..', '..', '..', 'web', 'dist'),
       exclude: ['/auth/*path', '/notices/*path', '/rallies/*path', '/members/*path',
                 '/boards/*path', '/translations/*path', '/users/*path',
-                '/translate/*path', '/tts-audio/*path', '/admin/*path', '/time', '/socket.io/*path'],
+                '/translate/*path', '/tts-audio/*path', '/admin/*path',
+                '/alliance-notices/*path', '/me/*path', '/time', '/socket.io/*path',
+                '/uploads/*path'],
       serveStaticOptions: { fallthrough: false },
+    }),
+    ServeStaticModule.forRoot({
+      rootPath: join(__dirname, '..', '..', 'uploads'),
+      serveRoot: '/uploads',
+      serveStaticOptions: { index: false },
     }),
     UsersModule,
     AuthModule,
@@ -61,6 +71,8 @@ import { AdminModule } from './admin/admin.module';
     TranslateModule,
     TtsModule,
     AdminModule,
+    AllianceNoticesModule,
+    MeModule,
   ],
   controllers: [AppController],
 })

@@ -3,7 +3,8 @@ import { useStore } from './store';
 import { useSocket } from './hooks/useSocket';
 import { useResizable } from './hooks/useResizable';
 import { useI18n } from './i18n';
-import { api } from './api';
+import { api, getSocket } from './api';
+import { syncTime, startPeriodicSync, stopPeriodicSync } from './timeSync';
 import AuthModal from './components/Auth/AuthModal';
 import Petals from './components/Layout/Petals';
 import Header from './components/Layout/Header';
@@ -17,7 +18,6 @@ export default function App() {
   const user      = useStore((s) => s.user);
   const setUser   = useStore((s) => s.setUser);
   const clearUser = useStore((s) => s.clearUser);
-  const setTimeOffset = useStore((s) => s.setTimeOffset);
   const { changeLang } = useI18n();
   const [activeTab, setActiveTab] = useState('battle');
   const [hydrating, setHydrating] = useState(true);
@@ -33,10 +33,9 @@ export default function App() {
         const me = await api.getMe();
         setUser(me.user);
         changeLang(me.user.language || 'ko');
+        // SNTP 다중 샘플 동기화 (마운트 시 첫 동기화)
         try {
-          const localBefore = Date.now();
-          const res = await api.getTime();
-          setTimeOffset(res.utc - Math.round((localBefore + Date.now()) / 2));
+          await syncTime();
         } catch { /* offset 0 유지 */ }
       } catch {
         // 유효한 세션 없음 — 로그인 화면 표시
@@ -45,10 +44,38 @@ export default function App() {
       }
     })();
 
+    // 30초마다 주기적 재동기화
+    startPeriodicSync(30_000);
+
+    // 탭 복귀 시 재동기화 — 백그라운드 체류로 인한 drift 보정
+    function onVisible() {
+      if (document.visibilityState === 'visible') {
+        syncTime().catch(() => {});
+      }
+    }
+    document.addEventListener('visibilitychange', onVisible);
+
     const handleExpiry = () => clearUser();
     window.addEventListener('auth:expired', handleExpiry);
-    return () => window.removeEventListener('auth:expired', handleExpiry);
+    return () => {
+      window.removeEventListener('auth:expired', handleExpiry);
+      document.removeEventListener('visibilitychange', onVisible);
+      stopPeriodicSync();
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 소켓 reconnect 시 재동기화 — user 로그인 이후 소켓이 생성된 뒤에 리스너 부착
+  // (마운트 시점엔 user가 없어 getSocket()이 null일 수 있으므로 user 변경 감지 effect로 분리)
+  useEffect(() => {
+    if (!user) return;
+    const sock = getSocket();
+    if (!sock) return;
+    const syncOnConnect = () => { syncTime().catch(() => {}); };
+    sock.on('connect', syncOnConnect);
+    return () => {
+      sock.off('connect', syncOnConnect);
+    };
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (hydrating) return null;
 

@@ -1,4 +1,4 @@
-import { IsString, IsOptional, MaxLength } from 'class-validator';
+import { IsString, IsOptional, MaxLength, IsArray } from 'class-validator';
 
 export class CreateBoardPostDto {
   @IsString() @MaxLength(50) alliance: string;
@@ -6,4 +6,6 @@ export class CreateBoardPostDto {
   @IsString() @MaxLength(100) userAlliance: string;
   @IsString() @MaxLength(1000) content: string;
   @IsString() @IsOptional() @MaxLength(10) lang?: string;
+  @IsOptional() @IsArray()
+  imageUrls?: string[];
 }
