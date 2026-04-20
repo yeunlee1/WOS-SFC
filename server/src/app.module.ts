@@ -13,6 +13,8 @@ import { Member } from './members/member.entity';
 import { BoardPost } from './boards/board-post.entity';
 import { Translation } from './translations/translation.entity';
 import { AllianceNotice } from './alliance-notices/alliance-notice.entity';
+import { RallyGroup } from './rally-groups/rally-group.entity';
+import { RallyGroupMember } from './rally-groups/rally-group-member.entity';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { ChatModule } from './chat/chat.module';
@@ -41,7 +43,7 @@ import { MeModule } from './me/me.module';
         username: configService.get<string>('DATABASE_USER'),
         password: configService.get<string>('DATABASE_PASSWORD'),
         database: configService.get<string>('DATABASE_NAME'),
-        entities: [User, Message, Notice, Rally, Member, BoardPost, Translation, AllianceNotice],
+        entities: [User, Message, Notice, Rally, Member, BoardPost, Translation, AllianceNotice, RallyGroup, RallyGroupMember],
         synchronize: configService.get<string>('NODE_ENV') !== 'production',
       }),
     }),
