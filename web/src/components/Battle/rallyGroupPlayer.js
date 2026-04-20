@@ -10,6 +10,11 @@
 //   captainSeconds에 해당하는 초는 숫자 대신 captain_N 발화로 대체.
 //   첫 슬롯 워밍업 대상은 가장 일찍 발화할 슬롯("3" 프리카운트).
 //
+// captain 겹침 정책:
+//   모든 슬롯(숫자/captain)을 예정 시각에 그대로 재생한다. 과거 captainBusUntil
+//   큐로 뒤 captain을 밀면 그 구간의 숫자가 스킵돼 "음성 불안정" 체감을 일으켰다.
+//   같은 초에 captain이 밀집한 드문 경우의 청각 겹침은 누락보다 낫다고 판단.
+//
 // ⚠️ 싱글톤 가정: 이 모듈은 한 번에 하나의 집결 그룹만 스케줄링한다.
 //   scheduleRallyCountdown 호출 시 이전 스케줄을 즉시 취소한다.
 //   여러 집결 그룹이 동시에 카운트다운 중이면 마지막 호출만 유효하다.
@@ -38,11 +43,6 @@ const activeTimeouts = new Set();
 
 // 스케줄 호출 식별자 — 늦게 도착한 버퍼 완료 콜백이 이전 스케줄의 결과를 재생하는 것 방지
 let latestScheduleId = 0;
-
-// captain 오디오 버스 — AudioContext 시각으로 다음 captain을 재생할 수 있는 시각.
-// march 차이가 TTS 오디오 길이(~1.5초)보다 작으면 두 captain 음성이 겹쳐 들린다.
-// AudioContext.currentTime 기준으로 이전 captain이 끝난 뒤에 다음 captain을 시작해 방지.
-let captainBusUntil = 0;
 
 // DEV 감독관용 텔레메트리
 const dispatchedCount = { value: 0 };
@@ -257,36 +257,29 @@ function scheduleSlot(delayMs, key, lang, myId) {
 }
 
 function dispatchSlot(lang, key, myId) {
-  const isCaptain = key.startsWith('captain_');
-  // captain이 재생 중인 구간에 숫자가 발화되면 겹침 → skip
-  if (!isCaptain && ctx && ctx.currentTime < captainBusUntil) {
-    if (import.meta.env.DEV) console.warn('[RallyGroupPlayer] skip number during captain', key);
-    return;
-  }
-  const playFn = isCaptain ? playCaptain : playNow;
+  // captain/number 모두 동일하게 즉시 재생한다. 이전 구현은 captainBusUntil
+  // 큐로 captain 연속 재생 시 뒤의 captain을 밀고 그 구간의 숫자를 스킵했는데,
+  // march가 가까운(예: 38초/37초) 시나리오에서 숫자가 누락돼 "불안정" 체감의
+  // 주원인이었다. captainSeconds로 겹치는 초는 이미 숫자에서 제거되므로
+  // 여기서는 모든 슬롯을 예정 시각에 재생한다. 같은 1초 안에 여러 captain이
+  // 겹치는 드문 경우의 청각 겹침은 받아들인다 — 누락보다 낫다.
   const entry = bufferCache.get(`${lang}:${key}`);
   if (entry && typeof entry === 'object' && 'numberOfChannels' in entry) {
-    playFn(entry, key);
+    playNow(entry, key);
     return;
   }
   if (entry && typeof entry.then === 'function') {
     entry.then((buf) => {
       if (myId !== latestScheduleId) return;
       if (!buf) { if (import.meta.env.DEV) console.warn('[RallyGroupPlayer] slot buf null', key); return; }
-      // 버퍼 로딩 대기 중 captain이 먼저 시작했을 수 있으므로 재검사
-      if (!isCaptain && ctx && ctx.currentTime < captainBusUntil) {
-        if (import.meta.env.DEV) console.warn('[RallyGroupPlayer] skip number (late resolve) during captain', key);
-        return;
-      }
-      playFn(buf, key);
+      playNow(buf, key);
     });
     return;
   }
   loadBuffer(lang, key).then((buf) => {
     if (myId !== latestScheduleId) return;
     if (!buf) return;
-    if (!isCaptain && ctx && ctx.currentTime < captainBusUntil) return;
-    playFn(buf, key);
+    playNow(buf, key);
   });
 }
 
@@ -306,28 +299,8 @@ function playNow(buffer, label) {
   }
 }
 
-function playCaptain(buffer, key) {
-  if (!ctx || !masterGain) return;
-  // 이전 captain이 아직 재생 중이면 끝난 직후에 시작
-  const startWhen = Math.max(ctx.currentTime, captainBusUntil);
-  const src = ctx.createBufferSource();
-  src.buffer = buffer;
-  src.connect(masterGain);
-  src.onended = () => { activeSources.delete(src); };
-  try {
-    src.start(startWhen);
-    captainBusUntil = startWhen + buffer.duration;
-    activeSources.add(src);
-    dispatchedCount.value += 1;
-    if (import.meta.env.DEV) dispatchedLog.push({ label: key, at: performance.now(), startWhen });
-  } catch (e) {
-    if (import.meta.env.DEV) console.warn('[RallyGroupPlayer] playCaptain fail', key, e.message);
-  }
-}
-
 export function stopRallyCountdown() {
   latestScheduleId++;
-  captainBusUntil = 0;
   for (const id of activeTimeouts) {
     try { clearTimeout(id); } catch { /* noop */ }
   }
