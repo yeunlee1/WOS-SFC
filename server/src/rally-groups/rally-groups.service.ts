@@ -1,17 +1,28 @@
-import {
-  Injectable,
-  NotFoundException,
-  BadRequestException,
-  Inject,
-  forwardRef,
-} from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { RallyGroup } from './rally-group.entity';
 import { RallyGroupMember } from './rally-group-member.entity';
 import { UserBattleSettings } from '../users/user-battle-settings.entity';
 import { CreateRallyGroupDto } from './dto/create-rally-group.dto';
 import { RallyGroupsGateway } from './rally-groups.gateway';
+
+const MAX_GROUP_MEMBERS = 10;
+const COUNTDOWN_LEAD_MS = 3000;
+
+export function computeFireSchedule(
+  members: Array<{ userId: number; orderIndex: number }>,
+  effectiveMarchByUserId: Map<number, number>,
+): { maxMarch: number; fireOffsets: Array<{ orderIndex: number; offsetMs: number; userId: number }> } {
+  const marches = members.map((m) => effectiveMarchByUserId.get(m.userId) ?? 0);
+  const maxMarch = Math.max(0, ...marches);
+  const fireOffsets = members.map((m) => ({
+    orderIndex: m.orderIndex,
+    userId: m.userId,
+    offsetMs: (maxMarch - (effectiveMarchByUserId.get(m.userId) ?? 0)) * 1000,
+  }));
+  return { maxMarch, fireOffsets };
+}
 
 @Injectable()
 export class RallyGroupsService {
@@ -19,7 +30,7 @@ export class RallyGroupsService {
     @InjectRepository(RallyGroup) private groupRepo: Repository<RallyGroup>,
     @InjectRepository(RallyGroupMember) private memberRepo: Repository<RallyGroupMember>,
     @InjectRepository(UserBattleSettings) private settingsRepo: Repository<UserBattleSettings>,
-    @Inject(forwardRef(() => RallyGroupsGateway)) private gateway: RallyGroupsGateway,
+    private gateway: RallyGroupsGateway,
     private dataSource: DataSource,
   ) {}
 
@@ -62,7 +73,7 @@ export class RallyGroupsService {
   async addMember(groupId: string, userId: number): Promise<RallyGroupMember> {
     const saved = await this.dataSource.transaction(async (mgr) => {
       const count = await mgr.count(RallyGroupMember, { where: { groupId } });
-      if (count >= 10) throw new BadRequestException('Group is full (max 10)');
+      if (count >= MAX_GROUP_MEMBERS) throw new BadRequestException(`Group is full (max ${MAX_GROUP_MEMBERS})`);
       const duplicate = await mgr.findOne(RallyGroupMember, { where: { groupId, userId } });
       if (duplicate) throw new BadRequestException('User already in group');
       const member = mgr.create(RallyGroupMember, { groupId, userId, orderIndex: count + 1, marchSecondsOverride: null });
@@ -75,18 +86,20 @@ export class RallyGroupsService {
   }
 
   async removeMember(groupId: string, memberId: string): Promise<void> {
-    const member = await this.memberRepo.findOne({ where: { id: memberId, groupId } });
-    if (!member) throw new NotFoundException('Member not found');
-    await this.memberRepo.remove(member);
+    await this.dataSource.transaction(async (mgr) => {
+      const member = await mgr.findOne(RallyGroupMember, { where: { id: memberId, groupId } });
+      if (!member) throw new NotFoundException('Member not found');
+      await mgr.remove(member);
 
-    const remaining = await this.memberRepo.find({
-      where: { groupId },
-      order: { orderIndex: 'ASC' },
+      const remaining = await mgr.find(RallyGroupMember, {
+        where: { groupId },
+        order: { orderIndex: 'ASC' },
+      });
+      for (let i = 0; i < remaining.length; i++) {
+        remaining[i].orderIndex = i + 1;
+      }
+      if (remaining.length > 0) await mgr.save(remaining);
     });
-    for (let i = 0; i < remaining.length; i++) {
-      remaining[i].orderIndex = i + 1;
-    }
-    if (remaining.length > 0) await this.memberRepo.save(remaining);
 
     const full = await this.getFullGroup(groupId);
     this.gateway.emitGroupUpdated(full);
@@ -109,22 +122,16 @@ export class RallyGroupsService {
   async startCountdown(groupId: string): Promise<{ group: RallyGroup; payload: { groupId: string; startedAtServerMs: number; fireOffsets: { orderIndex: number; offsetMs: number; userId: number }[] } }> {
     const group = await this.getFullGroup(groupId);
 
-    const memberSettings = await Promise.all(
-      group.members.map(async (m) => {
-        const settings = await this.settingsRepo.findOne({ where: { userId: m.userId } });
-        const effective = m.marchSecondsOverride ?? settings?.marchSeconds ?? 0;
-        return { member: m, effective };
-      }),
+    const userIds = group.members.map((m) => m.userId);
+    const settingsList = await this.settingsRepo.find({ where: { userId: In(userIds) } });
+    const settingsMap = new Map(settingsList.map((s) => [s.userId, s]));
+
+    const effectiveMap = new Map<number, number>(
+      group.members.map((m) => [m.userId, m.marchSecondsOverride ?? settingsMap.get(m.userId)?.marchSeconds ?? 0]),
     );
 
-    const maxMarch = memberSettings.reduce((max, { effective }) => Math.max(max, effective), 0);
-    const startedAtServerMs = Date.now() + 3000;
-
-    const fireOffsets = memberSettings.map(({ member, effective }) => ({
-      orderIndex: member.orderIndex,
-      offsetMs: (maxMarch - effective) * 1000,
-      userId: member.userId,
-    }));
+    const { maxMarch, fireOffsets } = computeFireSchedule(group.members, effectiveMap);
+    const startedAtServerMs = Date.now() + COUNTDOWN_LEAD_MS;
 
     group.state = 'running';
     group.startedAtServerMs = startedAtServerMs;
@@ -164,20 +171,15 @@ export class RallyGroupsService {
     const group = await this.getFullGroup(groupId);
     if (group.state !== 'running' || group.startedAtServerMs == null) return {};
 
-    const memberSettings = await Promise.all(
-      group.members.map(async (m) => {
-        const settings = await this.settingsRepo.findOne({ where: { userId: m.userId } });
-        const effective = m.marchSecondsOverride ?? settings?.marchSeconds ?? 0;
-        return { member: m, effective };
-      }),
+    const userIds = group.members.map((m) => m.userId);
+    const settingsList = await this.settingsRepo.find({ where: { userId: In(userIds) } });
+    const settingsMap = new Map(settingsList.map((s) => [s.userId, s]));
+
+    const effectiveMap = new Map<number, number>(
+      group.members.map((m) => [m.userId, m.marchSecondsOverride ?? settingsMap.get(m.userId)?.marchSeconds ?? 0]),
     );
 
-    const maxMarch = memberSettings.reduce((max, { effective }) => Math.max(max, effective), 0);
-    const fireOffsets = memberSettings.map(({ member, effective }) => ({
-      orderIndex: member.orderIndex,
-      offsetMs: (maxMarch - effective) * 1000,
-      userId: member.userId,
-    }));
+    const { maxMarch, fireOffsets } = computeFireSchedule(group.members, effectiveMap);
 
     group.maxMarchSeconds = maxMarch;
     await this.groupRepo.save(group);

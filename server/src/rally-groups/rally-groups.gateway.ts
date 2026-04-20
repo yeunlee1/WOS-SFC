@@ -1,5 +1,6 @@
 import { WebSocketGateway, WebSocketServer } from '@nestjs/websockets';
 import { Server } from 'socket.io';
+import { RallyGroup } from './rally-group.entity';
 
 const WEB_ORIGIN = process.env.WEB_ORIGIN || 'http://localhost:5173';
 
@@ -7,7 +8,7 @@ const WEB_ORIGIN = process.env.WEB_ORIGIN || 'http://localhost:5173';
 export class RallyGroupsGateway {
   @WebSocketServer() server: Server;
 
-  emitGroupUpdated(group: any) {
+  emitGroupUpdated(group: RallyGroup) {
     this.server.emit('rallyGroup:updated', group);
   }
 
