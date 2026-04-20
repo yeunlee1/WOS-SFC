@@ -1477,17 +1477,18 @@ input, textarea, select, .input {
 .rally-user-role { font-size: 11px; color: var(--text-3); text-transform: uppercase; }
 
 /* Countdown running view */
-.rally-countdown { display: flex; flex-direction: column; gap: 10px; }
-.rally-countdown__main {
+.rally-group-countdown { display: flex; flex-direction: column; gap: 10px; }
+.rally-group-countdown__main {
   display: flex; flex-direction: column; align-items: center;
   background: var(--bg-subtle);
   border-radius: 10px; padding: 16px;
+  color: var(--text-1);
 }
-.rally-countdown__remain {
+.rally-group-countdown__remain {
   font-size: 56px; font-weight: 800; font-variant-numeric: tabular-nums;
   color: var(--accent); line-height: 1;
 }
-.rally-countdown__next {
+.rally-group-countdown__next {
   margin-top: 6px; font-size: 13px; color: var(--text-2);
 }
 .rally-timeline { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
@@ -1504,7 +1505,7 @@ input, textarea, select, .input {
 }
 
 @media (max-width: 768px) {
-  .rally-countdown__remain { font-size: 42px; }
+  .rally-group-countdown__remain { font-size: 42px; }
   .rally-group-card__actions { width: 100%; }
   .rally-member-row { font-size: 13px; }
 }

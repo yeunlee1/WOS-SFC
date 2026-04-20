@@ -95,11 +95,11 @@ export default function RallyGroupCountdown({ group, countdown }) {
   }
 
   return (
-    <div className="rally-countdown">
-      <div className="rally-countdown__main">
-        <div className="rally-countdown__remain">{remainSec}</div>
+    <div className="rally-group-countdown">
+      <div className="rally-group-countdown__main">
+        <div className="rally-group-countdown__remain">{remainSec}</div>
         {nextFire && (
-          <div className="rally-countdown__next">
+          <div className="rally-group-countdown__next">
             다음 열기: {nextFire.orderIndex}번 집결장
             {sortedMembers.find((m) => m.orderIndex === nextFire.orderIndex)?.user
               ? ` (${formatUser(sortedMembers.find((m) => m.orderIndex === nextFire.orderIndex).user)})`
