@@ -10,6 +10,29 @@ import { RallyGroupsGateway } from './rally-groups.gateway';
 const MAX_GROUP_MEMBERS = 10;
 const COUNTDOWN_LEAD_MS = 3000;
 
+function sanitizeUser(u: any) {
+  if (!u) return u;
+  return {
+    id: u.id,
+    nickname: u.nickname,
+    allianceName: u.allianceName,
+    role: u.role,
+    language: u.language,
+    marchSeconds: u.marchSeconds,
+  };
+}
+
+function sanitizeGroup(group: RallyGroup): RallyGroup {
+  return {
+    ...group,
+    createdBy: group.createdBy ? (sanitizeUser(group.createdBy) as any) : group.createdBy,
+    members: (group.members ?? []).map((m) => ({
+      ...m,
+      user: m.user ? (sanitizeUser(m.user) as any) : m.user,
+    })) as any,
+  };
+}
+
 export function computeFireSchedule(
   members: Array<{ userId: number; orderIndex: number }>,
   effectiveMarchByUserId: Map<number, number>,
@@ -35,10 +58,11 @@ export class RallyGroupsService {
   ) {}
 
   async listAll(): Promise<RallyGroup[]> {
-    return this.groupRepo.find({
+    const groups = await this.groupRepo.find({
       relations: ['members', 'members.user', 'createdBy'],
       order: { createdAt: 'ASC' },
     });
+    return groups.map(sanitizeGroup);
   }
 
   async getFullGroup(id: string): Promise<RallyGroup> {
@@ -47,7 +71,7 @@ export class RallyGroupsService {
       relations: ['members', 'members.user', 'createdBy'],
     });
     if (!group) throw new NotFoundException('RallyGroup not found');
-    return group;
+    return sanitizeGroup(group);
   }
 
   async create(userId: number, dto: CreateRallyGroupDto): Promise<RallyGroup> {
@@ -70,19 +94,19 @@ export class RallyGroupsService {
     this.gateway.emitGroupRemoved(id);
   }
 
-  async addMember(groupId: string, userId: number): Promise<RallyGroupMember> {
-    const saved = await this.dataSource.transaction(async (mgr) => {
+  async addMember(groupId: string, userId: number): Promise<RallyGroup> {
+    await this.dataSource.transaction(async (mgr) => {
       const count = await mgr.count(RallyGroupMember, { where: { groupId } });
       if (count >= MAX_GROUP_MEMBERS) throw new BadRequestException(`Group is full (max ${MAX_GROUP_MEMBERS})`);
       const duplicate = await mgr.findOne(RallyGroupMember, { where: { groupId, userId } });
       if (duplicate) throw new BadRequestException('User already in group');
       const member = mgr.create(RallyGroupMember, { groupId, userId, orderIndex: count + 1, marchSecondsOverride: null });
-      return mgr.save(member);
+      await mgr.save(member);
     });
 
     const full = await this.getFullGroup(groupId);
     this.gateway.emitGroupUpdated(full);
-    return saved;
+    return full;
   }
 
   async removeMember(groupId: string, memberId: string): Promise<void> {
@@ -105,18 +129,17 @@ export class RallyGroupsService {
     this.gateway.emitGroupUpdated(full);
   }
 
-  async updateMarchOverride(memberId: string, seconds: number | null): Promise<RallyGroupMember> {
+  async updateMarchOverride(memberId: string, seconds: number | null): Promise<RallyGroup> {
     const member = await this.memberRepo.findOne({ where: { id: memberId } });
     if (!member) throw new NotFoundException('Member not found');
-    member.marchSecondsOverride = seconds;
-    const saved = await this.memberRepo.save(member);
+    await this.memberRepo.update(memberId, { marchSecondsOverride: seconds });
 
     const full = await this.getFullGroup(member.groupId);
     this.gateway.emitGroupUpdated(full);
 
     if (full.state === 'running') await this.recomputeIfRunning(member.groupId);
 
-    return saved;
+    return full;
   }
 
   async startCountdown(groupId: string): Promise<{ group: RallyGroup; payload: { groupId: string; startedAtServerMs: number; fireOffsets: { orderIndex: number; offsetMs: number; userId: number }[] } }> {
@@ -133,10 +156,11 @@ export class RallyGroupsService {
     const { maxMarch, fireOffsets } = computeFireSchedule(group.members, effectiveMap);
     const startedAtServerMs = Date.now() + COUNTDOWN_LEAD_MS;
 
-    group.state = 'running';
-    group.startedAtServerMs = startedAtServerMs;
-    group.maxMarchSeconds = maxMarch;
-    await this.groupRepo.save(group);
+    await this.groupRepo.update(groupId, {
+      state: 'running',
+      startedAtServerMs,
+      maxMarchSeconds: maxMarch,
+    });
 
     const payload = { groupId, startedAtServerMs, fireOffsets };
     this.gateway.emitCountdownStart(payload);
@@ -151,10 +175,11 @@ export class RallyGroupsService {
     const group = await this.groupRepo.findOne({ where: { id: groupId } });
     if (!group) throw new NotFoundException('RallyGroup not found');
 
-    group.state = 'idle';
-    group.startedAtServerMs = null;
-    group.maxMarchSeconds = null;
-    await this.groupRepo.save(group);
+    await this.groupRepo.update(groupId, {
+      state: 'idle',
+      startedAtServerMs: null,
+      maxMarchSeconds: null,
+    });
 
     this.gateway.emitCountdownStop(groupId);
 
@@ -181,8 +206,7 @@ export class RallyGroupsService {
 
     const { maxMarch, fireOffsets } = computeFireSchedule(group.members, effectiveMap);
 
-    group.maxMarchSeconds = maxMarch;
-    await this.groupRepo.save(group);
+    await this.groupRepo.update(groupId, { maxMarchSeconds: maxMarch });
 
     const payload = { groupId, startedAtServerMs: Number(group.startedAtServerMs), fireOffsets };
     this.gateway.emitCountdownStart(payload);
