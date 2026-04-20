@@ -111,7 +111,8 @@ export default function Header({ activeTab, onTabChange, onToggleOnline }) {
               if (v <= 0) stopAllTts();
             }}
             aria-label="TTS 볼륨"
-            aria-valuetext={`${Math.round(ttsVolume * 100)}%${ttsMuted ? ' (음소거)' : ''}`}
+            aria-valuenow={ttsMuted ? 0 : Math.round(ttsVolume * 100)}
+            aria-valuetext={ttsMuted ? `음소거 (기억된 볼륨 ${Math.round(ttsVolume * 100)}%)` : `${Math.round(ttsVolume * 100)}%`}
           />
           <span className="tts-volume-label">
             {ttsMuted ? '음소거' : `${Math.round(ttsVolume * 100)}%`}
