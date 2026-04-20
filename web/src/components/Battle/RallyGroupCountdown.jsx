@@ -22,6 +22,7 @@ export default function RallyGroupCountdown({ group, countdown }) {
   const [saving, setSaving] = useState(false);
   const [localMuted, setLocalMuted] = useState(false);
   const schedKeyRef = useRef('');
+  const lastOffsetRef = useRef(timeOffset);
 
   // countdown payload가 새로 시작되면 로컬 음소거 자동 해제
   useEffect(() => {
@@ -39,19 +40,42 @@ export default function RallyGroupCountdown({ group, countdown }) {
     if (schedKeyRef.current === key) return;
     schedKeyRef.current = key;
 
-    primeRallyAudio(countdown.fireOffsets, lang).then(() => {
-      scheduleRallyCountdown({
-        startedAtServerMs: countdown.startedAtServerMs,
-        fireOffsets: countdown.fireOffsets,
-        timeOffset,
-        lang,
-        volume: ttsVolume,
-        muted: ttsMuted,
-      });
+    // 1번(countdownPlayer) 패턴과 동일: prime은 fire-and-forget, schedule은 즉시 호출.
+    // prime을 await하면 Promise.all(criticalKeys)가 수 초 blocking → 초반 슬롯 skip 버그 재현.
+    // scheduleRallyCountdown 내부의 500ms Promise.race 워밍업이 타이밍을 보호한다.
+    primeRallyAudio(countdown.fireOffsets, lang).catch(() => {});
+    scheduleRallyCountdown({
+      startedAtServerMs: countdown.startedAtServerMs,
+      fireOffsets: countdown.fireOffsets,
+      timeOffset,
+      lang,
+      volume: ttsVolume,
+      muted: ttsMuted,
     });
+    lastOffsetRef.current = timeOffset;
 
     return () => { /* next run will cancel via schedule */ };
-  }, [countdown, timeOffset, lang, ttsVolume, ttsMuted]);
+  // timeOffset은 별도 effect에서 1초 이상 급변 시에만 리스케줄 (잦은 RTT 변동으로 인한 불필요한 재스케줄 방지)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [countdown, lang, ttsVolume, ttsMuted]);
+
+  // timeOffset 급변(1초 이상) 시 리스케줄 — 1번(Countdown.jsx) 패턴과 동일
+  useEffect(() => {
+    if (!countdown) return;
+    const deltaMs = Math.abs(timeOffset - lastOffsetRef.current);
+    if (deltaMs <= 1000) return;
+    primeRallyAudio(countdown.fireOffsets, lang).catch(() => {});
+    scheduleRallyCountdown({
+      startedAtServerMs: countdown.startedAtServerMs,
+      fireOffsets: countdown.fireOffsets,
+      timeOffset,
+      lang,
+      volume: ttsVolume,
+      muted: ttsMuted,
+    });
+    lastOffsetRef.current = timeOffset;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeOffset, countdown]);
 
   useEffect(() => { setRallyVolume(ttsVolume, ttsMuted); }, [ttsVolume, ttsMuted]);
 
@@ -94,15 +118,14 @@ export default function RallyGroupCountdown({ group, countdown }) {
     } else {
       // 재개: 현재 countdown 기준으로 남은 슬롯 재스케줄
       if (countdown) {
-        primeRallyAudio(countdown.fireOffsets, lang).then(() => {
-          scheduleRallyCountdown({
-            startedAtServerMs: countdown.startedAtServerMs,
-            fireOffsets: countdown.fireOffsets,
-            timeOffset,
-            lang,
-            volume: ttsVolume,
-            muted: ttsMuted,
-          });
+        primeRallyAudio(countdown.fireOffsets, lang).catch(() => {});
+        scheduleRallyCountdown({
+          startedAtServerMs: countdown.startedAtServerMs,
+          fireOffsets: countdown.fireOffsets,
+          timeOffset,
+          lang,
+          volume: ttsVolume,
+          muted: ttsMuted,
         });
       }
       setLocalMuted(false);
