@@ -11,7 +11,8 @@ import {
 import { RallyGroupMember } from './rally-group-member.entity';
 import { User } from '../users/users.entity';
 
-export type RallyGroupState = 'idle' | 'running' | 'finished';
+export const RALLY_GROUP_STATES = ['idle', 'running', 'finished'] as const;
+export type RallyGroupState = (typeof RALLY_GROUP_STATES)[number];
 
 @Entity('rally_groups')
 export class RallyGroup {
@@ -33,7 +34,7 @@ export class RallyGroup {
 
   @Column({
     type: 'enum',
-    enum: ['idle', 'running', 'finished'],
+    enum: RALLY_GROUP_STATES,
     default: 'idle',
   })
   state: RallyGroupState;
