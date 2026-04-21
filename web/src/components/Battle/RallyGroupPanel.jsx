@@ -7,6 +7,7 @@ import RallyGroupCountdown from './RallyGroupCountdown';
 import { stopRallyCountdown } from './rallyGroupPlayer';
 
 const canAdmin = (role) => role === 'admin' || role === 'developer';
+const MAX_GROUPS = 6;
 
 export default function RallyGroupPanel() {
   const user = useStore((s) => s.user);
@@ -16,25 +17,28 @@ export default function RallyGroupPanel() {
 
   const [editingGroupId, setEditingGroupId] = useState(null);
   const [creating, setCreating] = useState(false);
-  const [newName, setNewName] = useState('');
   const [error, setError] = useState(null);
   const isAdmin = canAdmin(user?.role);
+  const atMax = rallyGroups.length >= MAX_GROUPS;
 
   useEffect(() => {
     api.listRallyGroups().then(setRallyGroups).catch(() => { /* noop */ });
   }, [setRallyGroups]);
 
-  async function handleCreate(e) {
-    e.preventDefault();
-    const name = newName.trim();
-    if (!name) return;
+  async function handleCreate() {
+    // 이름은 서버가 displayOrder 기반으로 자동 할당 ("${N}번 집결그룹").
+    if (atMax) {
+      setError(`집결 그룹은 최대 ${MAX_GROUPS}개까지만 생성 가능합니다.`);
+      return;
+    }
     setError(null);
+    setCreating(true);
     try {
-      await api.createRallyGroup({ name });
-      setNewName('');
-      setCreating(false);
+      await api.createRallyGroup({});
     } catch (err) {
       setError(err?.message || '생성 실패');
+    } finally {
+      setCreating(false);
     }
   }
 
@@ -58,27 +62,19 @@ export default function RallyGroupPanel() {
   return (
     <div className="rally-group-panel">
       <div className="rally-group-panel__header">
-        <h3>집결 그룹</h3>
+        <h3>집결 그룹 ({rallyGroups.length}/{MAX_GROUPS})</h3>
         {isAdmin && (
-          <button type="button" className="rally-btn rally-btn--primary" onClick={() => setCreating((v) => !v)}>
-            {creating ? '취소' : '＋ 새 그룹'}
+          <button
+            type="button"
+            className="rally-btn rally-btn--primary"
+            onClick={handleCreate}
+            disabled={atMax || creating}
+            title={atMax ? `최대 ${MAX_GROUPS}개까지 생성 가능` : ''}
+          >
+            ＋ 새 그룹
           </button>
         )}
       </div>
-
-      {creating && (
-        <form className="rally-create-form" onSubmit={handleCreate}>
-          <input
-            type="text"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder="예: 1차행군조"
-            maxLength={40}
-            autoFocus
-          />
-          <button type="submit" className="rally-btn rally-btn--primary">만들기</button>
-        </form>
-      )}
 
       {error && <div className="rally-error">{error}</div>}
 
@@ -87,7 +83,7 @@ export default function RallyGroupPanel() {
       )}
 
       <ul className="rally-group-list">
-        {rallyGroups.map((g) => {
+        {[...rallyGroups].sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0)).map((g) => {
           const countdown = rallyCountdowns[g.id];
           const running = g.state === 'running' && !!countdown;
           const sortedMembers = [...(g.members ?? [])].sort((a, b) => a.orderIndex - b.orderIndex);

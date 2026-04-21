@@ -22,6 +22,13 @@ export class RallyGroup {
   @Column({ length: 40 })
   name: string;
 
+  // 1~6 자동 할당 — 생성 시 count+1, 삭제 시 남은 그룹들 재번호화로 1..N 연속 유지.
+  // 음성 안내("N번 집결그룹 집결 시작합니다")에서 N으로 사용되며,
+  // name 필드(`${displayOrder}번 집결그룹`)와 중복되지만 정규 소스는 이 필드.
+  // name에서 정규식 파싱보다 안정적.
+  @Column({ name: 'display_order', type: 'int', default: 1 })
+  displayOrder: number;
+
   @Column({ name: 'created_by_id', type: 'int' })
   createdById: number;
 

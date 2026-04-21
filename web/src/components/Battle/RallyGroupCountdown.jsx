@@ -37,7 +37,7 @@ export default function RallyGroupCountdown({ group, countdown }) {
       return;
     }
     const { ttsVolume: vol, ttsMuted: mut } = useStore.getState();
-    primeRallyAudio(countdown.fireOffsets, lang).catch(() => {});
+    primeRallyAudio(countdown.fireOffsets, lang, group.displayOrder).catch(() => {});
     scheduleRallyCountdown({
       startedAtServerMs: countdown.startedAtServerMs,
       fireOffsets: countdown.fireOffsets,
@@ -45,10 +45,11 @@ export default function RallyGroupCountdown({ group, countdown }) {
       lang,
       volume: vol,
       muted: mut,
+      displayOrder: group.displayOrder,
     });
     lastOffsetRef.current = timeOffset;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [countdown, lang]);
+  }, [countdown, lang, group.displayOrder]);
 
   // timeOffset 급변(1초 이상) 시 리스케줄 — 1번(Countdown.jsx) 패턴과 동일
   useEffect(() => {
@@ -56,7 +57,7 @@ export default function RallyGroupCountdown({ group, countdown }) {
     const deltaMs = Math.abs(timeOffset - lastOffsetRef.current);
     if (deltaMs <= 1000) return;
     const { ttsVolume: vol, ttsMuted: mut } = useStore.getState();
-    primeRallyAudio(countdown.fireOffsets, lang).catch(() => {});
+    primeRallyAudio(countdown.fireOffsets, lang, group.displayOrder).catch(() => {});
     scheduleRallyCountdown({
       startedAtServerMs: countdown.startedAtServerMs,
       fireOffsets: countdown.fireOffsets,
@@ -64,6 +65,7 @@ export default function RallyGroupCountdown({ group, countdown }) {
       lang,
       volume: vol,
       muted: mut,
+      displayOrder: group.displayOrder,
     });
     lastOffsetRef.current = timeOffset;
   // eslint-disable-next-line react-hooks/exhaustive-deps

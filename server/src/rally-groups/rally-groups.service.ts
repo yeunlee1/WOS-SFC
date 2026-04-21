@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, Repository } from 'typeorm';
+import { DataSource, EntityManager, MoreThan, Repository } from 'typeorm';
 import { RallyGroup } from './rally-group.entity';
 import { RallyGroupMember } from './rally-group-member.entity';
 import { User } from '../users/users.entity';
@@ -8,7 +8,15 @@ import { CreateRallyGroupDto } from './dto/create-rally-group.dto';
 import { RallyGroupsGateway } from './rally-groups.gateway';
 
 const MAX_GROUP_MEMBERS = 10;
-const COUNTDOWN_LEAD_MS = 4000;
+const MAX_GROUPS = 6;
+// 시작 안내 음성("N번 집결그룹 집결 시작합니다") + 프리카운트(3,2,1) 재생 시간 확보.
+// 기존 4000ms는 프리카운트만 고려한 값으로, 안내 음성(~3초)이 추가되어 7초로 증가.
+const COUNTDOWN_LEAD_MS = 7000;
+
+/** 자동 생성 이름 포맷 — 음성 안내와 쌍으로 유지 */
+function formatGroupName(displayOrder: number): string {
+  return `${displayOrder}번 집결그룹`;
+}
 
 function sanitizeUser(u: any) {
   if (!u) return u;
@@ -89,9 +97,11 @@ export class RallyGroupsService {
   }
 
   async listAll(): Promise<RallyGroup[]> {
+    // displayOrder ASC — 재번호화 후 1번~N번 순서대로 UI 노출.
+    // createdAt 기준으로 하면 삭제→재번호화 후 "4번이 3번보다 먼저 나오는" 어긋남 발생.
     const groups = await this.groupRepo.find({
       relations: ['members', 'members.user', 'createdBy'],
-      order: { createdAt: 'ASC' },
+      order: { displayOrder: 'ASC' },
     });
     return groups.map(sanitizeGroup);
   }
@@ -106,23 +116,64 @@ export class RallyGroupsService {
   }
 
   async create(userId: number, dto: CreateRallyGroupDto): Promise<RallyGroup> {
-    const group = this.groupRepo.create({
-      name: dto.name,
-      broadcastAll: dto.broadcastAll ?? false,
-      createdById: userId,
-      state: 'idle',
+    // 최대 6개 제한 + displayOrder 자동 할당을 단일 트랜잭션으로 묶어
+    // 동시 생성 시 중복 번호 할당 방지.
+    const saved = await this.dataSource.transaction(async (mgr) => {
+      const groupRepo = mgr.getRepository(RallyGroup);
+      const count = await groupRepo.count();
+      if (count >= MAX_GROUPS) {
+        throw new BadRequestException(`집결 그룹은 최대 ${MAX_GROUPS}개까지만 생성 가능합니다.`);
+      }
+      // count+1 = 다음 슬롯 (remove에서 재번호화로 1..N 연속 보장).
+      const displayOrder = count + 1;
+      const group = groupRepo.create({
+        name: formatGroupName(displayOrder),
+        displayOrder,
+        broadcastAll: dto.broadcastAll ?? false,
+        createdById: userId,
+        state: 'idle',
+      });
+      return groupRepo.save(group);
     });
-    const saved = await this.groupRepo.save(group);
     const full = await this.getFullGroup(saved.id);
     this.gateway.emitGroupUpdated(full);
     return full;
   }
 
   async remove(id: string): Promise<void> {
-    const group = await this.groupRepo.findOne({ where: { id } });
-    if (!group) throw new NotFoundException('RallyGroup not found');
-    await this.groupRepo.remove(group);
+    // 삭제 + 남은 그룹 재번호화를 단일 트랜잭션으로.
+    // 예: [1,2,3,4] 중 2 삭제 → [1,3,4] → [1,2,3]으로 재할당.
+    // name 필드도 displayOrder와 동기화.
+    const affectedIds = await this.dataSource.transaction(async (mgr) => {
+      const groupRepo = mgr.getRepository(RallyGroup);
+      const group = await groupRepo.findOne({ where: { id } });
+      if (!group) throw new NotFoundException('RallyGroup not found');
+      const removedOrder = group.displayOrder;
+      await groupRepo.remove(group);
+
+      // 삭제된 것보다 뒤에 있던 그룹들을 1씩 당김.
+      // displayOrder가 unique 제약이 있다면 임시 음수 → 최종값 2단계 필요하지만
+      // 현재 제약이 없고 renumber 순서를 오름차순으로 하면 (N+1 → N)
+      // 중간 상태 충돌 없음.
+      const tail = await groupRepo.find({
+        where: { displayOrder: MoreThan(removedOrder) },
+        order: { displayOrder: 'ASC' },
+      });
+      for (const g of tail) {
+        const newOrder = g.displayOrder - 1;
+        g.displayOrder = newOrder;
+        g.name = formatGroupName(newOrder);
+        await groupRepo.save(g);
+      }
+      return tail.map((g) => g.id);
+    });
+
     this.gateway.emitGroupRemoved(id);
+    // 재번호화된 그룹들을 클라이언트에 브로드캐스트.
+    for (const gid of affectedIds) {
+      const full = await this.getFullGroup(gid);
+      this.gateway.emitGroupUpdated(full);
+    }
   }
 
   async addMember(groupId: string, userId: number): Promise<RallyGroup> {

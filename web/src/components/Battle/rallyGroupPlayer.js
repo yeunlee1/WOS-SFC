@@ -106,8 +106,9 @@ function loadBuffer(lang, key) {
  * AudioContext 언락 + 필요 버퍼 프리로드. 사용자 제스처에서 호출.
  * @param {Array<{orderIndex:number, offsetMs:number}>} fireOffsets
  * @param {string} lang
+ * @param {number} [displayOrder] 그룹 번호 — rally_start_N 안내 음성 프리로드용 (있으면 critical 추가)
  */
-export async function primeRallyAudio(fireOffsets, lang = 'ko') {
+export async function primeRallyAudio(fireOffsets, lang = 'ko', displayOrder) {
   const c = ensureContext();
   if (!c) return;
   if (c.state === 'suspended') {
@@ -138,7 +139,12 @@ export async function primeRallyAudio(fireOffsets, lang = 'ko') {
     }
   }
 
-  const criticalKeys = ['3', '2', '1', ...offsets.map((f) => `captain_${f.orderIndex}`)];
+  // 안내 음성(rally_start_N)은 프리카운트("3")보다 먼저 재생되므로 critical에 포함.
+  const criticalKeys = [
+    ...(displayOrder ? [`rally_start_${displayOrder}`] : []),
+    '3', '2', '1',
+    ...offsets.map((f) => `captain_${f.orderIndex}`),
+  ];
   await Promise.all(criticalKeys.map((k) => loadBuffer(lang, k)));
   for (const k of numberKeys) loadBuffer(lang, k);
 }
@@ -146,9 +152,12 @@ export async function primeRallyAudio(fireOffsets, lang = 'ko') {
 /**
  * 집결 그룹 카운트다운 재생.
  * @param {{startedAtServerMs:number, fireOffsets:Array<{orderIndex:number,offsetMs:number,userId:number}>,
- *          timeOffset:number, lang?:string, volume:number, muted:boolean}} params
+ *          timeOffset:number, lang?:string, volume:number, muted:boolean,
+ *          displayOrder?:number}} params
+ *   displayOrder — 그룹 1~6. 지정 시 프리카운트 이전(ctxAnchor - 6s)에 "N번 집결그룹
+ *   집결 시작합니다" 안내 음성을 예약. 서버측 COUNTDOWN_LEAD_MS(7s)가 이 타이밍을 전제로 설정됨.
  */
-export async function scheduleRallyCountdown({ startedAtServerMs, fireOffsets, timeOffset = 0, lang = 'ko', volume, muted }) {
+export async function scheduleRallyCountdown({ startedAtServerMs, fireOffsets, timeOffset = 0, lang = 'ko', volume, muted, displayOrder }) {
   const c = ensureContext();
   if (!c) return;
   if (!startedAtServerMs || !Array.isArray(fireOffsets)) return;
@@ -181,8 +190,9 @@ export async function scheduleRallyCountdown({ startedAtServerMs, fireOffsets, t
 
   const captainSeconds = new Set(fireOffsets.map((f) => Math.round(f.offsetMs / 1000)));
 
-  // 첫 슬롯 워밍업 — 가장 일찍 발화할 "3" 프리카운트를 최대 500ms 기다림.
+  // 첫 슬롯 워밍업 — 가장 일찍 발화할 안내 음성(있으면) 또는 "3" 프리카운트를 최대 500ms 기다림.
   // ctx 클럭 기반 예약이라도 버퍼가 제시각 지나 도착하면 slot 유실되므로 유지.
+  if (displayOrder) loadBuffer(lang, `rally_start_${displayOrder}`);
   for (const k of ['3', '2', '1']) loadBuffer(lang, k);
   for (const f of fireOffsets) loadBuffer(lang, `captain_${f.orderIndex}`);
   if (maxOffsetSec > 0) {
@@ -190,8 +200,10 @@ export async function scheduleRallyCountdown({ startedAtServerMs, fireOffsets, t
       if (!captainSeconds.has(t)) loadBuffer(lang, String(t));
     }
   }
+  // 안내 음성이 있으면 그것이 가장 일찍 발화되므로 그 버퍼를 워밍업 대상으로.
+  const firstKey = displayOrder ? `rally_start_${displayOrder}` : '3';
   await Promise.race([
-    loadBuffer(lang, '3'),
+    loadBuffer(lang, firstKey),
     new Promise((r) => setTimeout(r, 500)),
   ]);
   if (myId !== latestScheduleId) return;
@@ -205,6 +217,12 @@ export async function scheduleRallyCountdown({ startedAtServerMs, fireOffsets, t
   // 이후 모든 슬롯은 ctxAnchor + offsetSec로 절대 시각 계산
   const serverNow = Date.now() + timeOffset;
   const ctxAnchor = c.currentTime + (startedAtServerMs - serverNow) / 1000;
+
+  // 시작 안내: T-6 ("N번 집결그룹 집결 시작합니다" — 한국어 약 3초, T-3 프리카운트 시작 전 여유)
+  // 서버 COUNTDOWN_LEAD_MS=7000ms가 이 타이밍을 전제로 설정됨.
+  if (displayOrder) {
+    schedulePlay(lang, `rally_start_${displayOrder}`, ctxAnchor - 6, myId);
+  }
 
   // 프리카운트: T-3, T-2, T-1
   for (const n of [3, 2, 1]) {
