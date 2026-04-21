@@ -1,9 +1,16 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useStore } from '../../store';
+import { useStore, THEMES } from '../../store';
 import { useI18n, SUPPORTED_LANGS } from '../../i18n';
 import { api, disconnectSocket } from '../../api';
 import { speak, stopAllTts } from '../Battle/tts';
+import ThemePicker from './ThemePicker';
+
+const THEME_DRAWER_META = {
+  spring:    { label: '🌸 Spring',    dot1: '#f9a8d4', dot2: '#d946a8' },
+  anthropic: { label: '🕯️ Anthropic', dot1: '#faf9f5', dot2: '#d97757' },
+  dark:      { label: '🌙 Dark',      dot1: '#1c1d22', dot2: '#818cf8' },
+};
 
 const ALLIANCE_COLORS = {
   KOR: '#3b82f6', NSL: '#22c55e', JKY: '#a855f7',
@@ -27,6 +34,7 @@ export default function Header({ activeTab, onTabChange, onToggleOnline }) {
   const {
     user, timeOffset, timeSyncRtt, clearUser, onlineUsers,
     ttsVolume, setTtsVolume, ttsMuted, setTtsMuted,
+    theme, setTheme,
   } = useStore();
   const { t, lang, changeLang } = useI18n();
   const [utcTime, setUtcTime] = useState('');
@@ -67,7 +75,10 @@ export default function Header({ activeTab, onTabChange, onToggleOnline }) {
           <span className="world-clock">{utcTime}</span>
         </div>
 
-        {/* 데스크톱 헤더 우측 — 인라인 컴포넌트 금지: 드래그 중 리마운트로 슬라이더 끊김 */}
+        {/* 데스크톱 헤더 우측 — 인라인 JSX 필수:
+         *  - 내부 함수 컴포넌트로 정의하면 Header 리렌더(매초 utcTime 변경)마다
+         *    새 함수 참조가 생성돼 React가 자식(ThemePicker, 슬라이더)을 재마운트함.
+         *    → 슬라이더 드래그 끊김, ThemePicker 드롭다운이 매초 닫힘 버그. */}
         <div className="header-right" id="user-info">
           {user && (
             <>
@@ -85,6 +96,7 @@ export default function Header({ activeTab, onTabChange, onToggleOnline }) {
                   <option key={l.code} value={l.code}>{l.flag} {l.label}</option>
                 ))}
               </select>
+              <ThemePicker />
               <span
                 className="time-sync-badge"
                 title={`시간 동기화 RTT: ${Math.round(timeSyncRtt)}ms`}
@@ -186,6 +198,28 @@ export default function Header({ activeTab, onTabChange, onToggleOnline }) {
                       <option key={l.code} value={l.code}>{l.flag} {l.label}</option>
                     ))}
                   </select>
+
+                  <label className="drawer-field-label" style={{ marginTop: 12 }}>테마</label>
+                  <ul className="drawer-theme-list" role="listbox">
+                    {THEMES.map((id) => {
+                      const m = THEME_DRAWER_META[id];
+                      const active = id === theme;
+                      return (
+                        <li
+                          key={id}
+                          role="option"
+                          aria-selected={active}
+                          className={`theme-picker__option${active ? ' is-active' : ''}`}
+                          onClick={() => { setTheme(id); }}
+                        >
+                          <span className="theme-picker__dot" style={{ background: m.dot1 }} />
+                          <span className="theme-picker__dot" style={{ background: m.dot2 }} />
+                          <span className="theme-picker__label">{m.label}</span>
+                          {active && <span className="theme-picker__check">✓</span>}
+                        </li>
+                      );
+                    })}
+                  </ul>
                 </section>
 
                 <section className="drawer-section">

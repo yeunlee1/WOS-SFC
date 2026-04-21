@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>WOS SFC — 테마 비교 미리보기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&family=Lora:ital,wght@0,400;0,600;1,400&display=swap" />
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    min-height: 100vh;
+    font-family: 'Inter', 'Pretendard', 'Noto Sans KR', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    transition: background 0.3s ease, color 0.3s ease;
+  }
+
+  /* ───────── 테마 A · Anthropic Claude ───────── */
+  body.theme-a {
+    --bg-page: #FAF9F5;
+    --bg-card: #FFFFFF;
+    --bg-subtle: #F5F3EE;
+    --bg-hover: #EFEBE0;
+    --text-1: #1F1E1D;
+    --text-2: #6B6763;
+    --text-3: #A8A39C;
+    --accent: #D97757;
+    --accent-hover: #C86540;
+    --accent-soft: #F7E9DF;
+    --green: #16A34A; --green-soft: #DCFCE7;
+    --orange: #EA580C; --orange-soft: #FFF7ED;
+    --red: #DC2626;   --red-soft: #FEF2F2;
+    --border: #EAE6DC;
+    --border-strong: #D6CFBF;
+    --shadow-sm: 0 1px 2px rgba(31,30,29,0.04);
+    --shadow-md: 0 2px 8px rgba(31,30,29,0.06);
+    --shadow-lg: 0 8px 24px rgba(31,30,29,0.08);
+    --r-sm: 10px; --r-md: 14px; --r-lg: 20px;
+    --font-heading: 'Lora', 'Inter', serif;
+    --font-mono: 'JetBrains Mono', 'Consolas', monospace;
+    background: var(--bg-page);
+    color: var(--text-1);
+  }
+
+  /* ───────── 테마 B · Linear ───────── */
+  body.theme-b {
+    --bg-page: #08090A;
+    --bg-card: #1C1D22;
+    --bg-subtle: #141518;
+    --bg-hover: #26272D;
+    --text-1: #F4F4F5;
+    --text-2: #A1A1AA;
+    --text-3: #71717A;
+    --accent: #5E6AD2;
+    --accent-hover: #4C56BB;
+    --accent-soft: rgba(94,106,210,0.16);
+    --green: #10B981; --green-soft: rgba(16,185,129,0.16);
+    --orange: #F59E0B; --orange-soft: rgba(245,158,11,0.16);
+    --red: #EF4444;   --red-soft: rgba(239,68,68,0.16);
+    --border: #27272A;
+    --border-strong: #3F3F46;
+    --shadow-sm: 0 0 0 1px rgba(255,255,255,0.06);
+    --shadow-md: 0 0 0 1px rgba(255,255,255,0.08), 0 4px 16px rgba(0,0,0,0.4);
+    --shadow-lg: 0 0 0 1px rgba(255,255,255,0.1), 0 16px 40px rgba(0,0,0,0.5);
+    --r-sm: 6px; --r-md: 8px; --r-lg: 12px;
+    --font-heading: 'Inter', sans-serif;
+    --font-mono: 'JetBrains Mono', 'Consolas', monospace;
+    background: var(--bg-page);
+    color: var(--text-1);
+  }
+
+  /* ───────── 테마 C · Arctic Command ───────── */
+  body.theme-c {
+    --bg-page: #0B1929;
+    --bg-card: #142238;
+    --bg-subtle: #0F1D30;
+    --bg-hover: #1B2D47;
+    --text-1: #E2E8F0;
+    --text-2: #94A3B8;
+    --text-3: #64748B;
+    --accent: #60A5FA;
+    --accent-hover: #3B82F6;
+    --accent-soft: rgba(96,165,250,0.14);
+    --green: #10B981; --green-soft: rgba(16,185,129,0.16);
+    --orange: #F59E0B; --orange-soft: rgba(245,158,11,0.16);
+    --red: #EF4444;   --red-soft: rgba(239,68,68,0.16);
+    --border: #1E3A5F;
+    --border-strong: #2C4A73;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+    --shadow-md: 0 4px 16px rgba(0,0,0,0.4), 0 0 0 1px rgba(96,165,250,0.05);
+    --shadow-lg: 0 16px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(96,165,250,0.08);
+    --r-sm: 8px; --r-md: 10px; --r-lg: 14px;
+    --font-heading: 'Inter', sans-serif;
+    --font-mono: 'JetBrains Mono', 'Consolas', monospace;
+    background: radial-gradient(ellipse at top, #112540 0%, #0B1929 45%, #060E1A 100%);
+    background-attachment: fixed;
+    color: var(--text-1);
+  }
+
+  /* ───────── 테마 D · Warm Tactical (추천) ───────── */
+  body.theme-d {
+    --bg-page: #1A1816;
+    --bg-card: #252220;
+    --bg-subtle: #1F1D1B;
+    --bg-hover: #2E2A27;
+    --text-1: #F5EFE6;
+    --text-2: #A39A8E;
+    --text-3: #736C62;
+    --accent: #D97757;
+    --accent-hover: #C86540;
+    --accent-soft: rgba(217,119,87,0.15);
+    --green: #65A30D; --green-soft: rgba(101,163,13,0.16);
+    --orange: #CA8A04; --orange-soft: rgba(202,138,4,0.16);
+    --red: #DC2626;   --red-soft: rgba(220,38,38,0.16);
+    --border: #35302C;
+    --border-strong: #4A443E;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+    --shadow-md: 0 4px 16px rgba(0,0,0,0.35), 0 0 0 1px rgba(217,119,87,0.04);
+    --shadow-lg: 0 16px 40px rgba(0,0,0,0.4), 0 0 0 1px rgba(217,119,87,0.06);
+    --r-sm: 8px; --r-md: 12px; --r-lg: 16px;
+    --font-heading: 'Inter', sans-serif;
+    --font-mono: 'JetBrains Mono', 'Consolas', monospace;
+    background: radial-gradient(ellipse at top left, #23201D 0%, #1A1816 55%, #120F0D 100%);
+    background-attachment: fixed;
+    color: var(--text-1);
+  }
+
+  /* ───────── 공통 레이아웃 ───────── */
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    backdrop-filter: blur(12px);
+    background: color-mix(in srgb, var(--bg-page) 82%, transparent);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+  .topbar h1 {
+    font-family: var(--font-heading);
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .topbar .subtitle {
+    font-size: 13px;
+    color: var(--text-2);
+    margin-top: 2px;
+  }
+  .theme-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+  .theme-tabs button {
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 8px 14px;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    color: var(--text-2);
+    border-radius: var(--r-sm);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .theme-tabs button:hover { color: var(--text-1); border-color: var(--border-strong); }
+  .theme-tabs button.active {
+    color: #fff;
+    background: var(--accent);
+    border-color: var(--accent);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 32px 24px 80px;
+  }
+
+  .section-title {
+    font-family: var(--font-heading);
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    margin-bottom: 4px;
+  }
+  .section-hint {
+    font-size: 13px;
+    color: var(--text-2);
+    margin-bottom: 20px;
+  }
+
+  /* ───────── 집결 그룹 패널 ───────── */
+  .rally-panel {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    padding: 24px;
+    box-shadow: var(--shadow-md);
+  }
+  .panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+  }
+  .panel-header h3 {
+    font-family: var(--font-heading);
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .panel-header .count {
+    font-family: var(--font-mono);
+    color: var(--text-2);
+    font-size: 14px;
+    margin-left: 8px;
+    font-weight: 500;
+  }
+
+  .btn {
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 8px 14px;
+    border-radius: var(--r-sm);
+    border: 1px solid var(--border);
+    background: var(--bg-subtle);
+    color: var(--text-1);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .btn:hover { background: var(--bg-hover); border-color: var(--border-strong); }
+  .btn-primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+  .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+  .btn-warn {
+    background: var(--orange-soft);
+    border-color: color-mix(in srgb, var(--orange) 50%, transparent);
+    color: var(--orange);
+  }
+  .btn-danger {
+    background: var(--red-soft);
+    border-color: color-mix(in srgb, var(--red) 50%, transparent);
+    color: var(--red);
+  }
+
+  /* ───────── 집결 카드 ───────── */
+  .rally-list {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    list-style: none;
+  }
+  .rally-card {
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 18px;
+    transition: all 0.2s ease;
+  }
+  .rally-card.running {
+    border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+    box-shadow: var(--shadow-md), 0 0 0 3px var(--accent-soft);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--accent-soft) 60%, var(--bg-subtle)) 0%, var(--bg-subtle) 100%);
+  }
+  .card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .card-top-left { display: flex; align-items: center; gap: 10px; }
+  .card-name {
+    font-weight: 600;
+    font-size: 15px;
+  }
+  .badge {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .badge-idle {
+    background: var(--bg-hover);
+    color: var(--text-2);
+    border: 1px solid var(--border);
+  }
+  .badge-running {
+    background: var(--accent-soft);
+    color: var(--accent);
+    border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  }
+  .card-actions { display: flex; gap: 6px; }
+
+  /* 카운트다운 */
+  .countdown {
+    margin-top: 16px;
+    padding: 20px;
+    background: color-mix(in srgb, var(--bg-card) 50%, transparent);
+    border-radius: var(--r-md);
+    border: 1px solid var(--border);
+  }
+  .countdown-number {
+    font-family: var(--font-mono);
+    font-size: 72px;
+    font-weight: 700;
+    text-align: center;
+    letter-spacing: -0.03em;
+    color: var(--accent);
+    text-shadow: 0 0 24px color-mix(in srgb, var(--accent) 30%, transparent);
+    line-height: 1;
+  }
+  .countdown-next {
+    text-align: center;
+    color: var(--text-2);
+    margin-top: 8px;
+    font-size: 13px;
+  }
+  .countdown-next b { color: var(--text-1); font-weight: 600; }
+
+  /* 멤버/타임라인 */
+  .member-list {
+    list-style: none;
+    margin-top: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .member-row {
+    display: grid;
+    grid-template-columns: 56px 1fr auto;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    background: color-mix(in srgb, var(--bg-card) 50%, transparent);
+    border-radius: var(--r-sm);
+    font-size: 14px;
+    border: 1px solid transparent;
+  }
+  .member-row.fired {
+    opacity: 0.55;
+    background: color-mix(in srgb, var(--green-soft) 40%, transparent);
+    border-color: color-mix(in srgb, var(--green) 30%, transparent);
+  }
+  .member-order {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    color: var(--accent);
+    font-size: 13px;
+  }
+  .member-row.fired .member-order { color: var(--green); }
+  .member-name { font-weight: 500; }
+  .member-march {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-2);
+  }
+
+  /* 입력 */
+  .form-row {
+    margin-top: 20px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+  .input {
+    flex: 1;
+    padding: 10px 14px;
+    font-family: inherit;
+    font-size: 14px;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    color: var(--text-1);
+    transition: all 0.15s ease;
+  }
+  .input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+
+  /* 샘플 팔레트 */
+  .palette {
+    margin-top: 28px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 10px;
+  }
+  .swatch {
+    border-radius: var(--r-sm);
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .swatch-color {
+    height: 48px;
+    border-bottom: 1px solid var(--border);
+  }
+  .swatch-meta {
+    padding: 8px 10px;
+    font-size: 11px;
+    background: var(--bg-subtle);
+  }
+  .swatch-meta b { display: block; font-size: 12px; margin-bottom: 2px; }
+  .swatch-meta code {
+    font-family: var(--font-mono);
+    color: var(--text-2);
+    font-size: 10px;
+  }
+
+  /* 반응형 */
+  @media (max-width: 768px) {
+    .container { padding: 20px 14px 60px; }
+    .rally-panel { padding: 18px; }
+    .countdown-number { font-size: 56px; }
+    .member-row { grid-template-columns: 48px 1fr; gap: 8px; }
+    .member-march { grid-column: 2; margin-top: 2px; }
+  }
+</style>
+</head>
+<body class="theme-d">
+  <div class="topbar">
+    <div>
+      <h1>WOS SFC 보조 — 테마 비교 미리보기</h1>
+      <div class="subtitle">상단 버튼으로 4개 테마 즉시 전환</div>
+    </div>
+    <div class="theme-tabs">
+      <button data-theme="a">A · Anthropic</button>
+      <button data-theme="b">B · Linear</button>
+      <button data-theme="c">C · Arctic</button>
+      <button data-theme="d" class="active">D · Warm Tactical ★</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="section-title">집결 그룹 패널</div>
+    <div class="section-hint">실제 앱의 <code>RallyGroupPanel</code> + <code>RallyGroupCountdown</code> 컴포넌트 구조를 그대로 재현</div>
+
+    <section class="rally-panel">
+      <div class="panel-header">
+        <div>
+          <h3>집결 그룹<span class="count">(3/6)</span></h3>
+        </div>
+        <button class="btn btn-primary">＋ 새 그룹</button>
+      </div>
+
+      <ul class="rally-list">
+        <!-- Running card -->
+        <li class="rally-card running">
+          <div class="card-top">
+            <div class="card-top-left">
+              <span class="card-name">1번 집결그룹</span>
+              <span class="badge badge-running">running</span>
+            </div>
+            <div class="card-actions">
+              <button class="btn btn-warn">정지</button>
+              <button class="btn">집결장 편집</button>
+            </div>
+          </div>
+          <div class="countdown">
+            <div class="countdown-number">12</div>
+            <div class="countdown-next">다음 열기: <b>3번 집결장</b> (용사123)</div>
+          </div>
+          <ul class="member-list">
+            <li class="member-row fired">
+              <span class="member-order">1번</span>
+              <span class="member-name">마법사456</span>
+              <span class="member-march">행군 45초</span>
+            </li>
+            <li class="member-row fired">
+              <span class="member-order">2번</span>
+              <span class="member-name">기사단장</span>
+              <span class="member-march">행군 38초</span>
+            </li>
+            <li class="member-row">
+              <span class="member-order">3번</span>
+              <span class="member-name">용사123</span>
+              <span class="member-march">행군 28초</span>
+            </li>
+            <li class="member-row">
+              <span class="member-order">4번</span>
+              <span class="member-name">궁수99</span>
+              <span class="member-march">행군 22초</span>
+            </li>
+          </ul>
+        </li>
+
+        <!-- Idle card -->
+        <li class="rally-card">
+          <div class="card-top">
+            <div class="card-top-left">
+              <span class="card-name">2번 집결그룹</span>
+              <span class="badge badge-idle">idle</span>
+            </div>
+            <div class="card-actions">
+              <button class="btn">시작</button>
+              <button class="btn">집결장 편집</button>
+              <button class="btn btn-danger">삭제</button>
+            </div>
+          </div>
+          <ul class="member-list">
+            <li class="member-row">
+              <span class="member-order">1번</span>
+              <span class="member-name">성기사</span>
+              <span class="member-march">행군 40초</span>
+            </li>
+            <li class="member-row">
+              <span class="member-order">2번</span>
+              <span class="member-name">어쎄신</span>
+              <span class="member-march">행군 35초</span>
+            </li>
+          </ul>
+        </li>
+
+        <!-- Empty card -->
+        <li class="rally-card">
+          <div class="card-top">
+            <div class="card-top-left">
+              <span class="card-name">3번 집결그룹</span>
+              <span class="badge badge-idle">idle</span>
+            </div>
+            <div class="card-actions">
+              <button class="btn" disabled style="opacity:0.5;cursor:not-allowed">시작</button>
+              <button class="btn">집결장 편집</button>
+              <button class="btn btn-danger">삭제</button>
+            </div>
+          </div>
+          <ul class="member-list">
+            <li class="member-row" style="justify-content:center;text-align:center;display:block;color:var(--text-3);font-size:13px">집결장 없음</li>
+          </ul>
+        </li>
+      </ul>
+
+      <div class="form-row">
+        <input class="input" placeholder="행군 시간 초 입력 (1~600)" value="45" />
+        <button class="btn btn-primary">저장</button>
+        <button class="btn">취소</button>
+      </div>
+    </section>
+
+    <div class="section-title" style="margin-top:40px">색상 팔레트</div>
+    <div class="section-hint">현재 선택된 테마의 핵심 컬러 토큰</div>
+    <div class="palette" id="palette"></div>
+  </div>
+
+<script>
+  const tabs = document.querySelectorAll('.theme-tabs button');
+  tabs.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const t = btn.dataset.theme;
+      document.body.className = 'theme-' + t;
+      tabs.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      renderPalette();
+    });
+  });
+
+  function renderPalette() {
+    const s = getComputedStyle(document.body);
+    const tokens = [
+      ['배경', '--bg-page'],
+      ['카드', '--bg-card'],
+      ['서브', '--bg-subtle'],
+      ['강조', '--accent'],
+      ['텍스트', '--text-1'],
+      ['보더', '--border'],
+      ['성공', '--green'],
+      ['경고', '--orange'],
+      ['위험', '--red'],
+    ];
+    const pal = document.getElementById('palette');
+    pal.innerHTML = tokens.map(([label, v]) => {
+      const color = s.getPropertyValue(v).trim();
+      return `<div class="swatch">
+        <div class="swatch-color" style="background:${color}"></div>
+        <div class="swatch-meta"><b>${label}</b><code>${v}: ${color}</code></div>
+      </div>`;
+    }).join('');
+  }
+  renderPalette();
+</script>
+</body>
+</html>

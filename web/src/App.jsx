@@ -18,6 +18,7 @@ export default function App() {
   const user      = useStore((s) => s.user);
   const setUser   = useStore((s) => s.setUser);
   const clearUser = useStore((s) => s.clearUser);
+  const theme     = useStore((s) => s.theme);
   const { changeLang } = useI18n();
   const [activeTab, setActiveTab] = useState('battle');
   const [hydrating, setHydrating] = useState(true);
@@ -26,6 +27,13 @@ export default function App() {
     useResizable('wos-sidebar-width', 200, { min: 150, max: 450 });
 
   useSocket(user);
+
+  // 테마 클래스를 <body>에 적용 — CSS 변수 cascade 기반 전역 전환
+  useEffect(() => {
+    const THEME_CLASSES = ['theme-spring', 'theme-anthropic', 'theme-dark'];
+    document.body.classList.remove(...THEME_CLASSES);
+    document.body.classList.add(`theme-${theme}`);
+  }, [theme]);
 
   useEffect(() => {
     (async () => {
