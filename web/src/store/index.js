@@ -24,6 +24,17 @@ function _initTtsMuted() {
   }
 }
 
+// 테마 초기값: localStorage 우선, 없으면 'spring' (기본 벚꽃)
+export const THEMES = ['spring', 'anthropic', 'dark'];
+function _initTheme() {
+  try {
+    const t = localStorage.getItem('wos-theme');
+    return THEMES.includes(t) ? t : 'spring';
+  } catch {
+    return 'spring';
+  }
+}
+
 export const useStore = create((set) => ({
   // 인증 (토큰은 httpOnly 쿠키로 관리 — JS에서 접근 불가)
   user: null,
@@ -47,6 +58,9 @@ export const useStore = create((set) => ({
   ttsVolume: _initTtsVolume(),
   // TTS 음소거 플래그 (볼륨과 독립 — 스피커 아이콘 토글용)
   ttsMuted: _initTtsMuted(),
+
+  // 테마: 'spring' | 'anthropic' | 'dark' — body.theme-* 클래스로 적용
+  theme: _initTheme(),
 
   // Actions
   setUser: (user) => set({ user }),
@@ -105,5 +119,10 @@ export const useStore = create((set) => ({
     const muted = !!v;
     try { localStorage.setItem('wos-tts-muted', muted ? '1' : '0'); } catch { /* 무시 */ }
     set({ ttsMuted: muted });
+  },
+  setTheme: (t) => {
+    const theme = THEMES.includes(t) ? t : 'spring';
+    try { localStorage.setItem('wos-theme', theme); } catch { /* 무시 */ }
+    set({ theme });
   },
 }));

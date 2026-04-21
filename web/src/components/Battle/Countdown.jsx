@@ -26,7 +26,8 @@ function RingProgress({ progress, secs, total }) {
                  : secs <= 30   ? 'countdown-number countdown-warning'
                  :                'countdown-number';
 
-  const ringStroke = secs === null   ? '#e9d5ff'
+  // idle 상태는 CSS 변수 --cd-ring-idle 사용 (테마별 오버라이드)
+  const ringStroke = secs === null   ? 'var(--cd-ring-idle, #e9d5ff)'
                    : secs <= 10     ? 'url(#cd-grad-danger)'
                    : secs <= 30     ? 'url(#cd-grad-warning)'
                    :                  'url(#cd-grad-normal)';
@@ -37,9 +38,10 @@ function RingProgress({ progress, secs, total }) {
     <div className="cd-ring-wrap" style={{ position: 'relative', width: size, height: size }}>
       <svg width={size} height={size} style={{ display: 'block' }}>
         <defs>
+          {/* normal 그라데이션은 테마 CSS 변수로 — Spring(핑크/퍼플), Anthropic(코랄/겨자), Dark(인디고/바이올렛) */}
           <linearGradient id="cd-grad-normal" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#ec4899" />
-            <stop offset="100%" stopColor="#a855f7" />
+            <stop offset="0%"   style={{ stopColor: 'var(--cd-grad-1, #ec4899)' }} />
+            <stop offset="100%" style={{ stopColor: 'var(--cd-grad-2, #a855f7)' }} />
           </linearGradient>
           <linearGradient id="cd-grad-warning" x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stopColor="#fbbf24" />
@@ -51,7 +53,7 @@ function RingProgress({ progress, secs, total }) {
           </linearGradient>
         </defs>
         <circle cx={center} cy={center} r={RADIUS}
-          fill="none" stroke="#f3e8ff" strokeWidth={STROKE} />
+          fill="none" stroke="var(--cd-ring-bg, #f3e8ff)" strokeWidth={STROKE} />
         <circle cx={center} cy={center} r={RADIUS}
           fill="none"
           stroke={ringStroke}
