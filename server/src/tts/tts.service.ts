@@ -74,11 +74,23 @@ export class TtsService implements OnModuleInit {
     return path.join(this.cacheDir, `${lang}-${key}.mp3`);
   }
 
-  // 파일 반환 — 없으면 생성, 동일 키 동시 요청은 하나의 Promise로 합침
+  // 파일 반환 — 없거나 손상(< MIN_MP3_BYTES) 파일이면 재생성.
+  // 동일 키 동시 요청은 하나의 Promise로 합침.
+  //
+  // 기존 파일 크기 검증이 필요한 이유:
+  //   Google TTS가 간혹 거의 빈 MP3(무음)를 반환해 800~900 bytes 파일이 캐시에 남음.
+  //   generateFile 쪽 가드(MIN_MP3_BYTES)가 추가되기 이전에 생성된 파일 또는
+  //   디스크 쓰기 중 중단된 파일이 그대로 유지되어 영구적으로 해당 숫자가
+  //   "재생은 되지만 소리가 안 나는" 상태가 된다. exists + size >= MIN 두 조건으로
+  //   한 번 걸러낸 뒤 못 통과하면 재생성.
   async ensureFile(lang: string, key: string, text: string): Promise<string> {
     const fp = this.filePath(lang, key);
-    const exists = await fsPromises.access(fp).then(() => true).catch(() => false);
-    if (exists) return fp;
+    const healthy = await fsPromises.stat(fp)
+      .then((st) => st.isFile() && st.size >= TtsService.MIN_MP3_BYTES)
+      .catch(() => false);
+    if (healthy) return fp;
+    // 손상 파일이 있으면 삭제 (재생성 경로로 진입) — race-safe: ENOENT 무시
+    await fsPromises.unlink(fp).catch(() => {});
 
     const lockKey = `${lang}-${key}`;
     if (this.pendingFiles.has(lockKey)) {
