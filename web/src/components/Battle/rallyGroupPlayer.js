@@ -234,9 +234,13 @@ export async function scheduleRallyCountdown({ startedAtServerMs, fireOffsets, t
     schedulePlay(lang, `captain_${f.orderIndex}`, ctxAnchor + f.offsetMs / 1000, myId);
   }
 
-  // 초당 카운팅
+  // 초당 카운팅.
+  // t<=3 은 프리카운트(T-3,T-2,T-1)에서 같은 음성 "3","2","1"을 이미 예약했으므로
+  // 중복 재생을 방지하기 위해 skip. (T-1에 "1" 재생 직후 T+1에 또 "1"이 들려
+  // "프리카운트가 중복된다"는 사용자 보고의 근본 원인.)
   if (maxOffsetSec > 0) {
     for (let t = 1; t <= maxOffsetSec; t++) {
+      if (t <= 3) continue;
       if (captainSeconds.has(t)) continue;
       schedulePlay(lang, String(t), ctxAnchor + t, myId);
     }
