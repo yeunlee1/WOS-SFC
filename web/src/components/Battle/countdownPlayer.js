@@ -152,14 +152,18 @@ export async function scheduleCountdown({ totalSeconds, startedAt, timeOffset, l
   dispatchedLog.length = 0;
 
   // 첫 슬롯 버퍼 워밍업 — 최대 500ms.
-  // 첫 슬롯은 fireAt ≈ 1000ms 에 발화되므로, 이 구간 안에 버퍼가 도착하지 않으면
-  // setTimeout 콜백에서 .then 대기 동안 발화가 밀린다 (10초 카운트다운에서
-  // "9"가 849ms 늦게 나온 감독관 보고의 근본 원인).
-  // Promise.race 로 워밍업하되 500ms 초과 시 즉시 스케줄링으로 진행해 "20부터
-  // 센다" 류의 전체 블로킹 버그 재발을 방지한다. 동시에 남은 모든 키의 로드도
+  // 첫 슬롯은 fireAt ≈ 0ms(= "totalSeconds" 숫자) 에 발화되므로, 이 구간 안에 버퍼가
+  // 도착하지 않으면 setTimeout 콜백에서 .then 대기 동안 발화가 밀린다.
+  // Promise.race 로 워밍업하되 500ms 초과 시 즉시 스케줄링으로 진행해 "20부터 센다"
+  // 류의 전체 블로킹 버그 재발을 방지한다. 동시에 남은 모든 키의 로드도
   // 백그라운드로 시작해 후속 슬롯 준비를 앞당긴다.
-  const firstSlot = totalSeconds - 1;
-  for (let n = totalSeconds - 1; n >= 1; n--) loadBuffer(lang, n);
+  //
+  // 루프 시작값 = totalSeconds (첫 숫자) : 30초 카운트다운이면 "30"부터 읽어야
+  // 사용자 기대와 일치. 과거 구현(n = totalSeconds - 1)은 "30"을 누락하고
+  // "29"부터 시작해, 동시 호출되는 speak('start')의 "준비해주세요"(1.3초)와
+  // 1초 후의 "29"가 겹쳐 "이십N부터 센다"로 들리는 원인.
+  const firstSlot = totalSeconds;
+  for (let n = totalSeconds; n >= 1; n--) loadBuffer(lang, n);
   await Promise.race([
     loadBuffer(lang, firstSlot),
     new Promise((r) => setTimeout(r, 500)),
@@ -171,7 +175,7 @@ export async function scheduleCountdown({ totalSeconds, startedAt, timeOffset, l
   let scheduled = 0;
   let skippedPastDue = 0;
 
-  for (let n = totalSeconds - 1; n >= 1; n--) {
+  for (let n = totalSeconds; n >= 1; n--) {
     const playServerTime = startedAt + (totalSeconds - n) * 1000;
     const delayMs = playServerTime - serverNow;
 

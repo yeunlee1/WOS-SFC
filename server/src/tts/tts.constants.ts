@@ -20,8 +20,27 @@ export const GOOGLE_VOICES: Record<string, { languageCode: string; name: string 
 
 // 카운트다운 문구 (서비스·컨트롤러 공통 사용)
 export const PHRASES: Record<string, Record<string, string>> = {
-  start:  { ko: '준비해주세요.', en: 'Get ready.', ja: '準備してください。', zh: '请准备。' },
-  stop:   { ko: '카운트다운이 중지되었습니다.', en: 'Countdown stopped.', ja: 'カウントダウンが中止されました。', zh: '倒计时已停止。' },
+  start:      { ko: '준비해주세요.', en: 'Get ready.', ja: '準備してください。', zh: '请准备。' },
+  stop:       { ko: '카운트다운이 중지되었습니다.', en: 'Countdown stopped.', ja: 'カウントダウンが中止されました。', zh: '倒计时已停止。' },
+  captain_1:  { ko: '1번 집결장', en: 'Captain 1', ja: '集結場1番', zh: '集结场1号' },
+  captain_2:  { ko: '2번 집결장', en: 'Captain 2', ja: '集結場2番', zh: '集结场2号' },
+  captain_3:  { ko: '3번 집결장', en: 'Captain 3', ja: '集結場3番', zh: '集结场3号' },
+  captain_4:  { ko: '4번 집결장', en: 'Captain 4', ja: '集結場4番', zh: '集结场4号' },
+  captain_5:  { ko: '5번 집결장', en: 'Captain 5', ja: '集結場5番', zh: '集结场5号' },
+  captain_6:  { ko: '6번 집결장', en: 'Captain 6', ja: '集結場6番', zh: '集结场6号' },
+  captain_7:  { ko: '7번 집결장', en: 'Captain 7', ja: '集結場7番', zh: '集结场7号' },
+  captain_8:  { ko: '8번 집결장', en: 'Captain 8', ja: '集結場8番', zh: '集结场8号' },
+  captain_9:  { ko: '9번 집결장', en: 'Captain 9', ja: '集結場9番', zh: '集结场9号' },
+  captain_10: { ko: '10번 집결장', en: 'Captain 10', ja: '集結場10番', zh: '集结场10号' },
+
+  // 집결 그룹 카운트다운 시작 안내 — "N번 집결그룹 집결 시작합니다"
+  // displayOrder 1~6에 대응. COUNTDOWN_LEAD_MS(7s) 여유 내에서 프리카운트(3,2,1) 전에 재생.
+  rally_start_1: { ko: '1번 집결그룹 집결 시작합니다.', en: 'Rally group 1 starting.',    ja: '集結グループ1番、集結開始します。', zh: '集结组1号开始集结。' },
+  rally_start_2: { ko: '2번 집결그룹 집결 시작합니다.', en: 'Rally group 2 starting.',    ja: '集結グループ2番、集結開始します。', zh: '集结组2号开始集结。' },
+  rally_start_3: { ko: '3번 집결그룹 집결 시작합니다.', en: 'Rally group 3 starting.',    ja: '集結グループ3番、集結開始します。', zh: '集结组3号开始集结。' },
+  rally_start_4: { ko: '4번 집결그룹 집결 시작합니다.', en: 'Rally group 4 starting.',    ja: '集結グループ4番、集結開始します。', zh: '集结组4号开始集结。' },
+  rally_start_5: { ko: '5번 집결그룹 집결 시작합니다.', en: 'Rally group 5 starting.',    ja: '集結グループ5番、集結開始します。', zh: '集结组5号开始集结。' },
+  rally_start_6: { ko: '6번 집결그룹 집결 시작합니다.', en: 'Rally group 6 starting.',    ja: '集結グループ6番、集結開始します。', zh: '集结组6号开始集结。' },
 };
 
 // 숫자 범위

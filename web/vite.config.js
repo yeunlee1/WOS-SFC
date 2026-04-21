@@ -4,7 +4,7 @@ import react from '@vitejs/plugin-react';
 const API_PATHS = [
   '/auth', '/notices', '/alliance-notices', '/rallies', '/members', '/boards',
   '/uploads', '/translations', '/users', '/translate', '/tts-audio', '/time', '/admin',
-  '/me',
+  '/me', '/rally-groups',
 ];
 
 export default defineConfig({

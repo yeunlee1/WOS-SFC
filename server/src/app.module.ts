@@ -13,6 +13,9 @@ import { Member } from './members/member.entity';
 import { BoardPost } from './boards/board-post.entity';
 import { Translation } from './translations/translation.entity';
 import { AllianceNotice } from './alliance-notices/alliance-notice.entity';
+import { RallyGroup } from './rally-groups/rally-group.entity';
+import { RallyGroupMember } from './rally-groups/rally-group-member.entity';
+import { UserBattleSettings } from './users/user-battle-settings.entity';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { ChatModule } from './chat/chat.module';
@@ -27,6 +30,7 @@ import { TtsModule } from './tts/tts.module';
 import { AdminModule } from './admin/admin.module';
 import { AllianceNoticesModule } from './alliance-notices/alliance-notices.module';
 import { MeModule } from './me/me.module';
+import { RallyGroupsModule } from './rally-groups/rally-groups.module';
 
 @Module({
   imports: [
@@ -41,7 +45,7 @@ import { MeModule } from './me/me.module';
         username: configService.get<string>('DATABASE_USER'),
         password: configService.get<string>('DATABASE_PASSWORD'),
         database: configService.get<string>('DATABASE_NAME'),
-        entities: [User, Message, Notice, Rally, Member, BoardPost, Translation, AllianceNotice],
+        entities: [User, Message, Notice, Rally, Member, BoardPost, Translation, AllianceNotice, RallyGroup, RallyGroupMember, UserBattleSettings],
         synchronize: configService.get<string>('NODE_ENV') !== 'production',
       }),
     }),
@@ -50,7 +54,8 @@ import { MeModule } from './me/me.module';
       exclude: ['/auth/*path', '/notices/*path', '/rallies/*path', '/members/*path',
                 '/boards/*path', '/translations/*path', '/users/*path',
                 '/translate/*path', '/tts-audio/*path', '/admin/*path',
-                '/alliance-notices/*path', '/me/*path', '/time', '/socket.io/*path',
+                '/alliance-notices/*path', '/me/*path', '/rally-groups/*path',
+                '/time', '/socket.io/*path',
                 '/uploads/*path'],
       serveStaticOptions: { fallthrough: false },
     }),
@@ -73,6 +78,7 @@ import { MeModule } from './me/me.module';
     AdminModule,
     AllianceNoticesModule,
     MeModule,
+    RallyGroupsModule,
   ],
   controllers: [AppController],
 })

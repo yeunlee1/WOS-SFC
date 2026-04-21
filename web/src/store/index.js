@@ -39,6 +39,10 @@ export const useStore = create((set) => ({
   allianceNotices: { KOR: [], NSL: [], JKY: [], GPX: [], UFO: [] },
   countdown: { active: false, startedAt: 0, totalSeconds: 0 },
 
+  // Rally Group Sync
+  rallyGroups: [],
+  rallyCountdowns: {}, // groupId → { startedAtServerMs, fireOffsets }
+
   // TTS 볼륨 (0~1, 기본 0.3 = 30%)
   ttsVolume: _initTtsVolume(),
   // TTS 음소거 플래그 (볼륨과 독립 — 스피커 아이콘 토글용)
@@ -59,6 +63,31 @@ export const useStore = create((set) => ({
     allianceNotices: { ...state.allianceNotices, [alliance]: notices },
   })),
   setCountdown:  (countdown)  => set({ countdown }),
+
+  setRallyGroups: (rallyGroups) => set({ rallyGroups }),
+  upsertRallyGroup: (group) => set((s) => {
+    const idx = s.rallyGroups.findIndex((g) => g.id === group.id);
+    if (idx < 0) return { rallyGroups: [...s.rallyGroups, group] };
+    const next = s.rallyGroups.slice();
+    next[idx] = group;
+    return { rallyGroups: next };
+  }),
+  removeRallyGroup: (groupId) => set((s) => {
+    const nextCountdowns = { ...s.rallyCountdowns };
+    delete nextCountdowns[groupId];
+    return {
+      rallyGroups: s.rallyGroups.filter((g) => g.id !== groupId),
+      rallyCountdowns: nextCountdowns,
+    };
+  }),
+  setRallyCountdown: (groupId, payload) => set((s) => ({
+    rallyCountdowns: { ...s.rallyCountdowns, [groupId]: payload },
+  })),
+  clearRallyCountdown: (groupId) => set((s) => {
+    const next = { ...s.rallyCountdowns };
+    delete next[groupId];
+    return { rallyCountdowns: next };
+  }),
   setTtsVolume: (v) => {
     const n = Number(v);
     const clamped = Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : 0.3;

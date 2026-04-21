@@ -207,15 +207,18 @@ export default function Countdown() {
   }, [timeOffset, active, startedAt]);
 
   // start/stop 멘트
+  // stop 멘트만 재생. start 멘트("준비해주세요")는 제거 —
+  // countdownPlayer가 이제 "totalSeconds"(예: "30")부터 스케줄하므로
+  // 카운트다운 시작 시점에 첫 숫자 발화가 그 역할을 대체한다.
+  // start 멘트(1.3초) + 1초 후 첫 숫자(0.96초)가 겹쳐 "이십N부터 센다"로
+  // 들리는 원인 제거.
   useEffect(() => {
     if (!initializedRef.current) {
       initializedRef.current = true;
       prevActiveRef.current  = active;
       return;
     }
-    if (active && !prevActiveRef.current) {
-      speak('start', lang);
-    } else if (!active && prevActiveRef.current) {
+    if (!active && prevActiveRef.current) {
       speak('stop', lang);
     }
     prevActiveRef.current = active;

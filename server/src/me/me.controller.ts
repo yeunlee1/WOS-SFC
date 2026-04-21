@@ -1,12 +1,16 @@
 import { Body, Controller, Get, Put, Req, UseGuards, BadRequestException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { UsersService } from '../users/users.service';
+import { RallyGroupsService } from '../rally-groups/rally-groups.service';
 import { UpdateBattleSettingsDto } from './dto/update-battle-settings.dto';
 
 @Controller('me')
 @UseGuards(AuthGuard('jwt'))
 export class MeController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly rallyGroupsService: RallyGroupsService,
+  ) {}
 
   @Get('battle-settings')
   async getBattleSettings(@Req() req: any) {
@@ -25,6 +29,10 @@ export class MeController {
     }
     const normalized = value ?? null;
     await this.usersService.updateMarchSeconds(req.user.id, normalized);
+
+    // marchSeconds 변경 → 해당 유저가 속한 모든 그룹의 순서 재계산
+    await this.rallyGroupsService.reorderAllForUser(req.user.id);
+
     return { marchSeconds: normalized };
   }
 }

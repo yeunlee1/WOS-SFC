@@ -74,11 +74,23 @@ export class TtsService implements OnModuleInit {
     return path.join(this.cacheDir, `${lang}-${key}.mp3`);
   }
 
-  // 파일 반환 — 없으면 생성, 동일 키 동시 요청은 하나의 Promise로 합침
+  // 파일 반환 — 없거나 손상(< MIN_MP3_BYTES) 파일이면 재생성.
+  // 동일 키 동시 요청은 하나의 Promise로 합침.
+  //
+  // 기존 파일 크기 검증이 필요한 이유:
+  //   Google TTS가 간혹 거의 빈 MP3(무음)를 반환해 800~900 bytes 파일이 캐시에 남음.
+  //   generateFile 쪽 가드(MIN_MP3_BYTES)가 추가되기 이전에 생성된 파일 또는
+  //   디스크 쓰기 중 중단된 파일이 그대로 유지되어 영구적으로 해당 숫자가
+  //   "재생은 되지만 소리가 안 나는" 상태가 된다. exists + size >= MIN 두 조건으로
+  //   한 번 걸러낸 뒤 못 통과하면 재생성.
   async ensureFile(lang: string, key: string, text: string): Promise<string> {
     const fp = this.filePath(lang, key);
-    const exists = await fsPromises.access(fp).then(() => true).catch(() => false);
-    if (exists) return fp;
+    const healthy = await fsPromises.stat(fp)
+      .then((st) => st.isFile() && st.size >= TtsService.MIN_MP3_BYTES)
+      .catch(() => false);
+    if (healthy) return fp;
+    // 손상 파일이 있으면 삭제 (재생성 경로로 진입) — race-safe: ENOENT 무시
+    await fsPromises.unlink(fp).catch(() => {});
 
     const lockKey = `${lang}-${key}`;
     if (this.pendingFiles.has(lockKey)) {
@@ -94,25 +106,50 @@ export class TtsService implements OnModuleInit {
   }
 
   // Google TTS가 간혹 거의 빈 MP3(무음)를 반환하는 것을 감지하기 위한 최소 바이트.
-  // 관찰값: 손상 파일 ≤900~3000 bytes / 정상 파일 3000+bytes.
-  // 짧은 문자열의 정상 오디오도 2KB 이상 나오므로 1000 bytes 미만은 손상으로 간주.
+  // 관찰값: 손상 파일 ≤900 bytes / 정상 파일 ≥1600 bytes.
+  // 짧은 한국어 1음절(예: "오", "팔") 정상 발화도 최소 2KB 이상이므로 1000 bytes 미만은 손상으로 간주.
   private static readonly MIN_MP3_BYTES = 1000;
 
-  // 실제 파일 생성
+  // Google TTS 무음 반환에 대한 최대 재시도 횟수.
+  // 관찰된 결함: Chirp3-HD/Wavenet 모델이 짧은 1음절 cardinal SSML 합성에서
+  // 간헐적으로 거의 빈 MP3를 반환. 모델 stochastic 특성이라 재호출 시 정상 응답 확률 높음.
+  private static readonly MAX_TTS_RETRIES = 3;
+
+  // 실제 파일 생성 — 무음 응답 시 재시도(exponential backoff).
+  // 모든 시도 실패 시 throw → ensureFile이 에러 전파, 캐시에 손상 파일 저장되지 않음.
   private async generateFile(lang: string, key: string, fp: string, text: string): Promise<string> {
     const tmpFp = `${fp}.tmp`;
-    try {
-      const buf = await this.fetchFromGoogleTts(lang, key, text);
-      if (buf.length < TtsService.MIN_MP3_BYTES) {
-        throw new Error(`TTS 응답이 비정상적으로 작음 (${buf.length} bytes) — 무음 가능성`);
+    let lastError: Error | null = null;
+
+    for (let attempt = 1; attempt <= TtsService.MAX_TTS_RETRIES; attempt++) {
+      try {
+        const buf = await this.fetchFromGoogleTts(lang, key, text);
+        if (buf.length < TtsService.MIN_MP3_BYTES) {
+          lastError = new Error(
+            `TTS 응답 ${buf.length} bytes — 무음 가능성 (attempt ${attempt}/${TtsService.MAX_TTS_RETRIES})`,
+          );
+          this.logger.warn(
+            `[${lang}/${key}] 무음 의심 ${buf.length}b — 재시도 ${attempt}/${TtsService.MAX_TTS_RETRIES}`,
+          );
+          if (attempt < TtsService.MAX_TTS_RETRIES) {
+            // exponential backoff: 500ms, 1000ms, 1500ms (Google TTS rate limit 배려)
+            await new Promise((r) => setTimeout(r, 500 * attempt));
+          }
+          continue;
+        }
+        await fsPromises.writeFile(tmpFp, buf);
+        await fsPromises.rename(tmpFp, fp);
+        return fp;
+      } catch (e) {
+        lastError = e as Error;
+        await fsPromises.unlink(tmpFp).catch(() => {});
+        if (attempt < TtsService.MAX_TTS_RETRIES) {
+          await new Promise((r) => setTimeout(r, 500 * attempt));
+        }
       }
-      await fsPromises.writeFile(tmpFp, buf);
-      await fsPromises.rename(tmpFp, fp);
-      return fp;
-    } catch (e) {
-      await fsPromises.unlink(tmpFp).catch(() => {});
-      throw e;
     }
+
+    throw lastError ?? new Error(`[${lang}/${key}] 생성 실패 (${TtsService.MAX_TTS_RETRIES}회 재시도 소진)`);
   }
 
   fileExists(lang: string, key: string): boolean {

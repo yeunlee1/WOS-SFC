@@ -59,144 +59,6 @@ export default function Header({ activeTab, onTabChange, onToggleOnline }) {
 
   const allianceColor = ALLIANCE_COLORS[user?.allianceName] || '#64748b';
 
-  // 데스크톱 헤더 우측 전용 — 드로어는 별도 구조 (DrawerContent)
-  function DesktopUserControls() {
-    if (!user) return null;
-    return (
-      <>
-        <span className="user-alliance-badge" style={{ background: allianceColor }}>
-          {user.allianceName}
-        </span>
-        <span className="user-nickname">{user.nickname}</span>
-        <span className="user-role-badge">{roleLabel}</span>
-        <select
-          className="lang-select"
-          value={lang}
-          onChange={(e) => changeLang(e.target.value)}
-        >
-          {SUPPORTED_LANGS.map((l) => (
-            <option key={l.code} value={l.code}>{l.flag} {l.label}</option>
-          ))}
-        </select>
-        <span
-          className="time-sync-badge"
-          title={`시간 동기화 RTT: ${Math.round(timeSyncRtt)}ms`}
-          aria-label={`시간 동기화 RTT ${Math.round(timeSyncRtt)}밀리초`}
-        >
-          {_rttIcon(timeSyncRtt)} ±{Math.round(timeSyncRtt)}ms
-        </span>
-        <div className="tts-volume-control">
-          <button
-            type="button"
-            className="tts-mute-btn"
-            onClick={() => {
-              const next = !ttsMuted;
-              setTtsMuted(next);
-              // 음소거 ON 시: 이미 재생 중인 숫자도 즉시 정지 (사용자 체감)
-              if (next) stopAllTts();
-            }}
-            aria-label={ttsMuted ? 'TTS 음소거 해제' : 'TTS 음소거'}
-            aria-pressed={ttsMuted}
-            title={ttsMuted ? '음소거 해제' : '음소거'}
-          >
-            {ttsMuted || ttsVolume === 0 ? '🔇' : '🔊'}
-          </button>
-          <input
-            type="range" min="0" max="100" step="1"
-            value={Math.round(ttsVolume * 100)}
-            onChange={(e) => {
-              const v = Number(e.target.value) / 100;
-              setTtsVolume(v);
-              // 슬라이더를 0까지 내리면 현재 재생 중인 오디오도 즉시 정지
-              if (v <= 0) stopAllTts();
-            }}
-            aria-label="TTS 볼륨"
-            aria-valuetext={`${Math.round(ttsVolume * 100)}%${ttsMuted ? ' (음소거)' : ''}`}
-            disabled={ttsMuted}
-          />
-          <span className="tts-volume-label">
-            {ttsMuted ? '음소거' : `${Math.round(ttsVolume * 100)}%`}
-          </span>
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm"
-            onClick={() => speak('start', lang, { force: true })}
-            aria-label="TTS 테스트"
-            disabled={ttsMuted || ttsVolume === 0}
-          >테스트</button>
-        </div>
-        <button
-          className="mobile-online-toggle btn btn-sm"
-          onClick={onToggleOnline}
-        >
-          👥 {onlineUsers.length}
-        </button>
-        <button className="btn btn-sm" id="logout-btn" onClick={handleLogout}>
-          {t('logout')}
-        </button>
-      </>
-    );
-  }
-
-  // 모바일 드로어 전용 — 프로필/설정/액션 3섹션 구조
-  function DrawerContent({ onClose }) {
-    if (!user) return null;
-    const initial = (user.nickname?.[0] || '?').toUpperCase();
-    return (
-      <>
-        <header className="drawer-profile">
-          <div className="drawer-avatar" style={{ background: allianceColor }}>
-            {initial}
-          </div>
-          <div className="drawer-profile-text">
-            <div className="drawer-nickname">{user.nickname}</div>
-            <div className="drawer-meta">
-              <span className="drawer-alliance-badge" style={{ background: allianceColor }}>
-                {user.allianceName}
-              </span>
-              <span className="drawer-role">{roleLabel}</span>
-            </div>
-          </div>
-          <button className="drawer-close-btn" onClick={onClose} aria-label="close">×</button>
-        </header>
-
-        <section className="drawer-section">
-          <div className="drawer-section-label">설정</div>
-          <label className="drawer-field-label" htmlFor="drawer-lang">언어</label>
-          <select
-            id="drawer-lang"
-            className="drawer-lang-select"
-            value={lang}
-            onChange={(e) => { changeLang(e.target.value); onClose(); }}
-          >
-            {SUPPORTED_LANGS.map((l) => (
-              <option key={l.code} value={l.code}>{l.flag} {l.label}</option>
-            ))}
-          </select>
-        </section>
-
-        <section className="drawer-section">
-          <div className="drawer-section-label">액션</div>
-          <button
-            className="drawer-action-btn"
-            onClick={() => { onToggleOnline(); onClose(); }}
-          >
-            <span className="drawer-action-icon">👥</span>
-            <span className="drawer-action-text">온라인</span>
-            <span className="drawer-action-count">{onlineUsers.length}</span>
-          </button>
-          <button
-            className="drawer-action-btn drawer-action-logout"
-            onClick={() => { handleLogout(); onClose(); }}
-          >
-            <span className="drawer-action-icon">🚪</span>
-            <span className="drawer-action-text">{t('logout')}</span>
-          </button>
-        </section>
-      </>
-    );
-  }
-
   return (
     <header className="app-header">
       <div className="header-top">
@@ -204,9 +66,83 @@ export default function Header({ activeTab, onTabChange, onToggleOnline }) {
           <span className="app-title">⚔️ WOS SFC</span>
           <span className="world-clock">{utcTime}</span>
         </div>
+
+        {/* 데스크톱 헤더 우측 — 인라인 컴포넌트 금지: 드래그 중 리마운트로 슬라이더 끊김 */}
         <div className="header-right" id="user-info">
-          <DesktopUserControls />
+          {user && (
+            <>
+              <span className="user-alliance-badge" style={{ background: allianceColor }}>
+                {user.allianceName}
+              </span>
+              <span className="user-nickname">{user.nickname}</span>
+              <span className="user-role-badge">{roleLabel}</span>
+              <select
+                className="lang-select"
+                value={lang}
+                onChange={(e) => changeLang(e.target.value)}
+              >
+                {SUPPORTED_LANGS.map((l) => (
+                  <option key={l.code} value={l.code}>{l.flag} {l.label}</option>
+                ))}
+              </select>
+              <span
+                className="time-sync-badge"
+                title={`시간 동기화 RTT: ${Math.round(timeSyncRtt)}ms`}
+                aria-label={`시간 동기화 RTT ${Math.round(timeSyncRtt)}밀리초`}
+              >
+                {_rttIcon(timeSyncRtt)} ±{Math.round(timeSyncRtt)}ms
+              </span>
+              <div className="tts-volume-control">
+                <button
+                  type="button"
+                  className="tts-mute-btn"
+                  onClick={() => {
+                    const next = !ttsMuted;
+                    setTtsMuted(next);
+                    if (next) stopAllTts();
+                  }}
+                  aria-label={ttsMuted ? 'TTS 음소거 해제' : 'TTS 음소거'}
+                  aria-pressed={ttsMuted}
+                  title={ttsMuted ? '음소거 해제' : '음소거'}
+                >
+                  {ttsMuted || ttsVolume === 0 ? '🔇' : '🔊'}
+                </button>
+                <input
+                  type="range" min="0" max="100" step="1"
+                  value={ttsMuted ? 0 : Math.round(ttsVolume * 100)}
+                  onChange={(e) => {
+                    const v = Number(e.target.value) / 100;
+                    setTtsVolume(v);
+                    if (v <= 0) stopAllTts();
+                  }}
+                  aria-label="TTS 볼륨"
+                  aria-valuenow={ttsMuted ? 0 : Math.round(ttsVolume * 100)}
+                  aria-valuetext={ttsMuted ? `음소거 (기억된 볼륨 ${Math.round(ttsVolume * 100)}%)` : `${Math.round(ttsVolume * 100)}%`}
+                />
+                <span className="tts-volume-label">
+                  {ttsMuted ? '음소거' : `${Math.round(ttsVolume * 100)}%`}
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => speak('start', lang, { force: true })}
+                  aria-label="TTS 테스트"
+                  disabled={ttsMuted || ttsVolume === 0}
+                >테스트</button>
+              </div>
+              <button
+                className="mobile-online-toggle btn btn-sm"
+                onClick={onToggleOnline}
+              >
+                👥 {onlineUsers.length}
+              </button>
+              <button className="btn btn-sm" id="logout-btn" onClick={handleLogout}>
+                {t('logout')}
+              </button>
+            </>
+          )}
         </div>
+
         <button
           className="mobile-menu-toggle"
           onClick={() => setMenuOpen(true)}
@@ -219,7 +155,59 @@ export default function Header({ activeTab, onTabChange, onToggleOnline }) {
       {createPortal(
         <>
           <aside className={`header-drawer${isMenuOpen ? ' header-drawer--open' : ''}`}>
-            <DrawerContent onClose={() => setMenuOpen(false)} />
+            {user && (
+              <>
+                <header className="drawer-profile">
+                  <div className="drawer-avatar" style={{ background: allianceColor }}>
+                    {(user.nickname?.[0] || '?').toUpperCase()}
+                  </div>
+                  <div className="drawer-profile-text">
+                    <div className="drawer-nickname">{user.nickname}</div>
+                    <div className="drawer-meta">
+                      <span className="drawer-alliance-badge" style={{ background: allianceColor }}>
+                        {user.allianceName}
+                      </span>
+                      <span className="drawer-role">{roleLabel}</span>
+                    </div>
+                  </div>
+                  <button className="drawer-close-btn" onClick={() => setMenuOpen(false)} aria-label="close">×</button>
+                </header>
+
+                <section className="drawer-section">
+                  <div className="drawer-section-label">설정</div>
+                  <label className="drawer-field-label" htmlFor="drawer-lang">언어</label>
+                  <select
+                    id="drawer-lang"
+                    className="drawer-lang-select"
+                    value={lang}
+                    onChange={(e) => { changeLang(e.target.value); setMenuOpen(false); }}
+                  >
+                    {SUPPORTED_LANGS.map((l) => (
+                      <option key={l.code} value={l.code}>{l.flag} {l.label}</option>
+                    ))}
+                  </select>
+                </section>
+
+                <section className="drawer-section">
+                  <div className="drawer-section-label">액션</div>
+                  <button
+                    className="drawer-action-btn"
+                    onClick={() => { onToggleOnline(); setMenuOpen(false); }}
+                  >
+                    <span className="drawer-action-icon">👥</span>
+                    <span className="drawer-action-text">온라인</span>
+                    <span className="drawer-action-count">{onlineUsers.length}</span>
+                  </button>
+                  <button
+                    className="drawer-action-btn drawer-action-logout"
+                    onClick={() => { handleLogout(); setMenuOpen(false); }}
+                  >
+                    <span className="drawer-action-icon">🚪</span>
+                    <span className="drawer-action-text">{t('logout')}</span>
+                  </button>
+                </section>
+              </>
+            )}
           </aside>
           <div
             className={`header-overlay-left${isMenuOpen ? ' header-overlay-left--open' : ''}`}
@@ -239,7 +227,6 @@ export default function Header({ activeTab, onTabChange, onToggleOnline }) {
             {t(key)}
           </button>
         ))}
-        {/* developer 전용 관리자 탭 */}
         {user?.role === 'developer' && (
           <button
             className={`tab-btn${activeTab === 'admin' ? ' active' : ''}`}
