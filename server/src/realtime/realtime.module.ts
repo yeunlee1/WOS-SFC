@@ -4,6 +4,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { RealtimeGateway } from './realtime.gateway';
 import { ReadyNegotiationService } from './ready-negotiation.service';
+import { WsRateLimitService } from './ws-rate-limit.service';
 import { NoticesModule } from '../notices/notices.module';
 import { RalliesModule } from '../rallies/rallies.module';
 import { MembersModule } from '../members/members.module';
@@ -25,7 +26,7 @@ import { AllianceNoticesModule } from '../alliance-notices/alliance-notices.modu
     forwardRef(() => BoardsModule),
     forwardRef(() => AllianceNoticesModule),
   ],
-  providers: [RealtimeGateway, ReadyNegotiationService],
+  providers: [RealtimeGateway, ReadyNegotiationService, WsRateLimitService],
   exports: [RealtimeGateway],
 })
 export class RealtimeModule {}
