@@ -2,7 +2,7 @@
 import { Controller, Get, Patch, Param, Body, UseGuards, NotFoundException, ForbiddenException, Request } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { UsersService } from './users.service';
-import { UserRole } from './users.entity';
+import { UpdateRoleDto } from './dto/update-role.dto';
 
 @Controller('users')
 @UseGuards(AuthGuard('jwt'))
@@ -20,14 +20,14 @@ export class UsersController {
   @Patch(':nickname/role')
   async setRole(
     @Param('nickname') nickname: string,
-    @Body() body: { role: UserRole },
+    @Body() dto: UpdateRoleDto,
     @Request() req,
   ) {
     const callerRole: string = req.user?.role;
     if (callerRole !== 'admin' && callerRole !== 'developer') {
       throw new ForbiddenException('관리자만 역할을 변경할 수 있습니다');
     }
-    const user = await this.service.setRole(nickname, body.role);
+    const user = await this.service.setRole(nickname, dto.role);
     if (!user) throw new NotFoundException('사용자를 찾을 수 없습니다');
     return { nickname: user.nickname, role: user.role };
   }

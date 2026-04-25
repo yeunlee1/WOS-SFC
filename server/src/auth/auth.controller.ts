@@ -44,6 +44,8 @@ export class AuthController {
     return { user: { id: u.id, nickname: u.nickname, role: u.role, allianceName: u.allianceName, language: u.language } };
   }
 
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
   @Post('refresh')
   async refresh(@Req() req: any, @Res({ passthrough: true }) res: any) {
     const rawRefreshToken = req.cookies?.refresh_token;
