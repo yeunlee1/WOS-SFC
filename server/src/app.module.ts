@@ -38,16 +38,22 @@ import { RallyGroupsModule } from './rally-groups/rally-groups.module';
     ThrottlerModule.forRoot([{ name: 'default', ttl: 60000, limit: 60 }]),
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        type: 'mysql',
-        host: configService.get<string>('DATABASE_HOST'),
-        port: configService.get<number>('DATABASE_PORT', 3306),
-        username: configService.get<string>('DATABASE_USER'),
-        password: configService.get<string>('DATABASE_PASSWORD'),
-        database: configService.get<string>('DATABASE_NAME'),
-        entities: [User, Message, Notice, Rally, Member, BoardPost, Translation, AllianceNotice, RallyGroup, RallyGroupMember, UserBattleSettings],
-        synchronize: configService.get<string>('NODE_ENV') !== 'production',
-      }),
+      useFactory: (configService: ConfigService) => {
+        // entity 자동 마이그레이션은 기본 OFF. dev에서 켜려면 .env에 TYPEORM_SYNC=true 명시.
+        // production(NODE_ENV=production)에서는 TYPEORM_SYNC 값과 무관하게 항상 false — 데이터 손실 방지.
+        const isProduction = configService.get<string>('NODE_ENV') === 'production';
+        const allowSync = configService.get<string>('TYPEORM_SYNC') === 'true';
+        return {
+          type: 'mysql',
+          host: configService.get<string>('DATABASE_HOST'),
+          port: configService.get<number>('DATABASE_PORT', 3306),
+          username: configService.get<string>('DATABASE_USER'),
+          password: configService.get<string>('DATABASE_PASSWORD'),
+          database: configService.get<string>('DATABASE_NAME'),
+          entities: [User, Message, Notice, Rally, Member, BoardPost, Translation, AllianceNotice, RallyGroup, RallyGroupMember, UserBattleSettings],
+          synchronize: !isProduction && allowSync,
+        };
+      },
     }),
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', '..', '..', 'web', 'dist'),
