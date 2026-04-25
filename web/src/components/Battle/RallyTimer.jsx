@@ -5,7 +5,9 @@ import { api, formatTime, playBeep } from '../../api';
 
 // RallyTimer — 실시간 집결 타이머 (최대 6개)
 export default function RallyTimer() {
-  const { rallies, timeOffset } = useStore();
+  const rallies = useStore((s) => s.rallies);
+  // timeOffset에 personalOffsetMs 합산 — Rally 종료 시각 표시도 디바이스별 보정 반영.
+  const timeOffset = useStore((s) => s.timeOffset + s.personalOffsetMs);
   const { t } = useI18n();
 
   // Map<id, { remainMs, ratio }>

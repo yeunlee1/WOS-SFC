@@ -3,13 +3,15 @@ import { useStore } from '../../store';
 import { useI18n } from '../../i18n';
 import { api } from '../../api';
 import { speak } from './tts';
+import PersonalSyncOffset from './PersonalSyncOffset';
 
 // PersonalPanel — 개인 현황판
 // 유저 본인의 행군 시간(marchSeconds)을 저장하고,
 // 카운트다운이 해당 시점에 도달하면 'march' TTS를 로컬에서 재생한다.
 export default function PersonalPanel() {
   const countdown  = useStore((s) => s.countdown);
-  const timeOffset = useStore((s) => s.timeOffset);
+  // timeOffset에 personalOffsetMs 합산 — march TTS 슬롯 시각도 디바이스별 보정 반영.
+  const timeOffset = useStore((s) => s.timeOffset + s.personalOffsetMs);
   const { lang }   = useI18n();
 
   // marchSeconds: null(미설정) | 1~180(설정됨)
@@ -222,6 +224,8 @@ export default function PersonalPanel() {
           현재: 카운트다운 {marchSeconds}초 남을 때 출발 음성
         </p>
       )}
+
+      <PersonalSyncOffset />
     </section>
   );
 }
