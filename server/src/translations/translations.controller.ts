@@ -2,6 +2,7 @@
 import { Controller, Get, Post, Param, Body, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { TranslationsService } from './translations.service';
+import { SetTranslationDto } from './dto/set-translation.dto';
 
 @Controller('translations')
 @UseGuards(AuthGuard('jwt'))
@@ -14,7 +15,7 @@ export class TranslationsController {
   }
 
   @Post()
-  set(@Body() body: { cacheKey: string; translated: string }) {
-    return this.service.set(body.cacheKey, body.translated);
+  set(@Body() dto: SetTranslationDto) {
+    return this.service.set(dto.cacheKey, dto.translated);
   }
 }
