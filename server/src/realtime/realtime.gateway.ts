@@ -28,6 +28,12 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
   private onlineMap = new Map<string, OnlineUser>();
   private countdown = { active: false, startedAt: 0, totalSeconds: 0 };
 
+  // 카운트다운 시작 시 startedAt을 현재 시각이 아니라 STARTUP_GRACE_MS 미래로 결정.
+  // 모든 클라이언트가 broadcast를 도착 받기 전에 미래 슬롯을 schedule할 수 있도록 보장 —
+  // TTS 동기 발화의 핵심 보장. 값이 너무 크면 SFC 클릭 후 시작 지연 체감, 너무 작으면
+  // 느린 네트워크 클라이언트가 첫 슬롯 놓침. 500ms는 일반적 RTT(50~300ms) + 마진.
+  private static readonly STARTUP_GRACE_MS = 500;
+
   constructor(
     private jwtService: JwtService,
     @Inject(forwardRef(() => NoticesService)) private noticesService: NoticesService,
@@ -81,7 +87,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       client.emit(`alliance-notice:updated:${a}`, allianceNotices.map(this.formatAllianceNotice));
     }
 
-    client.emit('countdown:state', this.countdown);
+    client.emit('countdown:state', { ...this.countdown, serverEmitAt: Date.now() });
   }
 
   @SubscribeMessage('countdown:start')
@@ -93,8 +99,12 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     if (!user || !['admin', 'developer', 'SFC'].includes(user.role)) return;
     if (typeof totalSeconds !== 'number' || totalSeconds < 1 || totalSeconds > 600) return;
 
-    this.countdown = { active: true, startedAt: Date.now(), totalSeconds };
-    this.server.emit('countdown:state', this.countdown);
+    this.countdown = {
+      active: true,
+      startedAt: Date.now() + RealtimeGateway.STARTUP_GRACE_MS,
+      totalSeconds,
+    };
+    this.server.emit('countdown:state', { ...this.countdown, serverEmitAt: Date.now() });
   }
 
   @SubscribeMessage('countdown:stop')
@@ -103,7 +113,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     if (!user || !['admin', 'developer', 'SFC'].includes(user.role)) return;
 
     this.countdown = { active: false, startedAt: 0, totalSeconds: 0 };
-    this.server.emit('countdown:state', this.countdown);
+    this.server.emit('countdown:state', { ...this.countdown, serverEmitAt: Date.now() });
   }
 
   handleDisconnect(client: Socket) {
