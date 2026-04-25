@@ -84,6 +84,15 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     client.emit('countdown:state', this.countdown);
   }
 
+  // 시간 동기화용 ws ping/pong — REST `/time` 대비 HTTP overhead 5~20ms 절약.
+  // 클라이언트가 ack callback으로 응답을 받아 NTP 4-timestamp 알고리즘에 사용.
+  @SubscribeMessage('time:ping')
+  handleTimePing(): { utc: number; t1: number; t2: number } {
+    const t1 = Date.now();
+    const t2 = Date.now();
+    return { utc: t2, t1, t2 };
+  }
+
   @SubscribeMessage('countdown:start')
   handleCountdownStart(
     @ConnectedSocket() client: Socket,

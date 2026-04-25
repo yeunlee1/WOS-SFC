@@ -13,7 +13,7 @@
 // 사용처: web/src/timeSync.js는 본 모듈의 thin wrapper (백워드 호환).
 //        신규 코드는 본 모듈의 getServerNow() / startup() / shutdown() 직접 사용 권장.
 
-import { api } from './api';
+import { api, getSocket } from './api';
 import { useStore } from './store';
 
 const SAMPLE_COUNT = 5;
@@ -22,9 +22,12 @@ const SMOOTH_THRESHOLD_MS = 50;     // 이 미만 변동은 noise로 무시
 const JUMP_THRESHOLD_MS = 500;       // 이 이상은 클럭 점프 — 즉시 채택
 const SMOOTH_OLD_WEIGHT = 0.3;
 const SMOOTH_NEW_WEIGHT = 0.7;
-const PERIODIC_SYNC_MS = 30_000;
+// ws ping은 keep-alive 연결 위에서 동작 — REST(HTTP overhead 5~20ms)보다 가벼움.
+// BroadcastChannel 멀티탭 흡수 덕에 단일 사용자 N탭은 1번만 보내므로 5초 주기도 서버 부담 미미.
+const PERIODIC_SYNC_MS = 5_000;
 const DRIFT_CHECK_MS = 1000;
 const DRIFT_THRESHOLD_MS = 200;
+const WS_PING_TIMEOUT_MS = 3000;
 
 let _hasSynced = false;
 let _periodicTimer = null;
@@ -44,38 +47,76 @@ export function getServerNow() {
   return Date.now() + (store.timeOffset || 0) + (store.personalOffsetMs || 0);
 }
 
+// 단일 sample 측정 — ws ping 우선, 미연결/실패 시 REST `/time` fallback.
+// 두 경로 모두 NTP 4-timestamp(t0/t1/t2/t3)로 서버 처리시간을 RTT에서 분리.
+async function fetchOneSample() {
+  const t0 = Date.now();
+  const sock = getSocket();
+
+  // ws 경로 — keep-alive 연결 위라서 HTTP overhead 없음
+  if (sock && sock.connected) {
+    const wsResult = await new Promise((resolve) => {
+      let settled = false;
+      const timeout = setTimeout(() => {
+        if (!settled) { settled = true; resolve(null); }
+      }, WS_PING_TIMEOUT_MS);
+      try {
+        sock.emit('time:ping', null, (res) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeout);
+          const t3 = Date.now();
+          if (res && typeof res.t1 === 'number' && typeof res.t2 === 'number') {
+            const rtt = (t3 - t0) - (res.t2 - res.t1);
+            const offset = ((res.t1 - t0) + (res.t2 - t3)) / 2;
+            if (Number.isFinite(rtt) && Number.isFinite(offset)) {
+              resolve({ rtt, offset });
+              return;
+            }
+          }
+          resolve(null);
+        });
+      } catch {
+        if (!settled) { settled = true; clearTimeout(timeout); resolve(null); }
+      }
+    });
+    if (wsResult) return wsResult;
+  }
+
+  // REST fallback — ws 미연결 또는 ws 호출 실패 시
+  try {
+    const res = await api.getTime();
+    const t3 = Date.now();
+    let rtt, offset;
+    if (typeof res.t1 === 'number' && typeof res.t2 === 'number') {
+      rtt = (t3 - t0) - (res.t2 - res.t1);
+      offset = ((res.t1 - t0) + (res.t2 - t3)) / 2;
+    } else {
+      // 백워드 호환: 단계 1 머지 전 응답 형식
+      rtt = t3 - t0;
+      offset = res.utc - (t0 + t3) / 2;
+    }
+    if (Number.isFinite(rtt) && Number.isFinite(offset)) {
+      return { rtt, offset };
+    }
+  } catch {
+    // 모든 경로 실패 — 호출자가 처리
+  }
+  return null;
+}
+
 /**
  * SNTP 다중 샘플 동기화.
- * - SAMPLE_COUNT 번 /time 호출, 각각 RTT·offset 측정
- * - 신규 응답 형식 { utc, t1, t2 } 일 때 NTP 4-timestamp(서버 처리시간 분리) 적용
- * - 구 응답 형식 { utc } 만 있으면 Cristian's algorithm fallback
+ * - SAMPLE_COUNT 번 ws ping(또는 REST fallback)으로 RTT·offset 측정
+ * - NTP 4-timestamp(서버 처리시간 분리) — fetchOneSample 참고
  * - 최소 RTT 샘플 채택 후 임계값 계층화
  * @returns {Promise<{offset:number, rtt:number, samples:Array}>}
  */
 export async function syncTime() {
   const samples = [];
   for (let i = 0; i < SAMPLE_COUNT; i++) {
-    try {
-      const t0 = Date.now();
-      const res = await api.getTime();
-      const t3 = Date.now();
-      let rtt;
-      let offset;
-      if (typeof res.t1 === 'number' && typeof res.t2 === 'number') {
-        // NTP 4-timestamp — 서버 처리시간(t2-t1)을 RTT에서 분리
-        rtt = (t3 - t0) - (res.t2 - res.t1);
-        offset = ((res.t1 - t0) + (res.t2 - t3)) / 2;
-      } else {
-        // 백워드 호환: 단계 1 머지 전 응답 형식
-        rtt = t3 - t0;
-        offset = res.utc - (t0 + t3) / 2;
-      }
-      if (Number.isFinite(rtt) && Number.isFinite(offset)) {
-        samples.push({ rtt, offset });
-      }
-    } catch {
-      // 한 샘플 실패 무시 — 다음 시도
-    }
+    const sample = await fetchOneSample();
+    if (sample) samples.push(sample);
     if (i < SAMPLE_COUNT - 1) {
       await new Promise((r) => setTimeout(r, SAMPLE_INTERVAL_MS));
     }
