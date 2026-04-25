@@ -24,6 +24,18 @@ function _initTtsMuted() {
   }
 }
 
+// personalOffsetMs 초기값: localStorage 우선, 없으면 0. 범위 -1000~+1000ms로 clamp.
+// 사용자가 디바이스별 카운트다운 TTS 발화 시점을 미세 보정하는 값 (단계 4 UI).
+function _initPersonalOffsetMs() {
+  try {
+    const v = parseFloat(localStorage.getItem('wos-personal-offset-ms'));
+    if (!Number.isFinite(v)) return 0;
+    return Math.max(-1000, Math.min(1000, Math.round(v)));
+  } catch {
+    return 0;
+  }
+}
+
 // 테마 초기값: localStorage 우선, 없으면 'spring' (기본 벚꽃)
 export const THEMES = ['spring', 'anthropic', 'dark'];
 function _initTheme() {
@@ -40,6 +52,7 @@ export const useStore = create((set) => ({
   user: null,
   timeOffset: 0,
   timeSyncRtt: 0, // 진단용 — 마지막 동기화 RTT(ms)
+  personalOffsetMs: _initPersonalOffsetMs(), // 사용자 디바이스별 미세 보정 (-1000~+1000ms)
 
   // 실시간 데이터
   notices: [],
@@ -67,6 +80,12 @@ export const useStore = create((set) => ({
   clearUser: () => set({ user: null }),
   setTimeOffset: (timeOffset) => set({ timeOffset }),
   setTimeSyncRtt: (timeSyncRtt) => set({ timeSyncRtt }),
+  setPersonalOffsetMs: (ms) => {
+    const n = Number(ms);
+    const clamped = Number.isFinite(n) ? Math.max(-1000, Math.min(1000, Math.round(n))) : 0;
+    try { localStorage.setItem('wos-personal-offset-ms', String(clamped)); } catch { /* 무시 */ }
+    set({ personalOffsetMs: clamped });
+  },
   setNotices:    (notices)    => set({ notices }),
   setRallies:    (rallies)    => set({ rallies }),
   setMembers:    (members)    => set({ members }),

@@ -4,7 +4,7 @@ import { useSocket } from './hooks/useSocket';
 import { useResizable } from './hooks/useResizable';
 import { useI18n } from './i18n';
 import { api, getSocket } from './api';
-import { syncTime, startPeriodicSync, stopPeriodicSync } from './timeSync';
+import { syncTime, startup, shutdown } from './clockSync';
 import AuthModal from './components/Auth/AuthModal';
 import Petals from './components/Layout/Petals';
 import Header from './components/Layout/Header';
@@ -41,9 +41,9 @@ export default function App() {
         const me = await api.getMe();
         setUser(me.user);
         changeLang(me.user.language || 'ko');
-        // SNTP 다중 샘플 동기화 (마운트 시 첫 동기화)
+        // clockSync 부팅 — 첫 동기화 + 주기적 재동기화 + system clock 점프 감지 + 멀티탭 채널
         try {
-          await syncTime();
+          await startup();
         } catch { /* offset 0 유지 */ }
       } catch {
         // 유효한 세션 없음 — 로그인 화면 표시
@@ -51,9 +51,6 @@ export default function App() {
         setHydrating(false);
       }
     })();
-
-    // 30초마다 주기적 재동기화
-    startPeriodicSync(30_000);
 
     // 탭 복귀 시 재동기화 — 백그라운드 체류로 인한 drift 보정
     function onVisible() {
@@ -68,7 +65,7 @@ export default function App() {
     return () => {
       window.removeEventListener('auth:expired', handleExpiry);
       document.removeEventListener('visibilitychange', onVisible);
-      stopPeriodicSync();
+      shutdown();
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
