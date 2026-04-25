@@ -9,6 +9,7 @@ import {
   stopCountdownAudio,
   setCountdownVolume,
 } from './countdownPlayer';
+import { RESCHEDULE_THRESHOLD_MS } from '../../clockSync';
 
 // ── SVG 원형 프로그레스 링 ──────────────────────
 const RADIUS = 120;
@@ -89,11 +90,14 @@ const PRESETS = [
 // ── 메인 컴포넌트 ───────────────────────────────
 export default function Countdown() {
   // S1: zustand selector로 구독 범위 최소화 — onlineUsers 등 무관한 state 변경으로 인한 재렌더 차단
-  const countdown   = useStore((s) => s.countdown);
-  // timeOffset에 personalOffsetMs 합산 — 디바이스별 미세 보정값(PersonalSyncOffset UI)이
-  // 카운트다운 시각 표시 + TTS 슬롯 절대시각에 자동 반영되도록.
-  const timeOffset  = useStore((s) => s.timeOffset + s.personalOffsetMs);
-  const user        = useStore((s) => s.user);
+  const countdown        = useStore((s) => s.countdown);
+  // timeOffset과 personalOffsetMs를 별도 구독 —
+  // personalOffsetMs 변경 시 즉시 리스케줄 effect(아래)가 임계값 무관 트리거되도록.
+  const clockOffset      = useStore((s) => s.timeOffset);
+  const personalOffsetMs = useStore((s) => s.personalOffsetMs);
+  // 실제 시각 계산에는 두 값의 합산 사용
+  const timeOffset       = clockOffset + personalOffsetMs;
+  const user             = useStore((s) => s.user);
   const { t, lang } = useI18n();
 
   const [remaining, setRemaining]   = useState(null);
@@ -184,7 +188,7 @@ export default function Countdown() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, startedAt, totalSeconds, lang]);
 
-  // timeOffset 변경 시 리스케줄
+  // clockOffset 급변(1초 이상) 시 리스케줄 — RESCHEDULE_THRESHOLD_MS 상수 사용 (Q1-a)
   //
   // Web Audio API 스케줄은 AudioContext.currentTime(모노토닉) 기반이라
   // 한 번 예약된 발화는 Date.now() drift와 무관하게 정확히 재생된다.
@@ -193,22 +197,42 @@ export default function Countdown() {
   // 시스템 클록이 실제로 점프한 경우(예: 수동 시간 변경)에만 재스케줄.
   useEffect(() => {
     if (!active || !startedAt || !totalSeconds) return;
-    const deltaMs = Math.abs(timeOffset - lastOffsetRef.current);
-    if (deltaMs <= 1000) return; // 1초 이내의 변동은 무시 (AudioContext가 이미 정확히 스케줄함)
+    const effectiveOffset = clockOffset + personalOffsetMs;
+    const deltaMs = Math.abs(effectiveOffset - lastOffsetRef.current);
+    if (deltaMs <= RESCHEDULE_THRESHOLD_MS) return; // 1초 이내의 변동은 무시 (AudioContext가 이미 정확히 스케줄함)
 
     if (import.meta.env.DEV) console.info('[Countdown] reschedule due to large offset jump', deltaMs, 'ms');
     const { ttsVolume, ttsMuted } = useStore.getState();
     scheduleCountdown({
       totalSeconds,
       startedAt,
-      timeOffset,
+      timeOffset: effectiveOffset,
       lang,
       volume: ttsVolume,
       muted: ttsMuted,
     });
-    lastOffsetRef.current = timeOffset;
+    lastOffsetRef.current = effectiveOffset;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timeOffset, active, startedAt]);
+  }, [clockOffset, active, startedAt]);
+
+  // personalOffsetMs 변경 시 즉시 리스케줄 — 슬라이더 조작에 즉각 반응 (Q1-b)
+  // 임계값(RESCHEDULE_THRESHOLD_MS) 무관하게 항상 리스케줄 — ±100ms 미세 보정 즉시 반영.
+  useEffect(() => {
+    if (!active || !startedAt || !totalSeconds) return;
+    const effectiveOffset = clockOffset + personalOffsetMs;
+    if (import.meta.env.DEV) console.info('[Countdown] reschedule due to personalOffset change', personalOffsetMs, 'ms');
+    const { ttsVolume, ttsMuted } = useStore.getState();
+    scheduleCountdown({
+      totalSeconds,
+      startedAt,
+      timeOffset: effectiveOffset,
+      lang,
+      volume: ttsVolume,
+      muted: ttsMuted,
+    });
+    lastOffsetRef.current = effectiveOffset;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [personalOffsetMs, active, startedAt]);
 
   // start/stop 멘트
   // stop 멘트만 재생. start 멘트("준비해주세요")는 제거 —

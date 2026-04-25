@@ -20,6 +20,10 @@ interface OnlineUser {
   role: string;
 }
 
+// production 환경에서 WEB_ORIGIN 미설정 시 실수로 모든 origin을 허용하는 fallback이 되지 않도록 에러.
+if (process.env.NODE_ENV === 'production' && !process.env.WEB_ORIGIN) {
+  throw new Error('WEB_ORIGIN 환경변수가 production에서 필수입니다. CORS 보안을 위해 명시적으로 설정하세요.');
+}
 const WEB_ORIGIN = process.env.WEB_ORIGIN || 'http://localhost:5173';
 
 @WebSocketGateway({ cors: { origin: WEB_ORIGIN, credentials: true } })
@@ -101,8 +105,8 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     @MessageBody() totalSeconds: number,
   ) {
     const user = this.getUserFromSocket(client);
-    if (!user || !['admin', 'developer', 'SFC'].includes(user.role)) return;
-    if (typeof totalSeconds !== 'number' || totalSeconds < 1 || totalSeconds > 600) return;
+    if (!user || !['admin', 'developer'].includes(user.role)) return;
+    if (typeof totalSeconds !== 'number' || !Number.isInteger(totalSeconds) || totalSeconds < 1 || totalSeconds > 600) return;
 
     // 단계 5: probe 라운드트립으로 모든 클라이언트의 maxRTT 측정 후 startedAt 결정.
     // → 모든 디바이스가 정확히 같은 절대 시각에 TTS 발화 시작 (±30ms 보장).
@@ -116,7 +120,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
   @SubscribeMessage('countdown:stop')
   handleCountdownStop(@ConnectedSocket() client: Socket) {
     const user = this.getUserFromSocket(client);
-    if (!user || !['admin', 'developer', 'SFC'].includes(user.role)) return;
+    if (!user || !['admin', 'developer'].includes(user.role)) return;
 
     this.countdown = { active: false, startedAt: 0, totalSeconds: 0 };
     this.server.emit('countdown:state', { ...this.countdown, serverEmitAt: Date.now() });

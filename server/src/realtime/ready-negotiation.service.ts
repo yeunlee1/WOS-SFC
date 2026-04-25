@@ -29,6 +29,9 @@ export class ReadyNegotiationService {
   // startedAt이 너무 먼 미래로 가지 않도록 cap
   // (한 명의 매우 느린 클라이언트 때문에 모두가 너무 오래 기다리지 않게)
   private static readonly MAX_STARTUP_GRACE_MS = 1500;
+  // 한 명의 악성/극느림 클라이언트가 모두를 1.5초 대기시키지 않도록 outlier 컷오프.
+  // RTT > OUTLIER_RTT_MS 인 클라이언트는 maxRTT 계산에서 제외하고 FALLBACK_RTT_MS 적용.
+  private static readonly OUTLIER_RTT_MS = 500;
 
   /**
    * 모든 활성 클라이언트에 probe 후 startedAt 절대시각 결정.
@@ -43,13 +46,18 @@ export class ReadyNegotiationService {
       return Date.now() + ReadyNegotiationService.STARTUP_GRACE_MARGIN_MS;
     }
 
-    const probeStart = Date.now();
     const probeResults = await Promise.all(
-      sockets.map((sock) => this.probeOne(sock, probeStart)),
+      sockets.map((sock) => this.probeOne(sock)),
     );
 
-    // 응답 못 한 클라이언트는 fallback RTT 적용 — "이 정도일 거다" 추정
-    const rtts = probeResults.map((r) => r ?? ReadyNegotiationService.FALLBACK_RTT_MS);
+    // 응답 못 한 클라이언트는 fallback RTT 적용 — "이 정도일 거다" 추정.
+    // outlier (RTT > OUTLIER_RTT_MS) 도 동일하게 fallback으로 대체 —
+    // 단 한 명의 악성/극느림 클라이언트가 MAX_STARTUP_GRACE를 강제하지 않도록.
+    const rtts = probeResults.map((r) => {
+      if (r === null) return ReadyNegotiationService.FALLBACK_RTT_MS;
+      if (r > ReadyNegotiationService.OUTLIER_RTT_MS) return ReadyNegotiationService.FALLBACK_RTT_MS;
+      return r;
+    });
     const maxRtt = Math.max(...rtts);
     const successCount = probeResults.filter((r) => r !== null).length;
 
@@ -65,28 +73,35 @@ export class ReadyNegotiationService {
 
   /**
    * 단일 socket에 probe 후 RTT 측정.
+   * socket.io v4의 sock.timeout().emit() 사용 — 자동 ack ID 정리로 메모리 누수 방지.
+   * sentAt을 probeOne 내부에서 측정해 Promise.all 큐 처리 시간이 후순위 socket RTT에
+   * 포함되지 않도록 함 (S1).
    * @returns RTT(ms) 또는 timeout/실패 시 null
    */
-  private probeOne(sock: any, probeStart: number): Promise<number | null> {
+  private probeOne(sock: any): Promise<number | null> {
     return new Promise((resolve) => {
-      let settled = false;
-      const timeout = setTimeout(() => {
-        if (!settled) { settled = true; resolve(null); }
-      }, ReadyNegotiationService.PROBE_TIMEOUT_MS);
-
+      // sentAt을 여기서 측정 — 큐 처리 지연이 RTT에 포함되지 않도록 (S1)
+      const sentAt = Date.now();
       try {
-        sock.emit('time:probe', { sentAt: probeStart }, (ack: unknown) => {
-          if (settled) return;
-          settled = true;
-          clearTimeout(timeout);
-          if (ack && typeof (ack as any).t === 'number') {
-            resolve(Date.now() - probeStart);
-          } else {
-            resolve(null);
-          }
-        });
+        // socket.io v4 timeout API — timeout 시 내부 ack ID를 자동 정리해 메모리 누수 방지 (Q2)
+        (sock as any).timeout(ReadyNegotiationService.PROBE_TIMEOUT_MS).emit(
+          'time:probe',
+          { sentAt },
+          (err: Error | null, ack: unknown) => {
+            if (err) {
+              // timeout 또는 에러 — null 반환
+              resolve(null);
+              return;
+            }
+            if (ack && typeof (ack as any).t === 'number') {
+              resolve(Date.now() - sentAt);
+            } else {
+              resolve(null);
+            }
+          },
+        );
       } catch {
-        if (!settled) { settled = true; clearTimeout(timeout); resolve(null); }
+        resolve(null);
       }
     });
   }
