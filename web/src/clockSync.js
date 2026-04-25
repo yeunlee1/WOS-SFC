@@ -18,6 +18,17 @@ import { useStore } from './store';
 
 const SAMPLE_COUNT = 5;
 const SAMPLE_INTERVAL_MS = 80;
+// RTT 표준편차가 이 값 이상이면 네트워크가 불안정한 것으로 간주 — 1회 추가 재샘플 실행
+const RTT_STDDEV_RESAMPLE_THRESHOLD_MS = 100;
+/**
+ * TTS 슬롯 리스케줄 임계값(ms).
+ * Web Audio API 스케줄은 AudioContext.currentTime(모노토닉) 기반이라
+ * 한 번 예약된 발화는 Date.now() drift와 무관하게 정확히 재생됨.
+ * 따라서 일반적인 RTT 변동(수백 ms 이내)으로 인한 재스케줄은 불필요.
+ * 시스템 클록이 실제로 1초 이상 점프한 경우에만 재스케줄.
+ * personalOffsetMs 변경은 별도 effect에서 임계값 무관 즉시 처리.
+ */
+export const RESCHEDULE_THRESHOLD_MS = 1000;
 const SMOOTH_THRESHOLD_MS = 50;     // 이 미만 변동은 noise로 무시
 const JUMP_THRESHOLD_MS = 500;       // 이 이상은 클럭 점프 — 즉시 채택
 const SMOOTH_OLD_WEIGHT = 0.3;
@@ -106,13 +117,28 @@ async function fetchOneSample() {
 }
 
 /**
+ * RTT 배열의 표준편차(ms) 계산.
+ * @param {Array<{rtt:number}>} samples
+ * @returns {number}
+ */
+function calcRttStddev(samples) {
+  if (samples.length < 2) return 0;
+  const rtts = samples.map((s) => s.rtt);
+  const mean = rtts.reduce((a, b) => a + b, 0) / rtts.length;
+  const variance = rtts.reduce((a, b) => a + (b - mean) ** 2, 0) / rtts.length;
+  return Math.sqrt(variance);
+}
+
+/**
  * SNTP 다중 샘플 동기화.
  * - SAMPLE_COUNT 번 ws ping(또는 REST fallback)으로 RTT·offset 측정
  * - NTP 4-timestamp(서버 처리시간 분리) — fetchOneSample 참고
  * - 최소 RTT 샘플 채택 후 임계값 계층화
+ * - RTT 표준편차 100ms+ 시 1회 추가 재샘플 (단계 2 명세)
+ * @param {boolean} [_isResample=false] — 재귀 방지용 내부 플래그
  * @returns {Promise<{offset:number, rtt:number, samples:Array}>}
  */
-export async function syncTime() {
+export async function syncTime(_isResample = false) {
   const samples = [];
   for (let i = 0; i < SAMPLE_COUNT; i++) {
     const sample = await fetchOneSample();
@@ -124,6 +150,15 @@ export async function syncTime() {
 
   if (samples.length === 0) {
     throw new Error('시간 동기화 실패 — 모든 샘플이 실패했습니다');
+  }
+
+  // RTT 표준편차 100ms+ → 네트워크 불안정 → 1회 추가 재샘플 (무한 재귀 방지: _isResample 플래그)
+  if (!_isResample && calcRttStddev(samples) >= RTT_STDDEV_RESAMPLE_THRESHOLD_MS) {
+    console.warn(
+      '[clockSync] RTT 표준편차 과다 (%dms), 재샘플 실행',
+      Math.round(calcRttStddev(samples)),
+    );
+    return syncTime(true);
   }
 
   // 최소 RTT 샘플 채택 (Cristian's algorithm — 네트워크 지연 적은 샘플이 가장 정확)

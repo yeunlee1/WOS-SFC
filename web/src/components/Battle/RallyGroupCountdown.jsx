@@ -9,11 +9,16 @@ import {
   setRallyVolume,
   primeRallyAudio,
 } from './rallyGroupPlayer';
+import { RESCHEDULE_THRESHOLD_MS } from '../../clockSync';
 
 export default function RallyGroupCountdown({ group, countdown }) {
   const user = useStore((s) => s.user);
-  // timeOffset에 personalOffsetMs 합산 — Rally Group TTS 슬롯도 디바이스별 보정 반영.
-  const timeOffset = useStore((s) => s.timeOffset + s.personalOffsetMs);
+  // timeOffset과 personalOffsetMs를 별도 구독 —
+  // personalOffsetMs 변경 시 즉시 리스케줄 effect가 임계값 무관 트리거되도록.
+  const clockOffset      = useStore((s) => s.timeOffset);
+  const personalOffsetMs = useStore((s) => s.personalOffsetMs);
+  // 실제 시각 계산에는 두 값의 합산 사용
+  const timeOffset       = clockOffset + personalOffsetMs;
   const ttsVolume = useStore((s) => s.ttsVolume);
   const ttsMuted = useStore((s) => s.ttsMuted);
   const { lang } = useI18n();
@@ -52,25 +57,48 @@ export default function RallyGroupCountdown({ group, countdown }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [countdown, lang, group.displayOrder]);
 
-  // timeOffset 급변(1초 이상) 시 리스케줄 — 1번(Countdown.jsx) 패턴과 동일
+  // clockOffset 급변(RESCHEDULE_THRESHOLD_MS 이상) 시 리스케줄 — RESCHEDULE_THRESHOLD_MS 상수 사용 (Q1-a)
   useEffect(() => {
     if (!countdown) return;
-    const deltaMs = Math.abs(timeOffset - lastOffsetRef.current);
-    if (deltaMs <= 1000) return;
+    const effectiveOffset = clockOffset + personalOffsetMs;
+    const deltaMs = Math.abs(effectiveOffset - lastOffsetRef.current);
+    if (deltaMs <= RESCHEDULE_THRESHOLD_MS) return;
     const { ttsVolume: vol, ttsMuted: mut } = useStore.getState();
     primeRallyAudio(countdown.fireOffsets, lang, group.displayOrder).catch(() => {});
     scheduleRallyCountdown({
       startedAtServerMs: countdown.startedAtServerMs,
       fireOffsets: countdown.fireOffsets,
-      timeOffset,
+      timeOffset: effectiveOffset,
       lang,
       volume: vol,
       muted: mut,
       displayOrder: group.displayOrder,
     });
-    lastOffsetRef.current = timeOffset;
+    lastOffsetRef.current = effectiveOffset;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timeOffset, countdown]);
+  }, [clockOffset, countdown]);
+
+  // personalOffsetMs 변경 시 즉시 리스케줄 — 슬라이더 조작에 즉각 반응 (Q1-b)
+  // Q-mount-1: effectiveOffset이 main effect에서 이미 설정한 lastOffsetRef와 동일하면 skip —
+  //   mount 시점에 main effect가 먼저 실행되므로 첫 렌더에서 중복 scheduleRallyCountdown 호출 방지.
+  useEffect(() => {
+    if (!countdown) return;
+    const effectiveOffset = clockOffset + personalOffsetMs;
+    if (lastOffsetRef.current === effectiveOffset) return; // 첫 렌더 또는 변경 없음 — skip
+    const { ttsVolume: vol, ttsMuted: mut } = useStore.getState();
+    primeRallyAudio(countdown.fireOffsets, lang, group.displayOrder).catch(() => {});
+    scheduleRallyCountdown({
+      startedAtServerMs: countdown.startedAtServerMs,
+      fireOffsets: countdown.fireOffsets,
+      timeOffset: effectiveOffset,
+      lang,
+      volume: vol,
+      muted: mut,
+      displayOrder: group.displayOrder,
+    });
+    lastOffsetRef.current = effectiveOffset;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [personalOffsetMs, countdown]);
 
   useEffect(() => { setRallyVolume(ttsVolume, ttsMuted); }, [ttsVolume, ttsMuted]);
 
