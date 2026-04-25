@@ -18,6 +18,9 @@ export const GOOGLE_VOICES: Record<string, { languageCode: string; name: string 
   zh: { languageCode: 'cmn-CN', name: 'cmn-CN-Wavenet-A' },
 };
 
+// Google TTS audioConfig.speakingRate — 값 변경 시 캐시 자동 무효화 트리거
+export const SPEAKING_RATE = 1.5;
+
 // 카운트다운 문구 (서비스·컨트롤러 공통 사용)
 export const PHRASES: Record<string, Record<string, string>> = {
   start:      { ko: '준비해주세요.', en: 'Get ready.', ja: '準備してください。', zh: '请准备。' },

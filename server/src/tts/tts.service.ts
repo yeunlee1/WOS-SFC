@@ -1,10 +1,11 @@
 import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { createHash } from 'crypto';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as fsPromises from 'fs/promises';
 import axios from 'axios';
-import { LANGS, GOOGLE_VOICES, PHRASES, TTS_PREGEN_MAX, getTtsText } from './tts.constants';
+import { LANGS, GOOGLE_VOICES, PHRASES, TTS_PREGEN_MAX, SPEAKING_RATE, getTtsText } from './tts.constants';
 
 // ── 동시 Google TTS 호출 수 제한 ─────────────────────────────────────────
 class Semaphore {
@@ -56,6 +57,10 @@ export class TtsService implements OnModuleInit {
       this.logger.warn('GOOGLE_TTS_API_KEY 없음 — TTS 사전 생성 건너뜀');
       return;
     }
+
+    // speakingRate / GOOGLE_VOICES / PHRASES 변경 시 자동 캐시 정리 (수동 rm 불필요)
+    await this.validateAndCleanCache();
+
     // 핵심 파일(숫자 1~10 + 문구)이 모두 있으면 사전 생성 스킵
     // npm run tts:generate 로 미리 생성한 경우
     const alreadyReady = LANGS.every(lang =>
@@ -72,6 +77,59 @@ export class TtsService implements OnModuleInit {
   // 파일 경로 규칙: {cacheDir}/{lang}-{key}.mp3
   private filePath(lang: string, key: string): string {
     return path.join(this.cacheDir, `${lang}-${key}.mp3`);
+  }
+
+  // ── 캐시 메타 자동 무효화 ────────────────────────────────────────────────
+  // speakingRate / GOOGLE_VOICES / PHRASES 중 어느 하나라도 변경되면 기존 mp3는
+  // 옛 설정으로 만들어졌으므로 그대로 재사용 시 변경이 반영되지 않는다. 부팅 시
+  // cache.meta.json 과 현재 설정을 비교해 불일치하면 모든 mp3 삭제 + 새 메타 기록.
+  private get metaPath(): string {
+    return path.join(this.cacheDir, 'cache.meta.json');
+  }
+
+  private buildCurrentMeta() {
+    return {
+      speakingRate: SPEAKING_RATE,
+      voices: GOOGLE_VOICES,
+      phrasesHash: createHash('sha256')
+        .update(JSON.stringify(PHRASES))
+        .digest('hex')
+        .slice(0, 12),
+    };
+  }
+
+  private async validateAndCleanCache(): Promise<void> {
+    const current = this.buildCurrentMeta();
+    let saved: ReturnType<TtsService['buildCurrentMeta']> | null = null;
+    try {
+      const raw = await fsPromises.readFile(this.metaPath, 'utf8');
+      saved = JSON.parse(raw);
+    } catch {
+      saved = null; // 메타 없거나 파싱 실패 → 정리 트리거
+    }
+
+    if (saved && JSON.stringify(saved) === JSON.stringify(current)) return;
+
+    this.logger.log(
+      saved
+        ? 'TTS 캐시 메타 불일치 — 캐시 정리 진행'
+        : 'TTS 캐시 메타 없음 — 첫 부팅 또는 마이그레이션, 캐시 정리',
+    );
+
+    const files = await fsPromises.readdir(this.cacheDir).catch(() => [] as string[]);
+    const mp3s = files.filter((f) => f.endsWith('.mp3'));
+    await Promise.all(
+      mp3s.map((f) =>
+        fsPromises.unlink(path.join(this.cacheDir, f)).catch(() => {}),
+      ),
+    );
+
+    await fsPromises.writeFile(
+      this.metaPath,
+      JSON.stringify(current, null, 2),
+      'utf8',
+    );
+    this.logger.log(`TTS 캐시 정리 완료 — ${mp3s.length}개 mp3 삭제, 새 메타 기록`);
   }
 
   // 파일 반환 — 없거나 손상(< MIN_MP3_BYTES) 파일이면 재생성.
@@ -182,7 +240,7 @@ export class TtsService implements OnModuleInit {
         {
           input,
           voice: { languageCode: voice.languageCode, name: voice.name },
-          audioConfig: { audioEncoding: 'MP3', speakingRate: 1.5 },
+          audioConfig: { audioEncoding: 'MP3', speakingRate: SPEAKING_RATE },
         },
         { timeout: 10000 },
       );
