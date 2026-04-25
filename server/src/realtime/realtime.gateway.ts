@@ -13,6 +13,7 @@ import { MembersService } from '../members/members.service';
 import { BoardsService } from '../boards/boards.service';
 import { AllianceNoticesService } from '../alliance-notices/alliance-notices.service';
 import { ReadyNegotiationService } from './ready-negotiation.service';
+import { WsRateLimitService } from './ws-rate-limit.service';
 
 interface OnlineUser {
   nickname: string;
@@ -36,6 +37,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
   constructor(
     private jwtService: JwtService,
     private readyNegotiation: ReadyNegotiationService,
+    private rateLimit: WsRateLimitService,
     @Inject(forwardRef(() => NoticesService)) private noticesService: NoticesService,
     @Inject(forwardRef(() => RalliesService)) private ralliesService: RalliesService,
     @Inject(forwardRef(() => MembersService)) private membersService: MembersService,
@@ -92,8 +94,10 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
 
   // 시간 동기화용 ws ping/pong — REST `/time` 대비 HTTP overhead 5~20ms 절약.
   // 클라이언트가 ack callback으로 응답을 받아 NTP 4-timestamp 알고리즘에 사용.
+  // Rate limit: 분당 30회 (정상 5초 주기 sync는 분당 12회 — 충분히 여유, abuse 차단).
   @SubscribeMessage('time:ping')
-  handleTimePing(): { utc: number; t1: number; t2: number } {
+  handleTimePing(@ConnectedSocket() client: Socket): { utc: number; t1: number; t2: number } | null {
+    if (!this.rateLimit.check(client.id, 'time:ping', 30, 60_000)) return null;
     const t1 = Date.now();
     const t2 = Date.now();
     return { utc: t2, t1, t2 };
@@ -107,6 +111,8 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     const user = this.getUserFromSocket(client);
     if (!user || !['admin', 'developer'].includes(user.role)) return;
     if (typeof totalSeconds !== 'number' || !Number.isInteger(totalSeconds) || totalSeconds < 1 || totalSeconds > 600) return;
+    // Rate limit: 분당 5회 — 정상 SFC 사용 충분, ReadyNegotiation probe 폭증 방지.
+    if (!this.rateLimit.check(client.id, 'countdown:start', 5, 60_000)) return;
 
     // 단계 5: probe 라운드트립으로 모든 클라이언트의 maxRTT 측정 후 startedAt 결정.
     // → 모든 디바이스가 정확히 같은 절대 시각에 TTS 발화 시작 (±30ms 보장).
@@ -128,6 +134,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
 
   handleDisconnect(client: Socket) {
     this.onlineMap.delete(client.id);
+    this.rateLimit.cleanup(client.id);
     this.broadcastOnline();
   }
 
