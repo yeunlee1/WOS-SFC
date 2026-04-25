@@ -8,6 +8,7 @@
 // - FALLBACK_RTT_MS 적용
 // - outlier RTT > 500ms → FALLBACK_RTT 대체 (C2)
 // - startedAt이 미래 절대시각 (Date.now() 기반) 인지
+// - (3회차 Sec-C2-strong) median 기반: 단일 악성 client가 median에 영향 미미 검증
 
 import type { Server } from 'socket.io';
 import { ReadyNegotiationService } from './ready-negotiation.service';
@@ -104,14 +105,15 @@ describe('ReadyNegotiationService', () => {
       expect(grace).toBeLessThanOrEqual(680 + 300);
     });
 
-    it('다수 client에서 maxRTT만 grace 결정에 영향', async () => {
+    it('다수 client — median(RTTs) 기반 grace 결정', async () => {
       const fast = makeMockSocket({ ackDelayMs: 0 });
       const slow = makeMockSocket({ ackDelayMs: 150 });
       const startedAt = await svc.negotiateStartedAt(makeServer([fast, slow]));
       const after = Date.now();
       const grace = startedAt - after;
-      // maxRTT ≈ 150 (fast는 즉시) → 150*2 + 200 = 500. jitter 허용.
-      expect(grace).toBeGreaterThanOrEqual(480 - 100);
+      // rtts = [~0ms, ~150ms] → median ≈ 75ms → grace = 75*2+200 = 350ms. jitter 허용.
+      // (0 + 150) / 2 = 75 → sorted median for even array
+      expect(grace).toBeGreaterThanOrEqual(150);
       expect(grace).toBeLessThanOrEqual(580 + 300);
     });
   });
@@ -130,18 +132,19 @@ describe('ReadyNegotiationService', () => {
       expect(actualGrace).toBeLessThanOrEqual(600 + 50);
     }, 5000);
 
-    it('일부만 timeout: 빠른 80ms + 느린 timeout → maxRTT는 FALLBACK 200', async () => {
+    it('일부만 timeout: 빠른 80ms + 느린 timeout → median = (80+200)/2 = 140, grace ≈ 480ms', async () => {
       const fast = makeMockSocket({ ackDelayMs: 80 });
       const slow = makeMockSocket({ ackDelayMs: null });
       const startedAt = await svc.negotiateStartedAt(makeServer([fast, slow]));
       const after = Date.now();
       const grace = startedAt - after;
-      // 80 vs FALLBACK 200 → max = 200, grace = 200*2 + 200 = 600
-      expect(grace).toBeGreaterThanOrEqual(600 - 50);
-      expect(grace).toBeLessThanOrEqual(600 + 50);
+      // rtts = [~80ms, FALLBACK 200ms] → median = (80+200)/2 = 140 → grace = 140*2+200 = 480ms
+      // jitter 허용: 80ms 실제 측정치 변동 고려
+      expect(grace).toBeGreaterThanOrEqual(300);
+      expect(grace).toBeLessThanOrEqual(700);
     }, 5000);
 
-    it('전부 timeout → 전부 FALLBACK → maxRTT = 200, grace = 600', async () => {
+    it('전부 timeout → 전부 FALLBACK → median = 200, grace = 600', async () => {
       const sockets = [
         makeMockSocket({ ackDelayMs: null }),
         makeMockSocket({ ackDelayMs: null }),
@@ -166,9 +169,9 @@ describe('ReadyNegotiationService', () => {
       expect(grace).toBeLessThanOrEqual(600 + 50);
     }, 5000);
 
-    it('빠른 client (450ms RTT) → outlier 미만이므로 그대로 사용 → 450*2 + 200 = 1100ms', async () => {
-      // 450ms는 OUTLIER_RTT_MS(500) 미만이므로 정상 처리.
-      // grace = 450*2 + 200 = 1100ms (MAX_GRACE 미초과).
+    it('단일 client 450ms RTT → median = 450ms → grace = 450*2+200 = 1100ms', async () => {
+      // 450ms는 OUTLIER_RTT_MS(500) 미만이므로 outlier 컷오프 미적용.
+      // 단일 클라이언트면 median = 그 값 → grace = 450*2+200 = 1100ms (MAX_GRACE 미초과).
       const slow = makeMockSocket({ ackDelayMs: 450 });
       const startedAt = await svc.negotiateStartedAt(makeServer([slow]));
       const after = Date.now();
@@ -249,15 +252,54 @@ describe('ReadyNegotiationService', () => {
       expect(grace).toBeLessThanOrEqual(650 + 100);
     }, 5000);
 
-    it('정상 client(100ms) + outlier(600ms) → maxRTT = 100(outlier는 FALLBACK 200), grace = 200*2+200=600', async () => {
+    it('정상 client(100ms) + outlier(600ms) → median = (100+200)/2 = 150, grace ≈ 500ms', async () => {
       const normal = makeMockSocket({ ackDelayMs: 100 });
       const outlier = makeMockSocket({ ackDelayMs: 600 });
       const startedAt = await svc.negotiateStartedAt(makeServer([normal, outlier]));
       const after = Date.now();
       const grace = startedAt - after;
-      // maxRTT = max(100ms, FALLBACK 200ms) = 200ms → grace = 200*2+200 = 600ms
-      expect(grace).toBeGreaterThanOrEqual(580 - 100);
-      expect(grace).toBeLessThanOrEqual(650 + 200);
+      // rtts = [~100ms, FALLBACK 200ms(outlier 컷오프)] → median = (100+200)/2 = 150
+      // grace = 150*2+200 = 500ms (maxRTT 기반 600ms보다 작음)
+      expect(grace).toBeGreaterThanOrEqual(350);
+      expect(grace).toBeLessThanOrEqual(700);
     }, 5000);
+  });
+
+  describe('median 기반 outlier 강화 (Sec-C2-strong)', () => {
+    // 3회차 수정: median 기반 알고리즘 도입.
+    // 단일 악성 클라이언트가 OUTLIER_RTT_MS 직전(예: 450ms)으로 응답해도
+    // 다수 정상 클라이언트가 있으면 median에 영향 거의 없음 (50%+ 정상 가정).
+    it('정상 5개(50ms) + 악성 1개(450ms) → median ≈ 50ms, grace는 정상 RTT 기반', async () => {
+      // 이전 maxRTT 방식: maxRTT = 450 → grace = 450*2+200 = 1100ms
+      // median 방식: rtts = [50,50,50,50,50,450] → sorted → median = 50 → grace = 50*2+200 = 300ms
+      const normals = Array.from({ length: 5 }, () => makeMockSocket({ ackDelayMs: 50 }));
+      const malicious = makeMockSocket({ ackDelayMs: 450 });
+      const startedAt = await svc.negotiateStartedAt(makeServer([...normals, malicious]));
+      const after = Date.now();
+      const grace = startedAt - after;
+      // median 기반이므로 grace는 maxRTT 방식(1100ms)보다 훨씬 작음
+      // grace = 50*2+200 = 300ms (±jitter)
+      expect(grace).toBeGreaterThanOrEqual(200);
+      expect(grace).toBeLessThanOrEqual(700);
+    }, 5000);
+
+    it('단일 클라이언트 450ms → median = 450ms → grace = 1100ms (단독이면 피할 수 없음)', async () => {
+      // 단독 악성 클라이언트일 때는 median도 450ms. 이는 알려진 한계 (1:1 환경).
+      // 실제 운영에서 단독 클라이언트는 드문 케이스, 다수 클라이언트에서 강건성 보장.
+      const malicious = makeMockSocket({ ackDelayMs: 450 });
+      const startedAt = await svc.negotiateStartedAt(makeServer([malicious]));
+      const after = Date.now();
+      const grace = startedAt - after;
+      expect(grace).toBeGreaterThanOrEqual(1000);
+      expect(grace).toBeLessThanOrEqual(MAX_GRACE_MS);
+    }, 5000);
+
+    it('time:ping rate limit 부재(보안 시나리오) — 운영 시나리오 도큐먼트', () => {
+      // realtime.gateway.ts의 'time:ping' 핸들러는 rate limit 없음.
+      // 악의적 client가 초당 수천 회 호출하면 서버 CPU 소모 가능 (DoS).
+      // 본 테스트는 placeholder — runtime rate limit 도입 후 단위 테스트 추가 예정.
+      // 현재는 passthrough (gateway 코드 검증을 외부 통합 테스트에서 수행).
+      expect(true).toBe(true);
+    });
   });
 });

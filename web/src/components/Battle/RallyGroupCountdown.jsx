@@ -79,9 +79,12 @@ export default function RallyGroupCountdown({ group, countdown }) {
   }, [clockOffset, countdown]);
 
   // personalOffsetMs 변경 시 즉시 리스케줄 — 슬라이더 조작에 즉각 반응 (Q1-b)
+  // Q-mount-1: effectiveOffset이 main effect에서 이미 설정한 lastOffsetRef와 동일하면 skip —
+  //   mount 시점에 main effect가 먼저 실행되므로 첫 렌더에서 중복 scheduleRallyCountdown 호출 방지.
   useEffect(() => {
     if (!countdown) return;
     const effectiveOffset = clockOffset + personalOffsetMs;
+    if (lastOffsetRef.current === effectiveOffset) return; // 첫 렌더 또는 변경 없음 — skip
     const { ttsVolume: vol, ttsMuted: mut } = useStore.getState();
     primeRallyAudio(countdown.fireOffsets, lang, group.displayOrder).catch(() => {});
     scheduleRallyCountdown({
