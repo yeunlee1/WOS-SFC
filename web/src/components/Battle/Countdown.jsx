@@ -90,7 +90,9 @@ const PRESETS = [
 export default function Countdown() {
   // S1: zustand selector로 구독 범위 최소화 — onlineUsers 등 무관한 state 변경으로 인한 재렌더 차단
   const countdown   = useStore((s) => s.countdown);
-  const timeOffset  = useStore((s) => s.timeOffset);
+  // timeOffset에 personalOffsetMs 합산 — 디바이스별 미세 보정값(PersonalSyncOffset UI)이
+  // 카운트다운 시각 표시 + TTS 슬롯 절대시각에 자동 반영되도록.
+  const timeOffset  = useStore((s) => s.timeOffset + s.personalOffsetMs);
   const user        = useStore((s) => s.user);
   const { t, lang } = useI18n();
 

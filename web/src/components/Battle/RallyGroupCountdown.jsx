@@ -12,7 +12,8 @@ import {
 
 export default function RallyGroupCountdown({ group, countdown }) {
   const user = useStore((s) => s.user);
-  const timeOffset = useStore((s) => s.timeOffset);
+  // timeOffset에 personalOffsetMs 합산 — Rally Group TTS 슬롯도 디바이스별 보정 반영.
+  const timeOffset = useStore((s) => s.timeOffset + s.personalOffsetMs);
   const ttsVolume = useStore((s) => s.ttsVolume);
   const ttsMuted = useStore((s) => s.ttsMuted);
   const { lang } = useI18n();
