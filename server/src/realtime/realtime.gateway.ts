@@ -12,6 +12,7 @@ import { RalliesService } from '../rallies/rallies.service';
 import { MembersService } from '../members/members.service';
 import { BoardsService } from '../boards/boards.service';
 import { AllianceNoticesService } from '../alliance-notices/alliance-notices.service';
+import { ReadyNegotiationService } from './ready-negotiation.service';
 
 interface OnlineUser {
   nickname: string;
@@ -28,14 +29,9 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
   private onlineMap = new Map<string, OnlineUser>();
   private countdown = { active: false, startedAt: 0, totalSeconds: 0 };
 
-  // 카운트다운 시작 시 startedAt을 현재 시각이 아니라 STARTUP_GRACE_MS 미래로 결정.
-  // 모든 클라이언트가 broadcast를 도착 받기 전에 미래 슬롯을 schedule할 수 있도록 보장 —
-  // TTS 동기 발화의 핵심 보장. 값이 너무 크면 SFC 클릭 후 시작 지연 체감, 너무 작으면
-  // 느린 네트워크 클라이언트가 첫 슬롯 놓침. 500ms는 일반적 RTT(50~300ms) + 마진.
-  private static readonly STARTUP_GRACE_MS = 500;
-
   constructor(
     private jwtService: JwtService,
+    private readyNegotiation: ReadyNegotiationService,
     @Inject(forwardRef(() => NoticesService)) private noticesService: NoticesService,
     @Inject(forwardRef(() => RalliesService)) private ralliesService: RalliesService,
     @Inject(forwardRef(() => MembersService)) private membersService: MembersService,
@@ -99,26 +95,8 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     return { utc: t2, t1, t2 };
   }
 
-  // 시간 동기화용 ws ping/pong — REST `/time` 대비 HTTP overhead 5~20ms 절약.
-  // 클라이언트가 ack callback으로 응답을 받아 NTP 4-timestamp 알고리즘에 사용.
-  @SubscribeMessage('time:ping')
-  handleTimePing(): { utc: number; t1: number; t2: number } {
-    const t1 = Date.now();
-    const t2 = Date.now();
-    return { utc: t2, t1, t2 };
-  }
-
-  // 시간 동기화용 ws ping/pong — REST `/time` 대비 HTTP overhead 5~20ms 절약.
-  // 클라이언트가 ack callback으로 응답을 받아 NTP 4-timestamp 알고리즘에 사용.
-  @SubscribeMessage('time:ping')
-  handleTimePing(): { utc: number; t1: number; t2: number } {
-    const t1 = Date.now();
-    const t2 = Date.now();
-    return { utc: t2, t1, t2 };
-  }
-
   @SubscribeMessage('countdown:start')
-  handleCountdownStart(
+  async handleCountdownStart(
     @ConnectedSocket() client: Socket,
     @MessageBody() totalSeconds: number,
   ) {
@@ -126,11 +104,12 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     if (!user || !['admin', 'developer', 'SFC'].includes(user.role)) return;
     if (typeof totalSeconds !== 'number' || totalSeconds < 1 || totalSeconds > 600) return;
 
-    this.countdown = {
-      active: true,
-      startedAt: Date.now() + RealtimeGateway.STARTUP_GRACE_MS,
-      totalSeconds,
-    };
+    // 단계 5: probe 라운드트립으로 모든 클라이언트의 maxRTT 측정 후 startedAt 결정.
+    // → 모든 디바이스가 정확히 같은 절대 시각에 TTS 발화 시작 (±30ms 보장).
+    // SFC가 클릭 후 0.5~1초 대기 비용 — UX 트레이드오프.
+    const startedAt = await this.readyNegotiation.negotiateStartedAt(this.server);
+
+    this.countdown = { active: true, startedAt, totalSeconds };
     this.server.emit('countdown:state', { ...this.countdown, serverEmitAt: Date.now() });
   }
 

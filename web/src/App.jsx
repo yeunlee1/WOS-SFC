@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useStore } from './store';
 import { useSocket } from './hooks/useSocket';
+import { useReadyProbe } from './hooks/useReadyProbe';
 import { useResizable } from './hooks/useResizable';
 import { useI18n } from './i18n';
 import { api, getSocket } from './api';
@@ -27,6 +28,7 @@ export default function App() {
     useResizable('wos-sidebar-width', 200, { min: 150, max: 450 });
 
   useSocket(user);
+  useReadyProbe(user);
 
   // 테마 클래스를 <body>에 적용 — CSS 변수 cascade 기반 전역 전환
   useEffect(() => {
