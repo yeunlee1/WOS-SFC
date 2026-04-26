@@ -13,6 +13,6 @@ export class CreateAllianceNoticeDto {
   @IsString() @MaxLength(2000)
   content: string;
 
-  @IsString()
+  @IsString() @MaxLength(10)
   lang: string;
 }

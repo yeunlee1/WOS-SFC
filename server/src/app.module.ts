@@ -15,7 +15,6 @@ import { Translation } from './translations/translation.entity';
 import { AllianceNotice } from './alliance-notices/alliance-notice.entity';
 import { RallyGroup } from './rally-groups/rally-group.entity';
 import { RallyGroupMember } from './rally-groups/rally-group-member.entity';
-import { UserBattleSettings } from './users/user-battle-settings.entity';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { ChatModule } from './chat/chat.module';
@@ -50,7 +49,7 @@ import { RallyGroupsModule } from './rally-groups/rally-groups.module';
           username: configService.get<string>('DATABASE_USER'),
           password: configService.get<string>('DATABASE_PASSWORD'),
           database: configService.get<string>('DATABASE_NAME'),
-          entities: [User, Message, Notice, Rally, Member, BoardPost, Translation, AllianceNotice, RallyGroup, RallyGroupMember, UserBattleSettings],
+          entities: [User, Message, Notice, Rally, Member, BoardPost, Translation, AllianceNotice, RallyGroup, RallyGroupMember],
           synchronize: !isProduction && allowSync,
         };
       },

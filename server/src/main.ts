@@ -13,7 +13,12 @@ async function bootstrap() {
   app.use(express.json({ limit: '50kb' }));
   app.use(express.urlencoded({ extended: true, limit: '50kb' }));
 
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true }));
+  app.useGlobalPipes(new ValidationPipe({
+    whitelist: true,
+    forbidNonWhitelisted: true,
+    transform: true,
+    disableErrorMessages: process.env.NODE_ENV === 'production',
+  }));
 
   const allowedOrigin = process.env.WEB_ORIGIN || 'http://localhost:5173';
   app.enableCors({ origin: allowedOrigin, credentials: true });
