@@ -98,10 +98,12 @@ export default function Countdown() {
   // 실제 시각 계산에는 두 값의 합산 사용
   const timeOffset       = clockOffset + personalOffsetMs;
   const user             = useStore((s) => s.user);
+  const busyHolder       = useStore((s) => s.busyHolder);
   const { t, lang } = useI18n();
 
   const [remaining, setRemaining]   = useState(null);
   const [inputSec,  setInputSec]    = useState('');
+  const [errorMsg,  setErrorMsg]    = useState(null);
   // 화면 업데이트용 interval
   const intervalRef    = useRef(null);
   const prevActiveRef  = useRef(countdown.active);
@@ -257,6 +259,9 @@ export default function Countdown() {
 
   const canControl = user?.role && user.role !== 'member';
 
+  // 다른 타입(rally 등)이 lock을 잡고 있으면 시작 버튼 disable
+  const blockedByOther = busyHolder && busyHolder.type !== 'countdown';
+
   const secs     = remaining !== null ? Math.max(0, Math.ceil(remaining)) : null;
   const total    = totalSeconds || 0;
   const progress = (secs !== null && total > 0) ? secs / total : 1;
@@ -265,7 +270,17 @@ export default function Countdown() {
   function handleStart(seconds) {
     const s = seconds ?? parseInt(inputSec, 10);
     if (!s || s < 1 || s > 180) return;
-    getSocket()?.emit('countdown:start', s);
+    getSocket()?.emit('countdown:start', s, (ack) => {
+      if (ack && !ack.ok) {
+        const msg =
+          ack.reason === 'busy'       ? '다른 카운트다운이 진행 중입니다' :
+          ack.reason === 'rate_limit' ? '요청이 너무 빠릅니다. 잠시 후 다시 시도하세요' :
+          ack.reason === 'invalid'    ? '카운트다운 시간이 유효하지 않습니다' :
+          '카운트다운 시작에 실패했습니다';
+        setErrorMsg(msg);
+        setTimeout(() => setErrorMsg(null), 1500);
+      }
+    });
   }
 
   function handleStop() {
@@ -295,7 +310,7 @@ export default function Countdown() {
                   setInputSec(String(p.value));
                   if (!isActive) handleStart(p.value);
                 }}
-                disabled={isActive}
+                disabled={isActive || blockedByOther}
               >
                 {p.label}
               </button>
@@ -311,14 +326,14 @@ export default function Countdown() {
               placeholder="직접 입력 (1~180초)"
               value={inputSec}
               onChange={(e) => setInputSec(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && !isActive && handleStart()}
-              disabled={isActive}
+              onKeyDown={(e) => e.key === 'Enter' && !isActive && !blockedByOther && handleStart()}
+              disabled={isActive || blockedByOther}
             />
             {!isActive ? (
               <button
                 className="btn btn-primary cd-btn-start"
                 onClick={() => handleStart()}
-                disabled={!inputSec || parseInt(inputSec) < 1 || parseInt(inputSec) > 180}
+                disabled={!inputSec || parseInt(inputSec) < 1 || parseInt(inputSec) > 180 || blockedByOther}
               >
                 ▶ 시작
               </button>
@@ -330,6 +345,8 @@ export default function Countdown() {
           </div>
         </div>
       )}
+
+      {errorMsg && <p className="cd-error-msg" style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: '0.5rem', textAlign: 'center' }}>{errorMsg}</p>}
 
       {!canControl && !isActive && (
         <p className="cd-viewer-msg">SFC가 카운트다운을 시작하면 여기에 표시됩니다</p>
