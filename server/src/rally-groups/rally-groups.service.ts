@@ -1,4 +1,12 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ConflictException,
+  OnModuleInit,
+  Inject,
+  forwardRef,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, MoreThan, Repository } from 'typeorm';
 import { RallyGroup } from './rally-group.entity';
@@ -6,12 +14,16 @@ import { RallyGroupMember } from './rally-group-member.entity';
 import { User } from '../users/users.entity';
 import { CreateRallyGroupDto } from './dto/create-rally-group.dto';
 import { RallyGroupsGateway } from './rally-groups.gateway';
+import { BusyLockService } from '../realtime/busy-lock.service';
 
 const MAX_GROUP_MEMBERS = 10;
 const MAX_GROUPS = 6;
 // 시작 안내 음성("N번 집결그룹 집결 시작합니다") + 프리카운트(3,2,1) 재생 시간 확보.
 // 기존 4000ms는 프리카운트만 고려한 값으로, 안내 음성(~3초)이 추가되어 7초로 증가.
 const COUNTDOWN_LEAD_MS = 7000;
+// BusyLock 자동 해제까지의 추가 여유 — maxMarchSeconds 만료 후 약간의 grace로
+// 안전하게 lock 해제. 너무 짧으면 race로 미해제, 너무 길면 다음 동작 차단 시간 증가.
+const RALLY_AUTO_IDLE_GRACE_SECONDS = 5;
 
 /** 자동 생성 이름 포맷 — 음성 안내와 쌍으로 유지 */
 function formatGroupName(displayOrder: number): string {
@@ -33,10 +45,12 @@ function sanitizeUser(u: any) {
 function sanitizeGroup(group: RallyGroup): RallyGroup {
   return {
     ...group,
-    createdBy: group.createdBy ? (sanitizeUser(group.createdBy) as any) : group.createdBy,
+    createdBy: group.createdBy
+      ? sanitizeUser(group.createdBy)
+      : group.createdBy,
     members: (group.members ?? []).map((m) => ({
       ...m,
-      user: m.user ? (sanitizeUser(m.user) as any) : m.user,
+      user: m.user ? sanitizeUser(m.user) : m.user,
     })) as any,
   };
 }
@@ -47,9 +61,13 @@ function sanitizeGroup(group: RallyGroup): RallyGroup {
  * 동률은 기존 orderIndex 오름차순으로 tie-break (안정 정렬).
  * 순수 함수 — DB 접근 없음. reorderByMarchSeconds의 정렬 핵심 로직.
  */
-export function sortMembersByMarchDesc<T extends { orderIndex: number; marchSecondsOverride: number | null; user?: { marchSeconds?: number | null } | null }>(
-  members: T[],
-): T[] {
+export function sortMembersByMarchDesc<
+  T extends {
+    orderIndex: number;
+    marchSecondsOverride: number | null;
+    user?: { marchSeconds?: number | null } | null;
+  },
+>(members: T[]): T[] {
   const withEffective = members.map((m) => ({
     m,
     effective: m.marchSecondsOverride ?? m.user?.marchSeconds ?? 0,
@@ -68,7 +86,10 @@ export function sortMembersByMarchDesc<T extends { orderIndex: number; marchSeco
 export function computeFireSchedule(
   members: Array<{ userId: number; orderIndex: number }>,
   effectiveMarchByUserId: Map<number, number>,
-): { maxMarch: number; fireOffsets: Array<{ orderIndex: number; offsetMs: number; userId: number }> } {
+): {
+  maxMarch: number;
+  fireOffsets: Array<{ orderIndex: number; offsetMs: number; userId: number }>;
+} {
   const marches = members.map((m) => effectiveMarchByUserId.get(m.userId) ?? 0);
   const maxMarch = Math.max(0, ...marches);
   const fireOffsets = members.map((m) => ({
@@ -80,14 +101,33 @@ export function computeFireSchedule(
 }
 
 @Injectable()
-export class RallyGroupsService {
+export class RallyGroupsService implements OnModuleInit {
   constructor(
     @InjectRepository(RallyGroup) private groupRepo: Repository<RallyGroup>,
-    @InjectRepository(RallyGroupMember) private memberRepo: Repository<RallyGroupMember>,
+    @InjectRepository(RallyGroupMember)
+    private memberRepo: Repository<RallyGroupMember>,
     @InjectRepository(User) private userRepo: Repository<User>,
     private gateway: RallyGroupsGateway,
     private dataSource: DataSource,
+    @Inject(forwardRef(() => BusyLockService))
+    private busyLock: BusyLockService,
   ) {}
+
+  /**
+   * 서버 재시작 시 stale 'running' 상태 복구.
+   * 메모리 lock은 재시작과 함께 휘발됐지만 DB에 'running' row가 남아 있을 수 있음.
+   * 클라이언트도 disconnect되어 카운트다운이 의미 없으므로 일괄 idle로 reset.
+   * 복구 시점에는 socket.io server가 아직 초기화 안 됐을 수 있어 broadcast는 생략 —
+   * 클라이언트가 재연결할 때 listAll로 idle 상태를 받게 됨.
+   */
+  async onModuleInit(): Promise<void> {
+    const running = await this.groupRepo.find({ where: { state: 'running' } });
+    if (running.length === 0) return;
+    await this.groupRepo.update(
+      { state: 'running' },
+      { state: 'idle', startedAtServerMs: null, maxMarchSeconds: null },
+    );
+  }
 
   async listAssignableUsers() {
     return this.userRepo.find({
@@ -122,7 +162,9 @@ export class RallyGroupsService {
       const groupRepo = mgr.getRepository(RallyGroup);
       const count = await groupRepo.count();
       if (count >= MAX_GROUPS) {
-        throw new BadRequestException(`집결 그룹은 최대 ${MAX_GROUPS}개까지만 생성 가능합니다.`);
+        throw new BadRequestException(
+          `집결 그룹은 최대 ${MAX_GROUPS}개까지만 생성 가능합니다.`,
+        );
       }
       // count+1 = 다음 슬롯 (remove에서 재번호화로 1..N 연속 보장).
       const displayOrder = count + 1;
@@ -179,11 +221,21 @@ export class RallyGroupsService {
   async addMember(groupId: string, userId: number): Promise<RallyGroup> {
     await this.dataSource.transaction(async (mgr) => {
       const count = await mgr.count(RallyGroupMember, { where: { groupId } });
-      if (count >= MAX_GROUP_MEMBERS) throw new BadRequestException(`Group is full (max ${MAX_GROUP_MEMBERS})`);
-      const duplicate = await mgr.findOne(RallyGroupMember, { where: { groupId, userId } });
+      if (count >= MAX_GROUP_MEMBERS)
+        throw new BadRequestException(
+          `Group is full (max ${MAX_GROUP_MEMBERS})`,
+        );
+      const duplicate = await mgr.findOne(RallyGroupMember, {
+        where: { groupId, userId },
+      });
       if (duplicate) throw new BadRequestException('User already in group');
       // 임시 orderIndex(count+1)로 삽입 후 reorderByMarchSeconds에서 재할당
-      const member = mgr.create(RallyGroupMember, { groupId, userId, orderIndex: count + 1, marchSecondsOverride: null });
+      const member = mgr.create(RallyGroupMember, {
+        groupId,
+        userId,
+        orderIndex: count + 1,
+        marchSecondsOverride: null,
+      });
       await mgr.save(member);
       // removeMember와 대칭: 트랜잭션 안에서 재정렬
       await this.reorderByMarchSeconds(groupId, mgr);
@@ -196,7 +248,9 @@ export class RallyGroupsService {
 
   async removeMember(groupId: string, memberId: string): Promise<void> {
     await this.dataSource.transaction(async (mgr) => {
-      const member = await mgr.findOne(RallyGroupMember, { where: { id: memberId, groupId } });
+      const member = await mgr.findOne(RallyGroupMember, {
+        where: { id: memberId, groupId },
+      });
       if (!member) throw new NotFoundException('Member not found');
       await mgr.remove(member);
 
@@ -208,7 +262,10 @@ export class RallyGroupsService {
     this.gateway.emitGroupUpdated(full);
   }
 
-  async updateMarchOverride(memberId: string, seconds: number | null): Promise<RallyGroup> {
+  async updateMarchOverride(
+    memberId: string,
+    seconds: number | null,
+  ): Promise<RallyGroup> {
     const member = await this.memberRepo.findOne({ where: { id: memberId } });
     if (!member) throw new NotFoundException('Member not found');
     await this.memberRepo.update(memberId, { marchSecondsOverride: seconds });
@@ -224,37 +281,88 @@ export class RallyGroupsService {
     return full;
   }
 
-  async startCountdown(groupId: string): Promise<{ group: RallyGroup; payload: { groupId: string; startedAtServerMs: number; fireOffsets: { orderIndex: number; offsetMs: number; userId: number }[] } }> {
-    // 카운트다운 시작 전 최신 marchSeconds 기준으로 순서 재정렬
+  async startCountdown(groupId: string): Promise<{
+    group: RallyGroup;
+    payload: {
+      groupId: string;
+      startedAtServerMs: number;
+      fireOffsets: { orderIndex: number; offsetMs: number; userId: number }[];
+    };
+  }> {
+    // 1단계: 정렬 + 그룹 + maxMarch 계산.
+    // reorder는 idempotent하므로 lock 획득 전에 수행 — DB 쓰기는 있으나 결과 동일.
+    // maxMarch를 미리 알아야 lock 자동해제 시간을 정확히 설정할 수 있음.
     await this.reorderByMarchSeconds(groupId);
 
     const group = await this.getFullGroup(groupId);
 
     const effectiveMap = new Map<number, number>(
-      group.members.map((m) => [m.userId, m.marchSecondsOverride ?? m.user?.marchSeconds ?? 0]),
+      group.members.map((m) => [
+        m.userId,
+        m.marchSecondsOverride ?? m.user?.marchSeconds ?? 0,
+      ]),
     );
 
-    const { maxMarch, fireOffsets } = computeFireSchedule(group.members, effectiveMap);
-    const startedAtServerMs = Date.now() + COUNTDOWN_LEAD_MS;
+    const { maxMarch, fireOffsets } = computeFireSchedule(
+      group.members,
+      effectiveMap,
+    );
 
-    await this.groupRepo.update(groupId, {
-      state: 'running',
-      startedAtServerMs,
-      maxMarchSeconds: maxMarch,
-    });
+    // 2단계: BusyLock 게이팅 — Countdown(1번) ↔ Rally(3번) 음성 충돌 방지.
+    // 자동 해제 시간 = LEAD + 최대 행군 시간 + 추가 grace.
+    const autoReleaseMs =
+      COUNTDOWN_LEAD_MS +
+      maxMarch * 1000 +
+      RALLY_AUTO_IDLE_GRACE_SECONDS * 1000;
+    const acquired = this.busyLock.tryAcquire(
+      { type: 'rally', groupId },
+      autoReleaseMs,
+      () => {
+        // 비동기 작업이지만 콜백은 sync — promise를 fire-and-forget으로.
+        // handleAutoIdle 내부에서 catch.
+        void this.handleAutoIdle(groupId);
+      },
+    );
+    if (!acquired) {
+      throw new ConflictException({
+        reason: 'busy',
+        message: '다른 카운트다운이 진행 중입니다.',
+        holder: this.busyLock.getHolder(),
+      });
+    }
 
-    const payload = { groupId, startedAtServerMs, fireOffsets };
-    this.gateway.emitCountdownStart(payload);
+    try {
+      // 3단계: DB 업데이트 + broadcast.
+      const startedAtServerMs = Date.now() + COUNTDOWN_LEAD_MS;
+      await this.groupRepo.update(groupId, {
+        state: 'running',
+        startedAtServerMs,
+        maxMarchSeconds: maxMarch,
+      });
 
-    const full = await this.getFullGroup(groupId);
-    this.gateway.emitGroupUpdated(full);
+      const payload = { groupId, startedAtServerMs, fireOffsets };
+      this.gateway.emitCountdownStart(payload);
 
-    return { group: full, payload };
+      const full = await this.getFullGroup(groupId);
+      this.gateway.emitGroupUpdated(full);
+      this.gateway.emitBusyState(this.busyLock.getHolder());
+
+      return { group: full, payload };
+    } catch (err) {
+      // DB update / fetch 실패 시 lock leak 방지 — 자동 해제 후 rethrow.
+      this.busyLock.release({ type: 'rally', groupId });
+      this.gateway.emitBusyState(null);
+      throw err;
+    }
   }
 
   async stopCountdown(groupId: string): Promise<void> {
     const group = await this.groupRepo.findOne({ where: { id: groupId } });
     if (!group) throw new NotFoundException('RallyGroup not found');
+
+    // BusyLock release — 다른 holder(다른 그룹의 rally, 또는 countdown)가 잡고 있으면 no-op.
+    // BusyLockService.release는 holder mismatch 시 자동으로 무시함.
+    this.busyLock.release({ type: 'rally', groupId });
 
     await this.groupRepo.update(groupId, {
       state: 'idle',
@@ -266,6 +374,30 @@ export class RallyGroupsService {
 
     const full = await this.getFullGroup(groupId);
     this.gateway.emitGroupUpdated(full);
+    this.gateway.emitBusyState(this.busyLock.getHolder());
+  }
+
+  /**
+   * BusyLock setTimeout 만료 시 호출 — 카운트다운 시간이 끝났는데 사용자가 stop을 안 누른 경우
+   * 자동으로 DB state를 idle로 reset하고 broadcast.
+   * 이 시점 BusyLockService 내부 holder는 이미 null (autoRelease가 holder→null 후 콜백 호출).
+   * 콜백은 throw 안 해야 BusyLockService 안전 — try/catch로 swallow.
+   */
+  private async handleAutoIdle(groupId: string): Promise<void> {
+    try {
+      await this.groupRepo.update(groupId, {
+        state: 'idle',
+        startedAtServerMs: null,
+        maxMarchSeconds: null,
+      });
+      this.gateway.emitCountdownStop(groupId);
+      const full = await this.getFullGroup(groupId).catch(() => null);
+      if (full) this.gateway.emitGroupUpdated(full);
+      this.gateway.emitBusyState(null);
+    } catch (err) {
+      // DB error 등 — 로그만 남기고 swallow.
+      console.error('[RallyGroupsService] handleAutoIdle 실패:', err);
+    }
   }
 
   async getMemberUserId(memberId: string): Promise<number | null> {
@@ -273,19 +405,35 @@ export class RallyGroupsService {
     return member?.userId ?? null;
   }
 
-  async recomputeIfRunning(groupId: string): Promise<{ payload?: { groupId: string; startedAtServerMs: number; fireOffsets: { orderIndex: number; offsetMs: number; userId: number }[] } }> {
+  async recomputeIfRunning(groupId: string): Promise<{
+    payload?: {
+      groupId: string;
+      startedAtServerMs: number;
+      fireOffsets: { orderIndex: number; offsetMs: number; userId: number }[];
+    };
+  }> {
     const group = await this.getFullGroup(groupId);
     if (group.state !== 'running' || group.startedAtServerMs == null) return {};
 
     const effectiveMap = new Map<number, number>(
-      group.members.map((m) => [m.userId, m.marchSecondsOverride ?? m.user?.marchSeconds ?? 0]),
+      group.members.map((m) => [
+        m.userId,
+        m.marchSecondsOverride ?? m.user?.marchSeconds ?? 0,
+      ]),
     );
 
-    const { maxMarch, fireOffsets } = computeFireSchedule(group.members, effectiveMap);
+    const { maxMarch, fireOffsets } = computeFireSchedule(
+      group.members,
+      effectiveMap,
+    );
 
     await this.groupRepo.update(groupId, { maxMarchSeconds: maxMarch });
 
-    const payload = { groupId, startedAtServerMs: Number(group.startedAtServerMs), fireOffsets };
+    const payload = {
+      groupId,
+      startedAtServerMs: Number(group.startedAtServerMs),
+      fireOffsets,
+    };
     this.gateway.emitCountdownStart(payload);
 
     return { payload };
@@ -296,14 +444,22 @@ export class RallyGroupsService {
    * 동률일 때는 기존 orderIndex를 tie-break으로 사용해 안정 정렬.
    * @param mgr EntityManager — 트랜잭션 내부에서 호출 시 전달, 아니면 생략(자체 트랜잭션으로 실행)
    */
-  private async reorderByMarchSeconds(groupId: string, mgr?: EntityManager): Promise<void> {
+  private async reorderByMarchSeconds(
+    groupId: string,
+    mgr?: EntityManager,
+  ): Promise<void> {
     if (mgr) {
       return this.reorderByMarchSeconds_inner(groupId, mgr);
     }
-    return this.dataSource.transaction((m) => this.reorderByMarchSeconds_inner(groupId, m));
+    return this.dataSource.transaction((m) =>
+      this.reorderByMarchSeconds_inner(groupId, m),
+    );
   }
 
-  private async reorderByMarchSeconds_inner(groupId: string, mgr: EntityManager): Promise<void> {
+  private async reorderByMarchSeconds_inner(
+    groupId: string,
+    mgr: EntityManager,
+  ): Promise<void> {
     const memberRepo = mgr.getRepository(RallyGroupMember);
     // user 관계 포함해서 조회 — marchSeconds 읽기 위함
     const members: RallyGroupMember[] = await memberRepo.find({
