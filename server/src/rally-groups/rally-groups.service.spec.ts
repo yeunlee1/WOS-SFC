@@ -511,4 +511,87 @@ describe('RallyGroupsService — BusyLock 통합', () => {
       expect(groupRepo.update).not.toHaveBeenCalled();
     });
   });
+
+  describe('listAssignableUsers — isLeader 필터', () => {
+    let userRepo: { find: jest.Mock };
+
+    beforeEach(() => {
+      // RallyGroupsService의 userRepo를 직접 접근하기 위해
+      // moduleRef에서 추출. 위 beforeEach에서 useValue로 주입한 {} 대신
+      // 이 describe 전용 mock으로 교체.
+      userRepo = { find: jest.fn() };
+      // service의 private userRepo를 교체 (테스트 목적)
+      (service as unknown as { userRepo: typeof userRepo }).userRepo = userRepo;
+    });
+
+    it('isLeader=true인 user는 결과에 포함됨', async () => {
+      const leaderUser = {
+        id: 1,
+        nickname: 'alice',
+        allianceName: 'KOR',
+        role: 'member',
+        language: 'ko',
+        isLeader: true,
+      };
+      userRepo.find.mockResolvedValue([leaderUser]);
+
+      const result = await service.listAssignableUsers();
+
+      expect(userRepo.find).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { isLeader: true } }),
+      );
+      expect(result).toHaveLength(1);
+      expect(result[0].nickname).toBe('alice');
+    });
+
+    // ──────────────────────────────────────────────────────────────
+    // Security reviewer 지적 보호 — select 화이트리스트 검증.
+    // listAssignableUsers는 클라이언트에 노출되므로 민감정보 컬럼이
+    // 우연히 select에 포함되지 않도록 ALLOWED + DISALLOWED 양쪽으로 검증.
+    // ──────────────────────────────────────────────────────────────
+    it('select에 안전 컬럼만 포함, 민감 컬럼(passwordHash/birthDate/name/refreshTokenHash) 미포함', async () => {
+      userRepo.find.mockResolvedValue([]);
+
+      await service.listAssignableUsers();
+
+      expect(userRepo.find).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { isLeader: true },
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+          select: expect.arrayContaining([
+            'id',
+            'nickname',
+            'allianceName',
+            'role',
+            'language',
+            'isLeader',
+          ]),
+        }),
+      );
+      expect(userRepo.find).toHaveBeenCalledWith(
+        expect.objectContaining({
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+          select: expect.not.arrayContaining([
+            'passwordHash',
+            'birthDate',
+            'name',
+            'refreshTokenHash',
+          ]),
+        }),
+      );
+    });
+
+    it('isLeader=false인 user는 결과에 미포함 (find가 빈 배열 반환)', async () => {
+      // where: { isLeader: true } 조건으로 DB가 걸러주는 것을 모의 —
+      // 실제 DB 필터링은 TypeORM이 처리하므로 mock에서 빈 배열 반환으로 검증.
+      userRepo.find.mockResolvedValue([]);
+
+      const result = await service.listAssignableUsers();
+
+      expect(userRepo.find).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { isLeader: true } }),
+      );
+      expect(result).toHaveLength(0);
+    });
+  });
 });

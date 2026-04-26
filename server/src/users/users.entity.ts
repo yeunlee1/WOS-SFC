@@ -1,10 +1,13 @@
 import {
-  Entity, PrimaryGeneratedColumn, Column, CreateDateColumn,
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
 } from 'typeorm';
 
 export type UserRole = 'admin' | 'member' | 'developer';
 export const LANGUAGES = ['ko', 'en', 'ja', 'zh', 'ru', 'other'] as const;
-export type Language = typeof LANGUAGES[number];
+export type Language = (typeof LANGUAGES)[number];
 
 @Entity('users')
 export class User {
@@ -32,11 +35,20 @@ export class User {
   @Column({ type: 'enum', enum: LANGUAGES })
   language: Language;
 
-  @Column({ name: 'refresh_token_hash', type: 'varchar', nullable: true, length: 255, select: false })
+  @Column({
+    name: 'refresh_token_hash',
+    type: 'varchar',
+    nullable: true,
+    length: 255,
+    select: false,
+  })
   refreshTokenHash: string | null;
 
   @Column({ name: 'march_seconds', type: 'int', nullable: true })
   marchSeconds: number | null;
+
+  @Column({ name: 'is_leader', type: 'boolean', default: false })
+  isLeader: boolean;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
