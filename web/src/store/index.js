@@ -67,6 +67,9 @@ export const useStore = create((set) => ({
   rallyGroups: [],
   rallyCountdowns: {}, // groupId → { startedAtServerMs, fireOffsets }
 
+  // busy lock holder: { type: 'countdown' } | { type: 'rally', groupId: string } | null
+  busyHolder: null,
+
   // TTS 볼륨 (0~1, 기본 0.3 = 30%)
   ttsVolume: _initTtsVolume(),
   // TTS 음소거 플래그 (볼륨과 독립 — 스피커 아이콘 토글용)
@@ -96,6 +99,8 @@ export const useStore = create((set) => ({
     allianceNotices: { ...state.allianceNotices, [alliance]: notices },
   })),
   setCountdown:  (countdown)  => set({ countdown }),
+
+  setBusyHolder: (holder) => set({ busyHolder: holder }),
 
   setRallyGroups: (rallyGroups) => set({ rallyGroups }),
   upsertRallyGroup: (group) => set((s) => {

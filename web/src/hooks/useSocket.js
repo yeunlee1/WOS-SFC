@@ -16,6 +16,7 @@ export function useSocket(user) {
   const removeRallyGroup    = useStore((s) => s.removeRallyGroup);
   const setRallyCountdown   = useStore((s) => s.setRallyCountdown);
   const clearRallyCountdown = useStore((s) => s.clearRallyCountdown);
+  const setBusyHolder       = useStore((s) => s.setBusyHolder);
 
   useEffect(() => {
     if (!user) return;
@@ -28,6 +29,7 @@ export function useSocket(user) {
     const onRallyRemoved = ({ groupId }) => removeRallyGroup(groupId);
     const onRallyCountdownStart = (payload) => setRallyCountdown(payload.groupId, payload);
     const onRallyCountdownStop = ({ groupId }) => clearRallyCountdown(groupId);
+    const onBusyState = ({ holder }) => setBusyHolder(holder);
 
     socket.on('notices:updated',  setNotices);
     socket.on('rallies:updated',  setRallies);
@@ -38,6 +40,7 @@ export function useSocket(user) {
     socket.on('rallyGroup:removed', onRallyRemoved);
     socket.on('rallyGroup:countdown:start', onRallyCountdownStart);
     socket.on('rallyGroup:countdown:stop', onRallyCountdownStop);
+    socket.on('busy:state', onBusyState);
     ALLIANCES.forEach((a, i) => socket.on(`board:updated:${a}`, boardHandlers[i]));
     ALLIANCES.forEach((a) => {
       socket.on(`alliance-notice:updated:${a}`, (notices) => setAllianceNotices(a, notices));
@@ -53,6 +56,7 @@ export function useSocket(user) {
       socket.off('rallyGroup:removed', onRallyRemoved);
       socket.off('rallyGroup:countdown:start', onRallyCountdownStart);
       socket.off('rallyGroup:countdown:stop', onRallyCountdownStop);
+      socket.off('busy:state', onBusyState);
       ALLIANCES.forEach((a, i) => socket.off(`board:updated:${a}`, boardHandlers[i]));
       ALLIANCES.forEach((a) => {
         socket.off(`alliance-notice:updated:${a}`);
