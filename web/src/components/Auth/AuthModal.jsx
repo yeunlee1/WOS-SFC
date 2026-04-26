@@ -69,7 +69,7 @@ export default function AuthModal() {
     if (signupPassword.length < 6) { setError('비밀번호는 6자 이상이어야 합니다'); return; }
     setLoading(true); setError('');
     try {
-      const res = await api.signup({ name, nickname: signupNickname, password: signupPassword, allianceName, role, birthDate, language, serverCode });
+      const res = await api.signup({ name, nickname: signupNickname, password: signupPassword, allianceName, birthDate, language, serverCode });
       await initUser(res.user);
     } catch (err) { setError(err.message); }
     finally { setLoading(false); }
@@ -81,7 +81,7 @@ export default function AuthModal() {
       let res;
       try { res = await api.login({ nickname: account.nickname, password: account.password }); }
       catch {
-        await api.signup({ nickname: account.nickname, password: account.password, name: account.name, allianceName: account.allianceName, role: account.role, birthDate: account.birthDate, language: account.language, serverCode: '2677' }).catch(() => {});
+        await api.signup({ nickname: account.nickname, password: account.password, name: account.name, allianceName: account.allianceName, birthDate: account.birthDate, language: account.language, serverCode: '2677' }).catch(() => {});
         res = await api.login({ nickname: account.nickname, password: account.password });
       }
       await api.setUserRole(account.nickname, account.role).catch(() => {});
