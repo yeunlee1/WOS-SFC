@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   BadRequestException,
   ConflictException,
@@ -102,6 +103,8 @@ export function computeFireSchedule(
 
 @Injectable()
 export class RallyGroupsService implements OnModuleInit {
+  private readonly logger = new Logger(RallyGroupsService.name);
+
   constructor(
     @InjectRepository(RallyGroup) private groupRepo: Repository<RallyGroup>,
     @InjectRepository(RallyGroupMember)
@@ -360,9 +363,25 @@ export class RallyGroupsService implements OnModuleInit {
     const group = await this.groupRepo.findOne({ where: { id: groupId } });
     if (!group) throw new NotFoundException('RallyGroup not found');
 
-    // BusyLock release — 다른 holder(다른 그룹의 rally, 또는 countdown)가 잡고 있으면 no-op.
-    // BusyLockService.release는 holder mismatch 시 자동으로 무시함.
-    this.busyLock.release({ type: 'rally', groupId });
+    // holder 가드 — RealtimeGateway.handleCountdownStop과 대칭화.
+    // 다른 holder(countdown 또는 다른 rally 그룹)가 lock 잡고 있으면 자기 그룹 idempotent
+    // 처리만 필요하다. 자기 그룹이 이미 idle이면 부수효과 없이 silent no-op.
+    // (자기 그룹이 stale running 상태면 DB만 idle로 reset, lock은 건드리지 않음.)
+    const holder = this.busyLock.getHolder();
+    const ownsLock =
+      holder !== null && holder.type === 'rally' && holder.groupId === groupId;
+
+    // 자기 그룹이 lock holder도 아니고 group state도 이미 idle이면 일찍 종료 —
+    // 부수효과(DB update, broadcast 4종) 모두 차단.
+    if (!ownsLock && group.state === 'idle') {
+      return;
+    }
+
+    // 자기 그룹이 lock holder인 경우에만 release 호출.
+    // (다른 holder의 lock을 BusyLockService가 mismatch로 무시하더라도, 의미상 명시적으로 차단.)
+    if (ownsLock) {
+      this.busyLock.release({ type: 'rally', groupId });
+    }
 
     await this.groupRepo.update(groupId, {
       state: 'idle',
@@ -396,7 +415,10 @@ export class RallyGroupsService implements OnModuleInit {
       this.gateway.emitBusyState(null);
     } catch (err) {
       // DB error 등 — 로그만 남기고 swallow.
-      console.error('[RallyGroupsService] handleAutoIdle 실패:', err);
+      this.logger.error(
+        'handleAutoIdle 실패',
+        err instanceof Error ? err.stack : String(err),
+      );
     }
   }
 

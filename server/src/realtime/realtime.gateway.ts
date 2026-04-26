@@ -195,6 +195,20 @@ export class RealtimeGateway
       throw err;
     }
 
+    // race 가드 — negotiateStartedAt await 도중 다른 admin이 stop 호출하여
+    // lock이 풀렸거나 다른 holder로 점유된 경우, countdown.active=true를 lock 없이
+    // 설정하면 게이팅 우회가 가능해진다. 따라서 holder가 여전히 'countdown'인지 재확인.
+    // 일치하지 않으면 abort + ack { ok: false, reason: 'busy', holder } 반환,
+    // countdown 상태/broadcast는 변경 안 함 (stop 측이 이미 idle broadcast 완료).
+    const currentHolder = this.busyLock.getHolder();
+    if (!currentHolder || currentHolder.type !== 'countdown') {
+      return {
+        ok: false,
+        reason: 'busy',
+        holder: currentHolder,
+      };
+    }
+
     this.countdown = { active: true, startedAt, totalSeconds };
     this.server.emit('countdown:state', {
       ...this.countdown,

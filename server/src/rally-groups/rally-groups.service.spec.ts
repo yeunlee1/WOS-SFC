@@ -368,6 +368,73 @@ describe('RallyGroupsService — BusyLock 통합', () => {
       expect(gateway.emitCountdownStop).toHaveBeenCalledWith('g1');
       expect(gateway.emitBusyState).toHaveBeenCalledWith(null);
     });
+
+    // ──────────────────────────────────────────────────────────────
+    // Quality reviewer 지적 수정: stopCountdown holder mismatch 가드 추가.
+    // RealtimeGateway.handleCountdownStop과 대칭화 — 다른 holder가 잡고 있고
+    // 자기 그룹이 idle이면 silent no-op (부수효과 모두 차단).
+    // 자기 그룹이 stale running 상태면 DB만 idle로 reset, lock은 건드리지 않음.
+    // ──────────────────────────────────────────────────────────────
+    it('countdown holder가 lock 잡고 있고 자기 그룹이 idle이면 stopCountdown(rally) — silent no-op (부수효과 차단)', async () => {
+      groupRepo.findOne.mockResolvedValue(fakeGroup('idle'));
+      // 다른 holder(countdown)가 lock 점유.
+      busyLock.tryAcquire({ type: 'countdown' });
+
+      await service.stopCountdown('g1');
+
+      // countdown lock 유지 — 가드로 release 시도조차 안 함.
+      expect(busyLock.getHolder()).toEqual({ type: 'countdown' });
+
+      // 가드로 인해 DB update / broadcast 모두 차단됨.
+      expect(groupRepo.update).not.toHaveBeenCalled();
+      expect(gateway.emitCountdownStop).not.toHaveBeenCalled();
+      expect(gateway.emitGroupUpdated).not.toHaveBeenCalled();
+      expect(gateway.emitBusyState).not.toHaveBeenCalled();
+    });
+
+    it('다른 그룹 rally가 lock 잡고 있고 자기 그룹이 idle이면 stopCountdown(g1) — silent no-op', async () => {
+      // 사전: 다른 그룹(g2)의 rally가 lock 점유, g1은 idle.
+      groupRepo.findOne.mockResolvedValue(fakeGroup('idle'));
+      busyLock.tryAcquire({ type: 'rally', groupId: 'g2' });
+
+      await service.stopCountdown('g1');
+
+      // g2 lock 유지.
+      expect(busyLock.getHolder()).toEqual({ type: 'rally', groupId: 'g2' });
+
+      // g1에 대한 DB update + broadcast 모두 차단 — 유령 broadcast 방지.
+      expect(groupRepo.update).not.toHaveBeenCalled();
+      expect(gateway.emitCountdownStop).not.toHaveBeenCalled();
+      expect(gateway.emitGroupUpdated).not.toHaveBeenCalled();
+      expect(gateway.emitBusyState).not.toHaveBeenCalled();
+    });
+
+    it('다른 holder가 lock 잡고 있고 자기 그룹은 stale running이면 — DB는 idle로 reset, lock은 건드리지 않음', async () => {
+      // 사전 조건 — g1이 running인데 다른 holder(countdown)가 lock 점유 중인 비정상 상태.
+      // (예: 서버 재시작 후 부분 복구가 어긋난 상황 등)
+      // 자기 그룹 state를 idle로 재정렬해야 클라이언트가 일관된 상태를 보지만,
+      // 다른 holder의 lock은 절대 풀지 않음.
+      groupRepo.findOne.mockResolvedValue(fakeGroup('running'));
+      busyLock.tryAcquire({ type: 'countdown' });
+
+      await service.stopCountdown('g1');
+
+      // countdown lock 유지.
+      expect(busyLock.getHolder()).toEqual({ type: 'countdown' });
+
+      // g1 DB는 idle로 reset (stale state 정정).
+      expect(groupRepo.update).toHaveBeenCalledWith(
+        'g1',
+        expect.objectContaining({
+          state: 'idle',
+          startedAtServerMs: null,
+          maxMarchSeconds: null,
+        }),
+      );
+      expect(gateway.emitCountdownStop).toHaveBeenCalledWith('g1');
+      // emitBusyState는 현재 holder(countdown)를 그대로 broadcast — null 아님.
+      expect(gateway.emitBusyState).toHaveBeenCalledWith({ type: 'countdown' });
+    });
   });
 
   describe('handleAutoIdle (BusyLock setTimeout 만료 시뮬레이션)', () => {
