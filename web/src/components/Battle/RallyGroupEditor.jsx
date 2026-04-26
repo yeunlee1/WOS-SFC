@@ -90,7 +90,7 @@ export default function RallyGroupEditor({ groupId, onClose }) {
             {filtered.map((u) => (
               <li key={u.id} className="rally-user-row">
                 <span className="rally-member-name">{formatUser(u)}</span>
-                <span className="rally-user-role">{u.role}</span>
+                <span className="leader-badge">집결장</span>
                 <button
                   type="button"
                   className="rally-btn rally-btn--primary"
@@ -101,7 +101,11 @@ export default function RallyGroupEditor({ groupId, onClose }) {
                 </button>
               </li>
             ))}
-            {filtered.length === 0 && <li className="rally-empty-small">결과 없음</li>}
+            {filtered.length === 0 && (
+              search.trim()
+                ? <li className="rally-empty-small">결과 없음</li>
+                : <li className="rally-empty-small">집결장 자격이 있는 유저가 없습니다 — 회원 관리에서 집결장으로 지정해주세요</li>
+            )}
           </ul>
         </div>
       </div>

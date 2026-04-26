@@ -19,6 +19,8 @@ export default function AdminTab() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  // leader 토글 in-flight 가드 — 빠른 더블클릭으로 PATCH 중복 발사 방지
+  const [leaderBusyId, setLeaderBusyId] = useState(null);
 
   // 유저 목록 불러오기
   async function fetchUsers() {
@@ -44,6 +46,21 @@ export default function AdminTab() {
       await fetchUsers();
     } catch (e) {
       alert(e.message);
+    }
+  }
+
+  // 집결장 토글 — 매 토글마다 전체 refetch 회피 위해 서버 응답(sanitized user)으로 in-place 머지.
+  // handleRoleChange는 role 변경 시 권한 영향이 있어 안전하게 전체 refetch 패턴 유지 (차이는 의도된 것).
+  async function handleLeaderToggle(targetUser) {
+    if (leaderBusyId === targetUser.id) return;
+    setLeaderBusyId(targetUser.id);
+    try {
+      const updated = await api.adminSetLeader(targetUser.id, !targetUser.isLeader);
+      setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setLeaderBusyId(null);
     }
   }
 
@@ -94,11 +111,22 @@ export default function AdminTab() {
             <tbody>
               {users.map((u) => (
                 <tr key={u.id}>
-                  <td>{u.nickname}</td>
+                  <td>
+                    {u.nickname}
+                    {u.isLeader && <span className="leader-badge">집결장</span>}
+                  </td>
                   <td>{u.allianceName}</td>
                   <td>{roleBadge(u.role)}</td>
                   <td>{new Date(u.createdAt).toLocaleDateString('ko-KR')}</td>
                   <td className="admin-actions">
+                    {/* 집결장 토글 — 모든 유저 가능 (role 무관) */}
+                    <button
+                      className={`btn btn-sm admin-leader-toggle${u.isLeader ? ' is-leader' : ''}`}
+                      onClick={() => handleLeaderToggle(u)}
+                      disabled={leaderBusyId === u.id}
+                    >
+                      {u.isLeader ? '집결장 해제' : '집결장 지정'}
+                    </button>
                     {/* developer는 역할 변경 불가 */}
                     {u.role !== 'developer' && (
                       <button
@@ -128,7 +156,10 @@ export default function AdminTab() {
             {users.map((u) => (
               <div key={u.id} className="admin-card">
                 <div className="admin-card-top">
-                  <span className="admin-card-nickname">{u.nickname}</span>
+                  <div className="admin-card-name-row">
+                    <span className="admin-card-nickname">{u.nickname}</span>
+                    {u.isLeader && <span className="leader-badge">집결장</span>}
+                  </div>
                   {roleBadge(u.role)}
                 </div>
                 <div className="admin-card-info">
@@ -136,6 +167,14 @@ export default function AdminTab() {
                   <span>{new Date(u.createdAt).toLocaleDateString('ko-KR')}</span>
                 </div>
                 <div className="admin-card-actions">
+                  {/* 집결장 토글 — 모든 유저 가능 (role 무관) */}
+                  <button
+                    className={`btn btn-sm admin-leader-toggle${u.isLeader ? ' is-leader' : ''}`}
+                    onClick={() => handleLeaderToggle(u)}
+                    disabled={leaderBusyId === u.id}
+                  >
+                    {u.isLeader ? '집결장 해제' : '집결장 지정'}
+                  </button>
                   {/* developer는 역할 변경 불가 */}
                   {u.role !== 'developer' && (
                     <button className="btn btn-sm" onClick={() => handleRoleChange(u)}>
