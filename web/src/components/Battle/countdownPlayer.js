@@ -24,6 +24,7 @@
 //   setCountdownVolume(volume, muted)   — 볼륨/뮤트 실시간 반영
 
 import { ttsUrl } from './tts';
+import { perceptualVolume } from '../../utils/volume';
 
 let ctx = null;
 let masterGain = null;
@@ -256,10 +257,8 @@ export function stopCountdownAudio() {
 
 export function setCountdownVolume(volume, muted) {
   if (!masterGain || !ctx) return;
-  const v = (typeof volume === 'number' && Number.isFinite(volume))
-    ? Math.max(0, Math.min(1, volume))
-    : 0.3;
-  const target = muted ? 0 : v;
+  const linear = (typeof volume === 'number' && Number.isFinite(volume)) ? volume : 0.3;
+  const target = muted ? 0 : perceptualVolume(linear);
   try {
     masterGain.gain.cancelScheduledValues(ctx.currentTime);
     masterGain.gain.setTargetAtTime(target, ctx.currentTime, 0.01);

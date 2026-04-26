@@ -2,6 +2,7 @@
 // 서버가 Google Cloud TTS로 사전 생성한 mp3를 재생.
 // 키 규칙: 숫자 1~180, 문구 start/stop/march
 import { useStore } from '../../store';
+import { perceptualVolume } from '../../utils/volume';
 
 const TTS_NUM_MAX = 180;
 
@@ -79,7 +80,7 @@ export function speak(key, lang = 'ko', opts) {
     // 근본 원인 수정 (Bug 1): 매 호출마다 독립 Audio 인스턴스
     //   → 이전 재생은 새 재생에 의해 중단되지 않음.
     const audio = new Audio(ttsUrl(lang, key));
-    audio.volume = Math.max(0, Math.min(1, volNum));
+    audio.volume = perceptualVolume(volNum);
     audio.preload = 'auto';
 
     const cleanup = () => {
