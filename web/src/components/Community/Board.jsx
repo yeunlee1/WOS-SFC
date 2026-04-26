@@ -100,11 +100,11 @@ export default function Board({ alliance }) {
     setPosting(true);
     try {
       await api.addBoardPost(alliance, {
-        nickname:  user.nickname,
-        alliance:  user.allianceName,
-        content:   content.trim(),
+        nickname:     user.nickname,
+        userAlliance: user.allianceName,
+        content:      content.trim(),
         lang,
-        imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
+        imageUrls:    imageUrls.length > 0 ? imageUrls : undefined,
       });
       setContent('');
       setImageUrls([]);
@@ -220,7 +220,7 @@ export default function Board({ alliance }) {
               <div key={p.id} className="board-post-card">
                 <div className="board-post-header">
                   <span className="board-post-alliance" style={{ background: color }}>
-                    {p.alliance}
+                    {p.userAlliance || p.alliance}
                   </span>
                   <span className="board-post-nickname">{p.nickname}</span>
                   <span className="board-post-date">{p.createdAt || ''}</span>
