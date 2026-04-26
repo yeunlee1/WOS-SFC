@@ -1,8 +1,12 @@
 // server/src/realtime/realtime.gateway.ts
 import {
-  WebSocketGateway, WebSocketServer,
-  OnGatewayConnection, OnGatewayDisconnect,
-  SubscribeMessage, MessageBody, ConnectedSocket,
+  WebSocketGateway,
+  WebSocketServer,
+  OnGatewayConnection,
+  OnGatewayDisconnect,
+  SubscribeMessage,
+  MessageBody,
+  ConnectedSocket,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
@@ -23,12 +27,16 @@ interface OnlineUser {
 
 // production 환경에서 WEB_ORIGIN 미설정 시 실수로 모든 origin을 허용하는 fallback이 되지 않도록 에러.
 if (process.env.NODE_ENV === 'production' && !process.env.WEB_ORIGIN) {
-  throw new Error('WEB_ORIGIN 환경변수가 production에서 필수입니다. CORS 보안을 위해 명시적으로 설정하세요.');
+  throw new Error(
+    'WEB_ORIGIN 환경변수가 production에서 필수입니다. CORS 보안을 위해 명시적으로 설정하세요.',
+  );
 }
 const WEB_ORIGIN = process.env.WEB_ORIGIN || 'http://localhost:5173';
 
 @WebSocketGateway({ cors: { origin: WEB_ORIGIN, credentials: true } })
-export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class RealtimeGateway
+  implements OnGatewayConnection, OnGatewayDisconnect
+{
   @WebSocketServer() server: Server;
 
   private onlineMap = new Map<string, OnlineUser>();
@@ -38,11 +46,16 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     private jwtService: JwtService,
     private readyNegotiation: ReadyNegotiationService,
     private rateLimit: WsRateLimitService,
-    @Inject(forwardRef(() => NoticesService)) private noticesService: NoticesService,
-    @Inject(forwardRef(() => RalliesService)) private ralliesService: RalliesService,
-    @Inject(forwardRef(() => MembersService)) private membersService: MembersService,
-    @Inject(forwardRef(() => BoardsService)) private boardsService: BoardsService,
-    @Inject(forwardRef(() => AllianceNoticesService)) private allianceNoticesService: AllianceNoticesService,
+    @Inject(forwardRef(() => NoticesService))
+    private noticesService: NoticesService,
+    @Inject(forwardRef(() => RalliesService))
+    private ralliesService: RalliesService,
+    @Inject(forwardRef(() => MembersService))
+    private membersService: MembersService,
+    @Inject(forwardRef(() => BoardsService))
+    private boardsService: BoardsService,
+    @Inject(forwardRef(() => AllianceNoticesService))
+    private allianceNoticesService: AllianceNoticesService,
   ) {}
 
   // httpOnly 쿠키에서 access_token 파싱 후 JWT 검증
@@ -65,7 +78,10 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
 
   async handleConnection(client: Socket) {
     const user = this.getUserFromSocket(client);
-    if (!user) { client.disconnect(); return; }
+    if (!user) {
+      client.disconnect();
+      return;
+    }
 
     this.onlineMap.set(client.id, user);
     this.broadcastOnline();
@@ -85,18 +101,27 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     }
 
     for (const a of ['KOR', 'NSL', 'JKY', 'GPX', 'UFO']) {
-      const allianceNotices = await this.allianceNoticesService.findByAlliance(a);
-      client.emit(`alliance-notice:updated:${a}`, allianceNotices.map(this.formatAllianceNotice));
+      const allianceNotices =
+        await this.allianceNoticesService.findByAlliance(a);
+      client.emit(
+        `alliance-notice:updated:${a}`,
+        allianceNotices.map(this.formatAllianceNotice),
+      );
     }
 
-    client.emit('countdown:state', { ...this.countdown, serverEmitAt: Date.now() });
+    client.emit('countdown:state', {
+      ...this.countdown,
+      serverEmitAt: Date.now(),
+    });
   }
 
   // 시간 동기화용 ws ping/pong — REST `/time` 대비 HTTP overhead 5~20ms 절약.
   // 클라이언트가 ack callback으로 응답을 받아 NTP 4-timestamp 알고리즘에 사용.
   // Rate limit: 분당 30회 (정상 5초 주기 sync는 분당 12회 — 충분히 여유, abuse 차단).
   @SubscribeMessage('time:ping')
-  handleTimePing(@ConnectedSocket() client: Socket): { utc: number; t1: number; t2: number } | null {
+  handleTimePing(
+    @ConnectedSocket() client: Socket,
+  ): { utc: number; t1: number; t2: number } | null {
     if (!this.rateLimit.check(client.id, 'time:ping', 30, 60_000)) return null;
     const t1 = Date.now();
     const t2 = Date.now();
@@ -110,17 +135,28 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
   ) {
     const user = this.getUserFromSocket(client);
     if (!user || !['admin', 'developer'].includes(user.role)) return;
-    if (typeof totalSeconds !== 'number' || !Number.isInteger(totalSeconds) || totalSeconds < 1 || totalSeconds > 600) return;
+    if (
+      typeof totalSeconds !== 'number' ||
+      !Number.isInteger(totalSeconds) ||
+      totalSeconds < 1 ||
+      totalSeconds > 600
+    )
+      return;
     // Rate limit: 분당 5회 — 정상 SFC 사용 충분, ReadyNegotiation probe 폭증 방지.
     if (!this.rateLimit.check(client.id, 'countdown:start', 5, 60_000)) return;
 
     // 단계 5: probe 라운드트립으로 모든 클라이언트의 maxRTT 측정 후 startedAt 결정.
     // → 모든 디바이스가 정확히 같은 절대 시각에 TTS 발화 시작 (±30ms 보장).
     // SFC가 클릭 후 0.5~1초 대기 비용 — UX 트레이드오프.
-    const startedAt = await this.readyNegotiation.negotiateStartedAt(this.server);
+    const startedAt = await this.readyNegotiation.negotiateStartedAt(
+      this.server,
+    );
 
     this.countdown = { active: true, startedAt, totalSeconds };
-    this.server.emit('countdown:state', { ...this.countdown, serverEmitAt: Date.now() });
+    this.server.emit('countdown:state', {
+      ...this.countdown,
+      serverEmitAt: Date.now(),
+    });
   }
 
   @SubscribeMessage('countdown:stop')
@@ -129,7 +165,10 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     if (!user || !['admin', 'developer'].includes(user.role)) return;
 
     this.countdown = { active: false, startedAt: 0, totalSeconds: 0 };
-    this.server.emit('countdown:state', { ...this.countdown, serverEmitAt: Date.now() });
+    this.server.emit('countdown:state', {
+      ...this.countdown,
+      serverEmitAt: Date.now(),
+    });
   }
 
   handleDisconnect(client: Socket) {
@@ -171,12 +210,18 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
 
   async broadcastBoard(alliance: string) {
     const posts = await this.boardsService.findByAlliance(alliance);
-    this.server.emit(`board:updated:${alliance}`, posts.map(this.formatBoardPost));
+    this.server.emit(
+      `board:updated:${alliance}`,
+      posts.map(this.formatBoardPost),
+    );
   }
 
   async broadcastAllianceNotice(alliance: string) {
     const notices = await this.allianceNoticesService.findByAlliance(alliance);
-    this.server.emit(`alliance-notice:updated:${alliance}`, notices.map(this.formatAllianceNotice));
+    this.server.emit(
+      `alliance-notice:updated:${alliance}`,
+      notices.map(this.formatAllianceNotice),
+    );
   }
 
   private formatAllianceNotice(n: any) {
@@ -188,9 +233,13 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       content: n.content,
       authorNick: n.authorNick,
       lang: n.lang,
-      createdAt: n.createdAt instanceof Date
-        ? n.createdAt.toLocaleString('ko-KR', { dateStyle: 'short', timeStyle: 'short' })
-        : String(n.createdAt),
+      createdAt:
+        n.createdAt instanceof Date
+          ? n.createdAt.toLocaleString('ko-KR', {
+              dateStyle: 'short',
+              timeStyle: 'short',
+            })
+          : String(n.createdAt),
     };
   }
 
@@ -202,9 +251,13 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       content: n.content,
       authorNick: n.authorNick,
       lang: n.lang,
-      createdAt: n.createdAt instanceof Date
-        ? n.createdAt.toLocaleString('ko-KR', { dateStyle: 'short', timeStyle: 'short' })
-        : String(n.createdAt),
+      createdAt:
+        n.createdAt instanceof Date
+          ? n.createdAt.toLocaleString('ko-KR', {
+              dateStyle: 'short',
+              timeStyle: 'short',
+            })
+          : String(n.createdAt),
     };
   }
 
@@ -230,9 +283,13 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       content: p.content,
       lang: p.lang,
       imageUrls: p.imageUrls || [],
-      createdAt: p.createdAt instanceof Date
-        ? p.createdAt.toLocaleString('ko-KR', { dateStyle: 'short', timeStyle: 'short' })
-        : String(p.createdAt),
+      createdAt:
+        p.createdAt instanceof Date
+          ? p.createdAt.toLocaleString('ko-KR', {
+              dateStyle: 'short',
+              timeStyle: 'short',
+            })
+          : String(p.createdAt),
     };
   }
 }
