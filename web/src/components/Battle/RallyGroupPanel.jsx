@@ -14,6 +14,7 @@ export default function RallyGroupPanel() {
   const rallyGroups = useStore((s) => s.rallyGroups);
   const setRallyGroups = useStore((s) => s.setRallyGroups);
   const rallyCountdowns = useStore((s) => s.rallyCountdowns);
+  const busyHolder = useStore((s) => s.busyHolder);
 
   const [editingGroupId, setEditingGroupId] = useState(null);
   const [creating, setCreating] = useState(false);
@@ -45,18 +46,30 @@ export default function RallyGroupPanel() {
   async function handleDelete(id) {
     if (!window.confirm('그룹을 삭제하시겠습니까?')) return;
     try { await api.deleteRallyGroup(id); }
-    catch (err) { setError(err?.message || '삭제 실패'); }
+    catch (err) {
+      setError(err?.message || '삭제 실패');
+      setTimeout(() => setError(null), 1500);
+    }
   }
 
   async function handleStart(id) {
-    try { await api.startRallyGroup(id); }
-    catch (err) { setError(err?.message || '시작 실패'); }
+    try {
+      await api.startRallyGroup(id);
+    } catch (err) {
+      // 서버 ConflictException 시 err.message가 '다른 카운트다운이 진행 중입니다.' 형태
+      // 기타 오류는 일반 메시지
+      setError(err?.message || '시작 실패');
+      setTimeout(() => setError(null), 1500);
+    }
   }
 
   async function handleStop(id) {
     stopRallyCountdown(); // 서버 응답 전에 클라이언트에서 즉시 오디오 정지
     try { await api.stopRallyGroup(id); }
-    catch (err) { setError(err?.message || '정지 실패'); }
+    catch (err) {
+      setError(err?.message || '정지 실패');
+      setTimeout(() => setError(null), 1500);
+    }
   }
 
   return (
@@ -87,6 +100,8 @@ export default function RallyGroupPanel() {
           const countdown = rallyCountdowns[g.id];
           const running = g.state === 'running' && !!countdown;
           const sortedMembers = [...(g.members ?? [])].sort((a, b) => a.orderIndex - b.orderIndex);
+          // 자기 자신 그룹이 lock 잡았다면 running 상태라 시작 버튼이 어차피 안 보임
+          const blockedByOther = busyHolder !== null && !(busyHolder.type === 'rally' && busyHolder.groupId === g.id);
 
           return (
             <li key={g.id} className={`rally-group-card ${running ? 'running' : ''}`}>
@@ -98,7 +113,7 @@ export default function RallyGroupPanel() {
                 {isAdmin && (
                   <div className="rally-group-card__actions">
                     {!running && (
-                      <button type="button" className="rally-btn" onClick={() => handleStart(g.id)} disabled={sortedMembers.length === 0}>
+                      <button type="button" className="rally-btn" onClick={() => handleStart(g.id)} disabled={sortedMembers.length === 0 || blockedByOther}>
                         시작
                       </button>
                     )}
