@@ -373,5 +373,60 @@ describe('RealtimeGateway — BusyLock 통합 단위 테스트', () => {
         .filter((c) => (c[1] as { active?: boolean })?.active === true);
       expect(activeTrueCalls).toHaveLength(0);
     });
+
+    // 2회차 verify-loop 보강 — race 가드의 두 번째 분기 회귀 보호.
+    // 시나리오: countdown:start의 negotiate await 도중 stop이 풀고,
+    // 즉시 RallyGroupsService(다른 admin)가 rally lock을 잡은 상태에서 await 종료.
+    // 이 경우 currentHolder = {type:'rally', groupId:'g2'} 이며, 가드의
+    // !currentHolder는 false이지만 currentHolder.type !== 'countdown'은 true →
+    // 분기가 활성화되어야 한다.
+    // 이 분기가 회귀로 사라지면 (예: 가드 조건이 잘못 단순화됨) start가 lock 없이
+    // active=true 설정 + countdown:state(active:true) broadcast → 게이팅 우회 가능.
+    it('start↔stop race 가드 — stop 직후 다른 holder(rally)가 lock 점유한 케이스도 차단', async () => {
+      let resolveNegotiate!: (v: number) => void;
+      const p = new Promise<number>((res) => {
+        resolveNegotiate = res;
+      });
+      negotiate.mockReturnValue(p);
+
+      const sock = makeAdminSocket();
+      const startPromise = gateway.handleCountdownStart(sock, 10);
+      await Promise.resolve();
+      expect(busyLock.getHolder()).toEqual({ type: 'countdown' });
+
+      // race 시퀀스:
+      // (1) 다른 admin이 stop 호출 → countdown lock release.
+      const stopAck = gateway.handleCountdownStop(sock);
+      expect(stopAck).toEqual({ ok: true });
+      expect(busyLock.getHolder()).toBeNull();
+
+      // (2) 즉시 RallyGroupsService(다른 admin)가 rally lock 획득.
+      const rallyAcquired = busyLock.tryAcquire({
+        type: 'rally',
+        groupId: 'g2',
+      });
+      expect(rallyAcquired).toBe(true);
+      expect(busyLock.getHolder()).toEqual({ type: 'rally', groupId: 'g2' });
+
+      // (3) negotiate resolve → start 완료 (race 가드 진입).
+      resolveNegotiate(Date.now() + 200);
+      const startAck = await startPromise;
+
+      // 가드 적용: holder는 rally지만 'countdown'이 아니므로 abort.
+      expect(startAck).toMatchObject({
+        ok: false,
+        reason: 'busy',
+        holder: { type: 'rally', groupId: 'g2' },
+      });
+
+      // rally lock은 그대로 유지 (start가 release를 호출하지 않아야 함).
+      expect(busyLock.getHolder()).toEqual({ type: 'rally', groupId: 'g2' });
+
+      // countdown:state(active:true)는 절대 broadcast되면 안 됨.
+      const activeTrueCalls = server.emit.mock.calls
+        .filter((c) => c[0] === 'countdown:state')
+        .filter((c) => (c[1] as { active?: boolean })?.active === true);
+      expect(activeTrueCalls).toHaveLength(0);
+    });
   });
 });
