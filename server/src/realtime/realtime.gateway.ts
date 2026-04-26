@@ -18,12 +18,27 @@ import { BoardsService } from '../boards/boards.service';
 import { AllianceNoticesService } from '../alliance-notices/alliance-notices.service';
 import { ReadyNegotiationService } from './ready-negotiation.service';
 import { WsRateLimitService } from './ws-rate-limit.service';
+import { BusyLockService, LockHolder } from './busy-lock.service';
 
 interface OnlineUser {
   nickname: string;
   alliance: string;
   role: string;
 }
+
+// setTimeout 자동 해제 여유 — countdown 총 시간 + 1초 후 lock 자동 release.
+const COUNTDOWN_AUTO_RELEASE_GRACE_MS = 1000;
+
+// countdown ack 응답 타입.
+// `forbidden`은 의도적으로 제외 — 권한 없는 사용자에게 reason 노출 보안 우려.
+// 권한 거부 시 `{ ok: false }`만 반환.
+type CountdownAck =
+  | { ok: true }
+  | {
+      ok: false;
+      reason: 'invalid' | 'rate_limit' | 'busy';
+      holder?: LockHolder | null;
+    };
 
 // production 환경에서 WEB_ORIGIN 미설정 시 실수로 모든 origin을 허용하는 fallback이 되지 않도록 에러.
 if (process.env.NODE_ENV === 'production' && !process.env.WEB_ORIGIN) {
@@ -46,6 +61,7 @@ export class RealtimeGateway
     private jwtService: JwtService,
     private readyNegotiation: ReadyNegotiationService,
     private rateLimit: WsRateLimitService,
+    private busyLock: BusyLockService,
     @Inject(forwardRef(() => NoticesService))
     private noticesService: NoticesService,
     @Inject(forwardRef(() => RalliesService))
@@ -113,6 +129,7 @@ export class RealtimeGateway
       ...this.countdown,
       serverEmitAt: Date.now(),
     });
+    client.emit('busy:state', { holder: this.busyLock.getHolder() });
   }
 
   // 시간 동기화용 ws ping/pong — REST `/time` 대비 HTTP overhead 5~20ms 절약.
@@ -132,43 +149,96 @@ export class RealtimeGateway
   async handleCountdownStart(
     @ConnectedSocket() client: Socket,
     @MessageBody() totalSeconds: number,
-  ) {
+  ): Promise<CountdownAck | { ok: false }> {
     const user = this.getUserFromSocket(client);
-    if (!user || !['admin', 'developer'].includes(user.role)) return;
+    if (!user || !['admin', 'developer'].includes(user.role)) {
+      return { ok: false }; // 권한 거부 — 사유 노출 안 함
+    }
     if (
       typeof totalSeconds !== 'number' ||
       !Number.isInteger(totalSeconds) ||
       totalSeconds < 1 ||
       totalSeconds > 600
-    )
-      return;
+    ) {
+      return { ok: false, reason: 'invalid' };
+    }
     // Rate limit: 분당 5회 — 정상 SFC 사용 충분, ReadyNegotiation probe 폭증 방지.
-    if (!this.rateLimit.check(client.id, 'countdown:start', 5, 60_000)) return;
+    if (!this.rateLimit.check(client.id, 'countdown:start', 5, 60_000)) {
+      return { ok: false, reason: 'rate_limit' };
+    }
+
+    // BusyLock 게이팅 — Countdown(1번) ↔ Rally(3번) 음성 충돌 방지.
+    // probe 이전에 잠금 획득 — probe 중 동시 시작 race를 차단.
+    const acquired = this.busyLock.tryAcquire(
+      { type: 'countdown' },
+      totalSeconds * 1000 + COUNTDOWN_AUTO_RELEASE_GRACE_MS,
+      () => this.handleCountdownAutoExpire(),
+    );
+    if (!acquired) {
+      return {
+        ok: false,
+        reason: 'busy',
+        holder: this.busyLock.getHolder(),
+      };
+    }
 
     // 단계 5: probe 라운드트립으로 모든 클라이언트의 maxRTT 측정 후 startedAt 결정.
     // → 모든 디바이스가 정확히 같은 절대 시각에 TTS 발화 시작 (±30ms 보장).
     // SFC가 클릭 후 0.5~1초 대기 비용 — UX 트레이드오프.
-    const startedAt = await this.readyNegotiation.negotiateStartedAt(
-      this.server,
-    );
+    // probe 실패 시 lock leak 방지 — 자동 release 후 재throw.
+    let startedAt: number;
+    try {
+      startedAt = await this.readyNegotiation.negotiateStartedAt(this.server);
+    } catch (err) {
+      this.busyLock.release({ type: 'countdown' });
+      this.server.emit('busy:state', { holder: null });
+      throw err;
+    }
 
     this.countdown = { active: true, startedAt, totalSeconds };
     this.server.emit('countdown:state', {
       ...this.countdown,
       serverEmitAt: Date.now(),
     });
+    this.server.emit('busy:state', { holder: this.busyLock.getHolder() });
+    return { ok: true };
   }
 
   @SubscribeMessage('countdown:stop')
-  handleCountdownStop(@ConnectedSocket() client: Socket) {
+  handleCountdownStop(@ConnectedSocket() client: Socket): { ok: boolean } {
     const user = this.getUserFromSocket(client);
-    if (!user || !['admin', 'developer'].includes(user.role)) return;
+    if (!user || !['admin', 'developer'].includes(user.role))
+      return { ok: false };
 
+    // holder 가드 — 다른 type(rally)이 lock을 잡고 있으면 countdown stop은 영향 X.
+    // 단, 내부 countdown 상태는 어차피 idle이므로 추가 변경 없이 ack만 반환.
+    const holder = this.busyLock.getHolder();
+    if (holder && holder.type !== 'countdown') {
+      return { ok: false };
+    }
+
+    this.busyLock.release({ type: 'countdown' });
     this.countdown = { active: false, startedAt: 0, totalSeconds: 0 };
     this.server.emit('countdown:state', {
       ...this.countdown,
       serverEmitAt: Date.now(),
     });
+    this.server.emit('busy:state', { holder: null });
+    return { ok: true };
+  }
+
+  /**
+   * setTimeout 만료 시 호출 — 카운트다운 시간이 끝났는데 사용자가 stop을 안 누른 경우
+   * 자동으로 active=false로 reset하여 모든 클라이언트 동기화.
+   * 이 시점에 BusyLockService 내부 holder는 이미 null (autoRelease가 holder→null 후 콜백 호출).
+   */
+  private handleCountdownAutoExpire(): void {
+    this.countdown = { active: false, startedAt: 0, totalSeconds: 0 };
+    this.server.emit('countdown:state', {
+      ...this.countdown,
+      serverEmitAt: Date.now(),
+    });
+    this.server.emit('busy:state', { holder: null });
   }
 
   handleDisconnect(client: Socket) {
