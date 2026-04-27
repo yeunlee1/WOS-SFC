@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { api } from '../../api';
 import { useStore } from '../../store';
 import { useI18n } from '../../i18n';
+import { warmupRallyAudio } from '../Battle/rallyGroupPlayer';
 
 const LANGUAGES = [
   { value: 'ko', label: '🇰🇷 한국어' },
@@ -45,6 +46,10 @@ export default function AuthModal() {
   async function initUser(user) {
     setUser(user);
     changeLang(user.language || 'ko');
+    // 로그인 직후 사용자 제스처가 살아있는 동안 AudioContext 언락 + 모든 그룹 음성 사전 디코드.
+    // fire-and-forget — 로그인 응답 + 화면 전환은 차단하지 않음. 첫 카운트다운 시작 시점에
+    // bufferCache에 모든 captain/rally_start/prep/numeric이 디코드되어 있어 첫 시작 누락 방지.
+    warmupRallyAudio({ lang: user.language || 'ko' }).catch(() => { /* noop */ });
     try {
       const localBefore = Date.now();
       const res = await api.getTime();
@@ -107,8 +112,9 @@ export default function AuthModal() {
               <input id="login-pw" className="modal-nick-input" type="password" placeholder="비밀번호 입력" value={password} onChange={(e) => setPassword(e.target.value)} maxLength={100} autoComplete="current-password" />
             </div>
             {error && <p className="auth-error">{error}</p>}
-            <button type="submit" className="btn btn-primary" disabled={loading} style={{ marginTop:'8px' }}>
-              {loading ? '로그인 중...' : '로그인'}
+            <button type="submit" className="btn btn-primary" disabled={loading} style={{ marginTop:'8px', display:'flex', alignItems:'center', justifyContent:'center' }}>
+              {loading && <span className="btn-spinner" aria-hidden="true" />}
+              {loading ? '잠시만요…' : '로그인'}
             </button>
             <p className="auth-switch">계정이 없으신가요? <a href="#" onClick={(e) => { e.preventDefault(); setMode('signup'); setError(''); }}>회원가입</a></p>
           </form>
@@ -129,7 +135,10 @@ export default function AuthModal() {
             </div>
             <div className="auth-field"><label className="auth-server-question">🗺 서버 번호가 어디입니까?</label><input className="modal-nick-input" type="text" placeholder="숫자 입력 (예: 2677)" value={serverCode} onChange={(e) => setServerCode(e.target.value)} maxLength={10} /></div>
             {error && <p className="auth-error">{error}</p>}
-            <button type="submit" className="btn btn-primary" disabled={loading} style={{ marginTop:'8px' }}>{loading ? '처리 중...' : '가입하기'}</button>
+            <button type="submit" className="btn btn-primary" disabled={loading} style={{ marginTop:'8px', display:'flex', alignItems:'center', justifyContent:'center' }}>
+              {loading && <span className="btn-spinner" aria-hidden="true" />}
+              {loading ? '잠시만요…' : '가입하기'}
+            </button>
             <p className="auth-switch">이미 계정이 있으신가요? <a href="#" onClick={(e) => { e.preventDefault(); setMode('login'); setError(''); }}>로그인</a></p>
           </form>
         )}
@@ -139,7 +148,10 @@ export default function AuthModal() {
             <summary className="modal-dev-summary">🔧 DEV 빠른 로그인</summary>
             <div style={{ display:'flex', flexDirection:'column', gap:'6px', marginTop:'10px' }}>
               {DEV_ACCOUNTS.map((acc) => (
-                <button key={acc.nickname} className="dev-login-btn" onClick={() => devLogin(acc)} disabled={loading}>{acc.label}</button>
+                <button key={acc.nickname} className="dev-login-btn" onClick={() => devLogin(acc)} disabled={loading} style={{ display:'flex', alignItems:'center' }}>
+                  {loading && <span className="btn-spinner" style={{ borderTopColor: 'var(--accent)', borderColor: 'var(--border)' }} aria-hidden="true" />}
+                  {acc.label}
+                </button>
               ))}
             </div>
           </details>

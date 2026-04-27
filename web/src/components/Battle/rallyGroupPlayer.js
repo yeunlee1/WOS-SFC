@@ -25,13 +25,22 @@
 //   다중 그룹 동시 지원이 필요하면 인스턴스 기반으로 리팩토링 필요.
 //
 // 공개 API:
-//   primeRallyAudio(fireOffsets, lang)
+//   warmupRallyAudio({lang}) — 로그인 직후 모든 그룹의 captain/rally_start/prep/numeric 사전 디코드
+//   primeRallyAudio(fireOffsets, lang) — 특정 그룹 시작 직전 prime
 //   scheduleRallyCountdown({startedAtServerMs, fireOffsets, timeOffset, lang, volume, muted})
 //   stopRallyCountdown()
 //   setRallyVolume(volume, muted)
 
 import { ttsUrl } from './tts';
 import { perceptualVolume } from '../../utils/volume';
+
+// 서버 DTO @Max(180) (server/src/rally-groups/dto/update-march-override.dto.ts) 와 일치.
+// warmupRallyAudio, primeRallyAudio, scheduleRallyCountdown 모두 이 상수를 상한으로 사용.
+const MAX_OFFSET_SEC = 180;
+
+// TTS 서버가 지원하는 언어 목록 (server/src/tts/tts.constants.ts LANGS 와 동기화).
+// 비지원 언어(ru, other 등) 사용자는 'ko'로 fallback해 서버 400/404 spam 방지.
+const SUPPORTED_TTS_LANGS = new Set(['ko', 'en', 'ja', 'zh']);
 
 let ctx = null;
 let masterGain = null;
@@ -72,6 +81,10 @@ function ensureContext() {
     window.__rallyDispatchedLog = dispatchedLog;
     window.__rallyScheduleLog = scheduleLog;
     window.__rallyCtx = ctx;
+    Object.defineProperty(window, '__rallyBufferCacheSize', {
+      configurable: true,
+      get: () => bufferCache.size,
+    });
   }
   return ctx;
 }
@@ -104,12 +117,61 @@ function loadBuffer(lang, key) {
 }
 
 /**
+ * 로그인 직후 호출되는 광범위 사전 워밍업.
+ * 모든 그룹(1~6)의 captain/rally_start, 프리카운트("3","2","1"), 숫자 1~60을 fetch+decode.
+ * fire-and-forget 패턴 — 호출자는 await 하지 않아도 background 진행.
+ *
+ * 첫 카운트다운 시작 시 일부 음성이 누락/지연되는 문제(첫 시작 RMS 낮음, 200ms past-due 가드 hit)
+ * 의 근본 원인: bufferCache가 schedulePlay 호출 후에만 채워져 첫 시작에서 fetch+decode 시간이
+ * 7s prep 안에 못 들어오는 케이스 발생. 사전에 모든 가능 키를 디코드해 두면 schedulePlay는
+ * 즉시 startSource 가능.
+ *
+ * 워밍업 대상 (총 ~192개, 6KB×192 ≈ 1.15MB — MAX_OFFSET_SEC=180 기준):
+ *   - captain_1~6 (6)
+ *   - rally_start_1~6 (6)
+ *   - prep "3","2","1" (3)
+ *   - numeric "4"~"180" (177, prep과 중복 제거)
+ *
+ * @param {{lang?:string, onProgress?:(p:{loaded:number,total:number})=>void}} [opts]
+ */
+export async function warmupRallyAudio(opts = {}) {
+  const { lang = 'ko', onProgress } = opts;
+  const safeLang = SUPPORTED_TTS_LANGS.has(lang) ? lang : 'ko';
+  const c = ensureContext();
+  if (!c) return;
+  if (c.state === 'suspended') {
+    try { await c.resume(); } catch { /* noop */ }
+  }
+
+  const keys = [];
+  for (let i = 1; i <= 6; i++) keys.push(`rally_start_${i}`);
+  for (let i = 1; i <= 6; i++) keys.push(`captain_${i}`);
+  keys.push('3', '2', '1');
+  for (let t = 4; t <= MAX_OFFSET_SEC; t++) keys.push(String(t));
+
+  let loaded = 0;
+  const total = keys.length;
+  await Promise.all(keys.map(async (k) => {
+    await loadBuffer(safeLang, k);
+    loaded += 1;
+    if (typeof onProgress === 'function') {
+      try { onProgress({ loaded, total }); } catch { /* noop */ }
+    }
+  }));
+
+  if (import.meta.env.DEV) {
+    console.info('[RallyGroupPlayer] warmup complete', { lang, safeLang, loaded, cacheSize: bufferCache.size });
+  }
+}
+
+/**
  * AudioContext 언락 + 필요 버퍼 프리로드. 사용자 제스처에서 호출.
  * @param {Array<{orderIndex:number, offsetMs:number}>} fireOffsets
  * @param {string} lang
  * @param {number} [displayOrder] 그룹 번호 — rally_start_N 안내 음성 프리로드용 (있으면 critical 추가)
  */
 export async function primeRallyAudio(fireOffsets, lang = 'ko', displayOrder) {
+  const safeLang = SUPPORTED_TTS_LANGS.has(lang) ? lang : 'ko';
   const c = ensureContext();
   if (!c) return;
   if (c.state === 'suspended') {
@@ -128,7 +190,7 @@ export async function primeRallyAudio(fireOffsets, lang = 'ko', displayOrder) {
   const rawMax = offsets.length > 0
     ? Math.max(...offsets.map((f) => Math.round(f.offsetMs / 1000)))
     : 0;
-  const maxOffsetSec = Math.min(rawMax, 180);
+  const maxOffsetSec = Math.min(rawMax, MAX_OFFSET_SEC);
 
   const numberKeys = [];
   if (maxOffsetSec > 0) {
@@ -146,8 +208,8 @@ export async function primeRallyAudio(fireOffsets, lang = 'ko', displayOrder) {
     '3', '2', '1',
     ...offsets.map((f) => `captain_${f.orderIndex}`),
   ];
-  await Promise.all(criticalKeys.map((k) => loadBuffer(lang, k)));
-  for (const k of numberKeys) loadBuffer(lang, k);
+  await Promise.all(criticalKeys.map((k) => loadBuffer(safeLang, k)));
+  for (const k of numberKeys) loadBuffer(safeLang, k);
 }
 
 /**
@@ -159,6 +221,7 @@ export async function primeRallyAudio(fireOffsets, lang = 'ko', displayOrder) {
  *   집결 시작합니다" 안내 음성을 예약. 서버측 COUNTDOWN_LEAD_MS(7s)가 이 타이밍을 전제로 설정됨.
  */
 export async function scheduleRallyCountdown({ startedAtServerMs, fireOffsets, timeOffset = 0, lang = 'ko', volume, muted, displayOrder }) {
+  const safeLang = SUPPORTED_TTS_LANGS.has(lang) ? lang : 'ko';
   const c = ensureContext();
   if (!c) return;
   if (!startedAtServerMs || !Array.isArray(fireOffsets)) return;
@@ -184,27 +247,27 @@ export async function scheduleRallyCountdown({ startedAtServerMs, fireOffsets, t
   const rawMax = fireOffsets.length > 0
     ? Math.max(...fireOffsets.map((f) => Math.round(f.offsetMs / 1000)))
     : 0;
-  if (rawMax > 180 && import.meta.env.DEV) {
-    console.warn('[RallyGroupPlayer] maxOffsetSec', rawMax, '> 180, capping at 180');
+  if (rawMax > MAX_OFFSET_SEC && import.meta.env.DEV) {
+    console.warn('[RallyGroupPlayer] maxOffsetSec', rawMax, '> MAX_OFFSET_SEC, capping at', MAX_OFFSET_SEC);
   }
-  const maxOffsetSec = Math.min(rawMax, 180);
+  const maxOffsetSec = Math.min(rawMax, MAX_OFFSET_SEC);
 
   const captainSeconds = new Set(fireOffsets.map((f) => Math.round(f.offsetMs / 1000)));
 
   // 첫 슬롯 워밍업 — 가장 일찍 발화할 안내 음성(있으면) 또는 "3" 프리카운트를 최대 500ms 기다림.
   // ctx 클럭 기반 예약이라도 버퍼가 제시각 지나 도착하면 slot 유실되므로 유지.
-  if (displayOrder) loadBuffer(lang, `rally_start_${displayOrder}`);
-  for (const k of ['3', '2', '1']) loadBuffer(lang, k);
-  for (const f of fireOffsets) loadBuffer(lang, `captain_${f.orderIndex}`);
+  if (displayOrder) loadBuffer(safeLang, `rally_start_${displayOrder}`);
+  for (const k of ['3', '2', '1']) loadBuffer(safeLang, k);
+  for (const f of fireOffsets) loadBuffer(safeLang, `captain_${f.orderIndex}`);
   if (maxOffsetSec > 0) {
     for (let t = 1; t <= maxOffsetSec; t++) {
-      if (!captainSeconds.has(t)) loadBuffer(lang, String(t));
+      if (!captainSeconds.has(t)) loadBuffer(safeLang, String(t));
     }
   }
   // 안내 음성이 있으면 그것이 가장 일찍 발화되므로 그 버퍼를 워밍업 대상으로.
   const firstKey = displayOrder ? `rally_start_${displayOrder}` : '3';
   await Promise.race([
-    loadBuffer(lang, firstKey),
+    loadBuffer(safeLang, firstKey),
     new Promise((r) => setTimeout(r, 500)),
   ]);
   if (myId !== latestScheduleId) return;
@@ -222,17 +285,17 @@ export async function scheduleRallyCountdown({ startedAtServerMs, fireOffsets, t
   // 시작 안내: T-6 ("N번 집결그룹 집결 시작합니다" — 한국어 약 3초, T-3 프리카운트 시작 전 여유)
   // 서버 COUNTDOWN_LEAD_MS=7000ms가 이 타이밍을 전제로 설정됨.
   if (displayOrder) {
-    schedulePlay(lang, `rally_start_${displayOrder}`, ctxAnchor - 6, myId);
+    schedulePlay(safeLang, `rally_start_${displayOrder}`, ctxAnchor - 6, myId);
   }
 
   // 프리카운트: T-3, T-2, T-1
   for (const n of [3, 2, 1]) {
-    schedulePlay(lang, String(n), ctxAnchor - n, myId);
+    schedulePlay(safeLang, String(n), ctxAnchor - n, myId);
   }
 
   // 집결장 순번 발화
   for (const f of fireOffsets) {
-    schedulePlay(lang, `captain_${f.orderIndex}`, ctxAnchor + f.offsetMs / 1000, myId);
+    schedulePlay(safeLang, `captain_${f.orderIndex}`, ctxAnchor + f.offsetMs / 1000, myId);
   }
 
   // 초당 카운팅.
@@ -243,7 +306,7 @@ export async function scheduleRallyCountdown({ startedAtServerMs, fireOffsets, t
     for (let t = 1; t <= maxOffsetSec; t++) {
       if (t <= 3) continue;
       if (captainSeconds.has(t)) continue;
-      schedulePlay(lang, String(t), ctxAnchor + t, myId);
+      schedulePlay(safeLang, String(t), ctxAnchor + t, myId);
     }
   }
 

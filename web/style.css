@@ -593,6 +593,19 @@ input:focus, select:focus, textarea:focus, .input:focus {
 .btn:hover  { transform: translateY(-2px); }
 .btn:active { transform: scale(.96) translateY(0); }
 .btn:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+/* 버튼 내 인라인 스피너 — 로그인/가입 로딩 중 표시용 */
+.btn-spinner {
+  display: inline-block;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,.35);
+  border-top-color: #fff;
+  animation: btn-spin 0.7s linear infinite;
+  vertical-align: middle;
+  margin-right: 6px;
+  flex-shrink: 0;
+}
+@keyframes btn-spin { to { transform: rotate(360deg); } }
 .btn-primary { background: var(--grad-sakura); color: white; box-shadow: 0 3px 10px rgba(217,70,168,.3); background-size: 200% 200%; animation: gradientShift 4s ease infinite; }
 .btn-primary:hover { box-shadow: 0 6px 20px rgba(217,70,168,.5); }
 .btn-secondary { background: var(--bg-subtle); color: var(--text-1); border: 1.5px solid var(--border); }

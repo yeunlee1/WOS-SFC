@@ -7,6 +7,7 @@ import { useI18n } from './i18n';
 import { api, getSocket } from './api';
 import { syncTime, startup, shutdown } from './clockSync';
 import AuthModal from './components/Auth/AuthModal';
+import { warmupRallyAudio } from './components/Battle/rallyGroupPlayer';
 import Petals from './components/Layout/Petals';
 import Header from './components/Layout/Header';
 import OnlinePanel from './components/Layout/OnlinePanel';
@@ -37,12 +38,28 @@ export default function App() {
     document.body.classList.add(`theme-${theme}`);
   }, [theme]);
 
+  // 새로고침 splash 제거 — index.html에 인라인된 #app-splash가 React mount 전에 즉시 보임.
+  // 첫 effect 실행(=React 마운트 + 첫 paint 직후)에 fade out → 320ms 후 DOM 제거.
+  useEffect(() => {
+    const splash = document.getElementById('app-splash');
+    if (!splash) return;
+    splash.classList.add('app-splash--leaving');
+    const t = setTimeout(() => { splash.remove(); }, 360);
+    return () => clearTimeout(t);
+  }, []);
+
   useEffect(() => {
     (async () => {
       try {
         const me = await api.getMe();
         setUser(me.user);
         changeLang(me.user.language || 'ko');
+        // 세션 복원 경로에서도 rally audio 사전 워밍업 — fire-and-forget.
+        // ensureContext()는 사용자 제스처 없어도 AudioContext 생성 가능(suspended 상태).
+        // fetch + decodeAudioData는 suspended에서도 동작하므로 bufferCache는 채워진다.
+        // 이후 사용자 첫 클릭에서 global unlock 핸들러가 ctx.resume → 즉시 재생 가능.
+        // 새로고침 후 첫 카운트다운 시작 시 누락되던 케이스 방지.
+        warmupRallyAudio({ lang: me.user.language || 'ko' }).catch(() => { /* noop */ });
         // clockSync 부팅 — 첫 동기화 + 주기적 재동기화 + system clock 점프 감지 + 멀티탭 채널
         try {
           await startup();
