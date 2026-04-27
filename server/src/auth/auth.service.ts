@@ -6,8 +6,6 @@ import { LoginDto } from './dto/login.dto';
 import * as bcrypt from 'bcrypt';
 import { randomUUID } from 'crypto';
 
-const SERVER_CODE = process.env.SERVER_CODE;
-
 @Injectable()
 export class AuthService {
   constructor(
@@ -34,7 +32,10 @@ export class AuthService {
   }
 
   async signup(dto: SignupDto) {
-    if (dto.serverCode !== SERVER_CODE) {
+    // ConfigModule.forRoot()는 AppModule @Module 데코레이터 평가 시점에 .env를 로드한다.
+    // 모듈 file top-level에서 process.env를 캡처하면 그 시점엔 dotenv가 아직 안 돌아 undefined가 들어간다 —
+    // 그래서 메서드 호출 시점에 lazy 읽기로 바꿔야 .env 값이 정상 매칭된다.
+    if (dto.serverCode !== process.env.SERVER_CODE) {
       throw new ForbiddenException('서버 코드가 올바르지 않습니다');
     }
     const user = await this.usersService.create({
@@ -42,8 +43,6 @@ export class AuthService {
       password: dto.password,
       allianceName: dto.allianceName,
       role: 'member',
-      birthDate: dto.birthDate,
-      name: dto.name,
       language: dto.language,
     });
     const accessToken = this.createAccessToken(user);
