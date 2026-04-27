@@ -9,10 +9,11 @@ import PersonalSyncOffset from './PersonalSyncOffset';
 // 유저 본인의 행군 시간(marchSeconds)을 저장하고,
 // 카운트다운이 해당 시점에 도달하면 'march' TTS를 로컬에서 재생한다.
 export default function PersonalPanel() {
-  const countdown  = useStore((s) => s.countdown);
+  const countdown          = useStore((s) => s.countdown);
   // timeOffset에 personalOffsetMs 합산 — march TTS 슬롯 시각도 디바이스별 보정 반영.
-  const timeOffset = useStore((s) => s.timeOffset + s.personalOffsetMs);
-  const { lang }   = useI18n();
+  const timeOffset         = useStore((s) => s.timeOffset + s.personalOffsetMs);
+  const setMyMarchSeconds  = useStore((s) => s.setMyMarchSeconds);
+  const { lang }           = useI18n();
 
   // marchSeconds: null(미설정) | 1~180(설정됨)
   const [marchSeconds, setMarchSeconds] = useState(null);
@@ -35,12 +36,16 @@ export default function PersonalPanel() {
         if (data && typeof data.marchSeconds === 'number') {
           setMarchSeconds(data.marchSeconds);
           setInputVal(String(data.marchSeconds));
+          setMyMarchSeconds(data.marchSeconds);
         } else {
           // null 응답 처리
           const fallback = parseInt(localStorage.getItem('wos-march-seconds'), 10);
           if (Number.isFinite(fallback) && fallback >= 1 && fallback <= 180) {
             setMarchSeconds(fallback);
             setInputVal(String(fallback));
+            setMyMarchSeconds(fallback);
+          } else {
+            setMyMarchSeconds(null);
           }
         }
       })
@@ -51,6 +56,9 @@ export default function PersonalPanel() {
         if (Number.isFinite(fallback) && fallback >= 1 && fallback <= 180) {
           setMarchSeconds(fallback);
           setInputVal(String(fallback));
+          setMyMarchSeconds(fallback);
+        } else {
+          setMyMarchSeconds(null);
         }
       })
       .finally(() => {
@@ -69,6 +77,7 @@ export default function PersonalPanel() {
     try {
       await api.saveBattleSettings({ marchSeconds: value });
       setMarchSeconds(value);
+      setMyMarchSeconds(value);
       // localStorage 동기화
       if (value !== null) {
         localStorage.setItem('wos-march-seconds', String(value));
