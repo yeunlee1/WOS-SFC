@@ -20,7 +20,9 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @UseGuards(ThrottlerGuard)
-  @Throttle({ default: { limit: 3, ttl: 3600000 } })
+  // 가입 시도 제한: 10분당 5회. 자동 가입 봇은 차단하되, 정상 사용자가 입력 실수로
+  // 몇 번 실패해도 1시간씩 막히지 않도록 완화. (이전: 1시간당 3회)
+  @Throttle({ default: { limit: 5, ttl: 600000 } })
   @Post('signup')
   async signup(@Body() dto: SignupDto, @Res({ passthrough: true }) res: any) {
     const { accessToken, refreshToken, user } = await this.authService.signup(dto);

@@ -41,11 +41,24 @@ describe('DTO Validation — main.ts ValidationPipe 옵션 동작', () => {
         nickname: 'tester',
         password: 'password123',
         allianceName: 'KOR',
-        birthDate: '2000-01-01',
-        name: '홍길동',
         language: 'ko',
         serverCode: '101',
-        role: 'admin', // 화이트리스트 외 필드 — SignupDto에서 제거된 필드
+        role: 'admin', // 화이트리스트 외 필드 — 클라이언트가 자기 계급을 정할 수 없음
+      };
+      await expect(tx(SignupDto, payload)).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+    });
+
+    it('SignupDto에서 제거된 필드(name/birthDate) 송신 시 거부', async () => {
+      const payload = {
+        nickname: 'tester',
+        password: 'password123',
+        allianceName: 'KOR',
+        language: 'ko',
+        serverCode: '101',
+        birthDate: '2000-01-01', // 제거된 필드
+        name: '홍길동',          // 제거된 필드
       };
       await expect(tx(SignupDto, payload)).rejects.toBeInstanceOf(
         BadRequestException,
@@ -57,13 +70,94 @@ describe('DTO Validation — main.ts ValidationPipe 옵션 동작', () => {
         nickname: 'tester',
         password: 'password123',
         allianceName: 'KOR',
-        birthDate: '2000-01-01',
-        name: '홍길동',
         language: 'ko',
         serverCode: '101',
       };
       const out = await tx(SignupDto, payload);
       expect(out).toBeInstanceOf(SignupDto);
+    });
+  });
+
+  // ===========================================================
+  // SignupDto.nickname @Matches — 한글/영문/숫자만, 2~20자
+  // ===========================================================
+  describe('SignupDto.nickname @Matches (한글/영문/숫자, 2~20자)', () => {
+    const base = {
+      password: 'password123',
+      allianceName: 'KOR',
+      language: 'ko',
+      serverCode: '101',
+    };
+
+    it('영문 닉네임 통과', async () => {
+      const out = (await tx(SignupDto, { ...base, nickname: 'tester01' })) as SignupDto;
+      expect(out.nickname).toBe('tester01');
+    });
+
+    it('한글 닉네임 통과', async () => {
+      const out = (await tx(SignupDto, { ...base, nickname: '테스터' })) as SignupDto;
+      expect(out.nickname).toBe('테스터');
+    });
+
+    it('한글+영문+숫자 혼합 통과', async () => {
+      const out = (await tx(SignupDto, { ...base, nickname: '닉네임abc1' })) as SignupDto;
+      expect(out.nickname).toBe('닉네임abc1');
+    });
+
+    it('특수문자 포함 거부', async () => {
+      await expect(
+        tx(SignupDto, { ...base, nickname: 'tester!' }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('공백 포함 거부', async () => {
+      await expect(
+        tx(SignupDto, { ...base, nickname: 'test er' }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('1자 거부 (MinLength 미만)', async () => {
+      await expect(
+        tx(SignupDto, { ...base, nickname: 'a' }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('21자 거부 (MaxLength 초과)', async () => {
+      await expect(
+        tx(SignupDto, { ...base, nickname: 'a'.repeat(21) }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    // 한글 엣지 케이스 — 정규식 [가-힣]는 완성형만 허용
+    it('한글 단일 자모(ㄱ) 거부 — 완성형 외 자모 차단', async () => {
+      await expect(
+        tx(SignupDto, { ...base, nickname: 'ㄱㄴ' }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('한글 완성형 1자(가) 거부 — MinLength 미만', async () => {
+      await expect(
+        tx(SignupDto, { ...base, nickname: '가' }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('한글 모음 분리 표기(ㅎㅏ) 거부 — 자모 결합 불완전', async () => {
+      await expect(
+        tx(SignupDto, { ...base, nickname: 'ㅎㅏ' }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('zero-width space 포함 거부 — 보이지 않는 공백 차단', async () => {
+      // U+200B 삽입 — 길이 카운트는 통과해도 정규식에서 차단되어야 함
+      await expect(
+        tx(SignupDto, { ...base, nickname: 'tes​ter' }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('이모지 포함 거부', async () => {
+      await expect(
+        tx(SignupDto, { ...base, nickname: 'tester🚀' }),
+      ).rejects.toBeInstanceOf(BadRequestException);
     });
   });
 

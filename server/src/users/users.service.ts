@@ -9,8 +9,6 @@ export interface CreateUserDto {
   password: string;
   allianceName: string;
   role: UserRole;
-  birthDate: string;
-  name: string;
   language: Language;
 }
 
@@ -31,8 +29,8 @@ export class UsersService {
       passwordHash,
       allianceName: dto.allianceName,
       role: dto.role,
-      birthDate: dto.birthDate,
-      name: dto.name,
+      birthDate: null,
+      name: null,
       language: dto.language,
     });
     return this.usersRepo.save(user);

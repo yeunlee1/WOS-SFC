@@ -7,16 +7,19 @@ const API_PATHS = [
   '/me', '/rally-groups',
 ];
 
+// 백엔드 주소 — 워크트리 분리 작업 시 다른 포트로 분기 가능 (예: VITE_API_TARGET=http://localhost:3002)
+const API_TARGET = process.env.VITE_API_TARGET || 'http://localhost:3001';
+
 export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
     proxy: {
       ...Object.fromEntries(
-        API_PATHS.map((p) => [p, { target: 'http://localhost:3001', changeOrigin: true }])
+        API_PATHS.map((p) => [p, { target: API_TARGET, changeOrigin: true }])
       ),
       '/socket.io': {
-        target: 'http://localhost:3001',
+        target: API_TARGET,
         changeOrigin: true,
         ws: true,
       },

@@ -28,7 +28,7 @@ describe('UsersService', () => {
     await expect(
       service.create({
         nickname: 'tester', password: 'pass123', allianceName: 'KOR',
-        role: 'member', birthDate: '1990-01-01', name: '테스터', language: 'ko',
+        role: 'member', language: 'ko',
       })
     ).rejects.toThrow(ConflictException);
   });
@@ -39,9 +39,22 @@ describe('UsersService', () => {
     mockRepo.save.mockResolvedValue({ id: 1, nickname: 'newuser' });
     const result = await service.create({
       nickname: 'newuser', password: 'pass123', allianceName: 'KOR',
-      role: 'member', birthDate: '1990-01-01', name: '새유저', language: 'ko',
+      role: 'member', language: 'ko',
     });
     expect(result).toHaveProperty('nickname', 'newuser');
+  });
+
+  it('회원가입 시 birthDate/name은 항상 null로 저장된다 (개인정보 최소화)', async () => {
+    mockRepo.findOne.mockResolvedValue(null);
+    mockRepo.create.mockImplementation((entity) => entity);
+    mockRepo.save.mockImplementation(async (entity) => ({ id: 1, ...entity }));
+    await service.create({
+      nickname: 'newuser', password: 'pass123', allianceName: 'KOR',
+      role: 'member', language: 'ko',
+    });
+    const created = mockRepo.create.mock.calls[0][0];
+    expect(created.birthDate).toBeNull();
+    expect(created.name).toBeNull();
   });
 
   it('findByNickname - 존재하는 유저 반환', async () => {

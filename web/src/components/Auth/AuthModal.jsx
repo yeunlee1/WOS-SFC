@@ -14,16 +14,20 @@ const LANGUAGES = [
 ];
 
 const DEV_ACCOUNTS = [
-  { label: '🛡️ 개발자 (한국)', nickname: 'dev_dev_ko',    password: 'devpass123', role: 'developer', language: 'ko', allianceName: 'KOR', name: '개발자',    birthDate: '1990-01-01' },
-  { label: '👑 관리자 (한국)', nickname: 'dev_admin_ko',  password: 'devpass123', role: 'admin',  language: 'ko', allianceName: 'KOR', name: '관리자',    birthDate: '1990-01-01' },
-  { label: '🇨🇳 관리자 (중국)', nickname: 'dev_admin_zh',  password: 'devpass123', role: 'admin',  language: 'zh', allianceName: 'KOR', name: '中国管理员', birthDate: '1990-01-01' },
-  { label: '🇺🇸 관리자 (영어)', nickname: 'dev_admin_en',  password: 'devpass123', role: 'admin',  language: 'en', allianceName: 'KOR', name: 'EnAdmin',   birthDate: '1990-01-01' },
-  { label: '🇯🇵 관리자 (일본)', nickname: 'dev_admin_ja',  password: 'devpass123', role: 'admin',  language: 'ja', allianceName: 'KOR', name: '日本管理者', birthDate: '1990-01-01' },
-  { label: '🙋 멤버 (한국)',   nickname: 'dev_member_ko', password: 'devpass123', role: 'member', language: 'ko', allianceName: 'KOR', name: '한국멤버',   birthDate: '1990-01-01' },
-  { label: '🙋 멤버 (중국)',   nickname: 'dev_member_zh', password: 'devpass123', role: 'member', language: 'zh', allianceName: 'KOR', name: '中国成员',   birthDate: '1990-01-01' },
-  { label: '🙋 멤버 (영어)',   nickname: 'dev_member_en', password: 'devpass123', role: 'member', language: 'en', allianceName: 'KOR', name: 'EnMember',  birthDate: '1990-01-01' },
-  { label: '🙋 멤버 (일본)',   nickname: 'dev_member_ja', password: 'devpass123', role: 'member', language: 'ja', allianceName: 'KOR', name: '日本メンバー', birthDate: '1990-01-01' },
+  { label: '🛡️ 개발자 (한국)', nickname: 'devDevKo',    password: 'devpass123', role: 'developer', language: 'ko', allianceName: 'KOR' },
+  { label: '👑 관리자 (한국)', nickname: 'devAdminKo',  password: 'devpass123', role: 'admin',  language: 'ko', allianceName: 'KOR' },
+  { label: '🇨🇳 관리자 (중국)', nickname: 'devAdminZh',  password: 'devpass123', role: 'admin',  language: 'zh', allianceName: 'KOR' },
+  { label: '🇺🇸 관리자 (영어)', nickname: 'devAdminEn',  password: 'devpass123', role: 'admin',  language: 'en', allianceName: 'KOR' },
+  { label: '🇯🇵 관리자 (일본)', nickname: 'devAdminJa',  password: 'devpass123', role: 'admin',  language: 'ja', allianceName: 'KOR' },
+  { label: '🙋 멤버 (한국)',   nickname: 'devMemberKo', password: 'devpass123', role: 'member', language: 'ko', allianceName: 'KOR' },
+  { label: '🙋 멤버 (중국)',   nickname: 'devMemberZh', password: 'devpass123', role: 'member', language: 'zh', allianceName: 'KOR' },
+  { label: '🙋 멤버 (영어)',   nickname: 'devMemberEn', password: 'devpass123', role: 'member', language: 'en', allianceName: 'KOR' },
+  { label: '🙋 멤버 (일본)',   nickname: 'devMemberJa', password: 'devpass123', role: 'member', language: 'ja', allianceName: 'KOR' },
 ];
+
+// 닉네임 정책: 한글/영문/숫자만, 2~20자. 특수문자·공백 금지.
+// 닉네임 정규식 — server/web 양쪽이 동일해야 함. 한쪽만 바꾸면 silent divergence 발생.
+const NICKNAME_REGEX = /^[A-Za-z0-9가-힣]{2,20}$/;
 
 export default function AuthModal() {
   const [mode, setMode] = useState('login');
@@ -31,12 +35,9 @@ export default function AuthModal() {
   const [error, setError] = useState('');
   const [nickname, setNickname] = useState('');
   const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
   const [signupNickname, setSignupNickname] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
   const [allianceName, setAllianceName] = useState('');
-  const [role, setRole] = useState('member');
-  const [birthDate, setBirthDate] = useState('');
   const [language, setLanguage] = useState('ko');
   const [serverCode, setServerCode] = useState('');
 
@@ -70,11 +71,15 @@ export default function AuthModal() {
 
   async function handleSignup(e) {
     e.preventDefault();
-    if (!name || !signupNickname || !signupPassword || !allianceName || !birthDate) { setError('모든 항목을 입력하세요'); return; }
+    if (!signupNickname || !signupPassword || !allianceName || !serverCode) { setError('모든 항목을 입력하세요'); return; }
+    if (!NICKNAME_REGEX.test(signupNickname)) {
+      setError('닉네임은 한글 또는 영문/숫자만 사용할 수 있습니다 (2~20자, 특수문자·공백 불가)');
+      return;
+    }
     if (signupPassword.length < 6) { setError('비밀번호는 6자 이상이어야 합니다'); return; }
     setLoading(true); setError('');
     try {
-      const res = await api.signup({ name, nickname: signupNickname, password: signupPassword, allianceName, birthDate, language, serverCode });
+      const res = await api.signup({ nickname: signupNickname, password: signupPassword, allianceName, language, serverCode });
       await initUser(res.user);
     } catch (err) { setError(err.message); }
     finally { setLoading(false); }
@@ -86,7 +91,7 @@ export default function AuthModal() {
       let res;
       try { res = await api.login({ nickname: account.nickname, password: account.password }); }
       catch {
-        await api.signup({ nickname: account.nickname, password: account.password, name: account.name, allianceName: account.allianceName, birthDate: account.birthDate, language: account.language, serverCode: '2677' }).catch(() => {});
+        await api.signup({ nickname: account.nickname, password: account.password, allianceName: account.allianceName, language: account.language, serverCode: '2677' }).catch(() => {});
         res = await api.login({ nickname: account.nickname, password: account.password });
       }
       await api.setUserRole(account.nickname, account.role).catch(() => {});
@@ -120,20 +125,18 @@ export default function AuthModal() {
           </form>
         ) : (
           <form onSubmit={handleSignup} style={{ width:'100%', display:'flex', flexDirection:'column' }}>
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0 12px' }}>
-              <div className="auth-field"><label>이름</label><input className="modal-nick-input" type="text" placeholder="실제 이름" value={name} onChange={(e) => setName(e.target.value)} maxLength={100} /></div>
-              <div className="auth-field"><label>닉네임</label><input className="modal-nick-input" type="text" placeholder="게임 닉네임" value={signupNickname} onChange={(e) => setSignupNickname(e.target.value)} maxLength={50} autoComplete="username" /></div>
+            <div className="auth-field">
+              <label>게임 닉네임 (= 로그인 ID)</label>
+              <input className="modal-nick-input" type="text" placeholder="한글 또는 영문/숫자, 2~20자" value={signupNickname} onChange={(e) => setSignupNickname(e.target.value)} maxLength={20} autoComplete="username" />
+              <p className="auth-help">한글 또는 영문·숫자만 가능. 특수문자와 공백은 사용할 수 없습니다.</p>
             </div>
             <div className="auth-field"><label>비밀번호</label><input className="modal-nick-input" type="password" placeholder="6자 이상" value={signupPassword} onChange={(e) => setSignupPassword(e.target.value)} maxLength={100} autoComplete="new-password" /></div>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0 12px' }}>
               <div className="auth-field"><label>동맹명</label><input className="modal-nick-input" type="text" placeholder="예: KOR" value={allianceName} onChange={(e) => setAllianceName(e.target.value)} maxLength={100} /></div>
-              <div className="auth-field"><label>계급</label><select className="modal-nick-input" value={role} onChange={(e) => setRole(e.target.value)}><option value="member">일반 인원</option><option value="admin">관리자</option></select></div>
-            </div>
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0 12px' }}>
-              <div className="auth-field"><label>생년월일</label><input className="modal-nick-input" type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} /></div>
               <div className="auth-field"><label>언어</label><select className="modal-nick-input" value={language} onChange={(e) => setLanguage(e.target.value)}>{LANGUAGES.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}</select></div>
             </div>
-            <div className="auth-field"><label className="auth-server-question">🗺 서버 번호가 어디입니까?</label><input className="modal-nick-input" type="text" placeholder="숫자 입력 (예: 2677)" value={serverCode} onChange={(e) => setServerCode(e.target.value)} maxLength={10} /></div>
+            <div className="auth-field"><label className="auth-server-question">🗺 서버 번호가 어디입니까?</label><input className="modal-nick-input" type="text" placeholder="숫자 입력" value={serverCode} onChange={(e) => setServerCode(e.target.value)} maxLength={10} inputMode="numeric" autoComplete="off" /></div>
+            <p className="auth-help" style={{ margin:'0 0 8px' }}>계급은 관리자가 가입 후 별도로 부여합니다.</p>
             {error && <p className="auth-error">{error}</p>}
             <button type="submit" className="btn btn-primary" disabled={loading} style={{ marginTop:'8px', display:'flex', alignItems:'center', justifyContent:'center' }}>
               {loading && <span className="btn-spinner" aria-hidden="true" />}
