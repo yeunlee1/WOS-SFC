@@ -273,11 +273,23 @@ export default function Countdown() {
     if (!s || s < 1 || s > 180) return;
     getSocket()?.emit('countdown:start', s, (ack) => {
       if (ack && !ack.ok) {
-        const msg =
-          ack.reason === 'busy'       ? '다른 카운트다운이 진행 중입니다' :
-          ack.reason === 'rate_limit' ? '요청이 너무 빠릅니다. 잠시 후 다시 시도하세요' :
-          ack.reason === 'invalid'    ? '카운트다운 시간이 유효하지 않습니다' :
-          '카운트다운 시작에 실패했습니다';
+        let msg;
+        if (ack.reason === 'busy') {
+          const holder = busyHolder;
+          if (holder?.type === 'rally') {
+            msg = '공격 카운트가 진행 중입니다';
+          } else if (holder?.type === 'countdown') {
+            msg = '수비 카운트가 진행 중입니다';
+          } else {
+            msg = '다른 카운트가 진행 중입니다';
+          }
+        } else if (ack.reason === 'rate_limit') {
+          msg = '요청이 너무 빠릅니다. 잠시 후 다시 시도하세요';
+        } else if (ack.reason === 'invalid') {
+          msg = '수비 카운트 시간이 유효하지 않습니다';
+        } else {
+          msg = '수비 카운트 시작에 실패했습니다';
+        }
         setErrorMsg(msg);
         setTimeout(() => setErrorMsg(null), 1500);
       }
