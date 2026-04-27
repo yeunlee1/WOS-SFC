@@ -75,7 +75,8 @@ const UI_TEXTS = {
     countdownSeconds: '초',
     viewTranslation: '번역 보기',
     logout: '로그아웃',
-    countdown: '⏳ 카운트다운',
+    // 게임 명칭에 맞춰 "수비 카운트"로 변경. 타 언어(en/ja/zh)는 번역가 검수 후 동기화 예정.
+    countdown: '⏳ 수비 카운트',
   },
   en: {
     modalTitle: 'Enter server code',
