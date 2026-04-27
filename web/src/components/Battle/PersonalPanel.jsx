@@ -221,7 +221,7 @@ export default function PersonalPanel() {
       {/* 현재 저장값 표시 */}
       {marchSeconds !== null && (
         <p style={{ fontSize: 12, color: 'var(--text-3)', margin: '4px 0 0' }}>
-          현재: 카운트다운 {marchSeconds}초 남을 때 출발 음성
+          현재: 수비 카운트 {marchSeconds}초 남을 때 출발 음성
         </p>
       )}
 

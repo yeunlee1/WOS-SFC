@@ -29,7 +29,7 @@ export default function RallyGroupPanel() {
   async function handleCreate() {
     // 이름은 서버가 displayOrder 기반으로 자동 할당 ("${N}번 집결그룹").
     if (atMax) {
-      setError(`집결 그룹은 최대 ${MAX_GROUPS}개까지만 생성 가능합니다.`);
+      setError(`공격 카운트 그룹은 최대 ${MAX_GROUPS}개까지만 생성 가능합니다.`);
       return;
     }
     setError(null);
@@ -75,7 +75,7 @@ export default function RallyGroupPanel() {
   return (
     <div className="rally-group-panel">
       <div className="rally-group-panel__header">
-        <h3>집결 그룹 ({rallyGroups.length}/{MAX_GROUPS})</h3>
+        <h3>공격 카운트 ({rallyGroups.length}/{MAX_GROUPS})</h3>
         {isAdmin && (
           <button
             type="button"
@@ -92,7 +92,7 @@ export default function RallyGroupPanel() {
       {error && <div className="rally-error">{error}</div>}
 
       {rallyGroups.length === 0 && (
-        <div className="rally-empty">등록된 집결 그룹이 없습니다.</div>
+        <div className="rally-empty">등록된 공격 카운트 그룹이 없습니다.</div>
       )}
 
       <ul className="rally-group-list">
