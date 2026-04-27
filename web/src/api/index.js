@@ -84,6 +84,7 @@ export const api = {
   // Admin Panel (developer 전용)
   adminGetUsers: () => apiFetch('/admin/users'),
   adminSetRole: (id, role) => apiFetch(`/admin/users/${id}/role`, { method: 'PATCH', body: JSON.stringify({ role }) }),
+  adminSetLeader: (id, isLeader) => apiFetch(`/admin/users/${id}/leader`, { method: 'PATCH', body: JSON.stringify({ isLeader }) }),
   adminBanUser: (id) => apiFetch(`/admin/users/${id}`, { method: 'DELETE' }),
 
   // 연맹 공지

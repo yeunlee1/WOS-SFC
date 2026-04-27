@@ -67,6 +67,9 @@ export const useStore = create((set) => ({
   rallyGroups: [],
   rallyCountdowns: {}, // groupId → { startedAtServerMs, fireOffsets }
 
+  // 개인 행군 시간 (PersonalPanel과 시각화 컴포넌트 공유)
+  myMarchSeconds: null,
+
   // busy lock holder: { type: 'countdown' } | { type: 'rally', groupId: string } | null
   busyHolder: null,
 
@@ -100,6 +103,7 @@ export const useStore = create((set) => ({
   })),
   setCountdown:  (countdown)  => set({ countdown }),
 
+  setMyMarchSeconds: (v) => set({ myMarchSeconds: v }),
   setBusyHolder: (holder) => set({ busyHolder: holder }),
 
   setRallyGroups: (rallyGroups) => set({ rallyGroups }),

@@ -23,7 +23,15 @@ export class AdminService {
 
   async getUsers(): Promise<User[]> {
     return this.usersRepo.find({
-      select: ['id', 'nickname', 'allianceName', 'role', 'language', 'createdAt'],
+      select: [
+        'id',
+        'nickname',
+        'allianceName',
+        'role',
+        'isLeader',
+        'language',
+        'createdAt',
+      ],
       order: { createdAt: 'ASC' },
     });
   }
@@ -38,6 +46,45 @@ export class AdminService {
     // stale role 창을 0으로 줄입니다 (권한 강등 즉시 반영).
     this.realtimeGateway.kickUser(saved.nickname);
     return saved;
+  }
+
+  // isLeader는 권한 게이트가 아니라 listAssignableUsers 필터용 메타데이터 —
+  // JWT/소켓 무효화 불필요(kickUser 호출하지 않음).
+  async setLeader(
+    id: number,
+    isLeader: boolean,
+  ): Promise<
+    Pick<
+      User,
+      | 'id'
+      | 'nickname'
+      | 'allianceName'
+      | 'role'
+      | 'isLeader'
+      | 'language'
+      | 'marchSeconds'
+      | 'createdAt'
+    >
+  > {
+    const result = await this.usersRepo.update(id, { isLeader });
+    if (!result.affected) {
+      throw new NotFoundException('유저를 찾을 수 없습니다');
+    }
+    // getUsers와 동일한 화이트리스트로 응답 — passwordHash/birthDate/name/refreshTokenHash 모두 제외
+    const user = await this.usersRepo.findOne({
+      where: { id },
+      select: [
+        'id',
+        'nickname',
+        'allianceName',
+        'role',
+        'isLeader',
+        'language',
+        'marchSeconds',
+        'createdAt',
+      ],
+    });
+    return user!;
   }
 
   async banUser(id: number, requesterId: number): Promise<void> {

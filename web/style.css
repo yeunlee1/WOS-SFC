@@ -671,6 +671,269 @@ input:focus, select:focus, textarea:focus, .input:focus {
   }
 }
 
+/* ── Phase E: 두 번째 행 (시각화) ── */
+.battle-viz-row {
+  grid-column: 1 / -1;          /* 첫 번째 행의 3열 폭 전체 차지 */
+  display: grid;
+  grid-template-columns: 1fr 1fr; /* 50/50 분할 */
+  gap: 12px;
+}
+.battle-viz h4 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: var(--text-2);
+}
+
+/* 모바일: 두 번째 행 숨기고 1번/3번 카드 안 inline 시각화 노출 */
+.battle-viz-mobile {
+  display: none;  /* 데스크탑 기본 숨김 */
+  margin-top: 12px;
+}
+@media (max-width: 768px) {
+  .battle-viz-row { display: none; }
+  .battle-viz-mobile { display: block; }
+}
+
+/* ── Phase E: 타임라인 시각화 (가로 막대 + 마커) ── */
+/* 사쿠라 그라데이션 + glow + 펄스 애니메이션으로 화려하게. */
+.timeline {
+  position: relative;
+  /* 양옆 padding은 마커 핀의 절반 폭(약 50px) 이상이어야 0%/100% 위치 마커가
+     카드 밖으로 삐져나오지 않음. axis(0s/9s)도 같은 padding 안에서 막대 양 끝과 정렬. */
+  padding: 64px 56px 6px;
+  width: 100%;
+  box-sizing: border-box;
+}
+.timeline-markers {
+  position: absolute;
+  inset: 0 56px auto 56px;
+  height: 58px;
+  pointer-events: none;
+}
+.timeline-marker {
+  position: absolute;
+  bottom: 0;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  pointer-events: auto;
+  z-index: 1;
+}
+.timeline-marker__pin {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-subtle) 100%);
+  border: 1.5px solid var(--border2, var(--border));
+  border-radius: 8px;
+  padding: 4px 9px;
+  min-width: 44px;
+  box-shadow:
+    0 4px 12px rgba(180, 80, 160, 0.18),
+    0 1px 3px rgba(180, 80, 160, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+.timeline-marker__name {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text-1);
+  white-space: nowrap;
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: -0.3px;
+}
+.timeline-marker__time {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  margin-top: 1px;
+}
+.timeline-marker__arrow {
+  width: 0;
+  height: 0;
+  border: 6px solid transparent;
+  border-top-color: var(--border2, var(--border));
+  margin-top: -1px;
+  filter: drop-shadow(0 2px 3px rgba(180, 80, 160, 0.25));
+}
+
+/* 본인 마커 — 사쿠라 그라데이션 + 펄스 + 강한 glow */
+.timeline-marker--me {
+  z-index: 3;
+}
+.timeline-marker--me .timeline-marker__pin {
+  background: var(--grad-sakura);
+  border-color: transparent;
+  box-shadow:
+    0 6px 20px rgba(217, 70, 168, 0.45),
+    0 0 0 2px rgba(255, 255, 255, 0.5) inset,
+    0 0 30px rgba(217, 70, 168, 0.25);
+  animation: marker-pulse 1.8s ease-in-out infinite;
+}
+.timeline-marker--me .timeline-marker__name,
+.timeline-marker--me .timeline-marker__time {
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+.timeline-marker--me .timeline-marker__arrow {
+  border-top-color: #d946a8;
+  filter: drop-shadow(0 2px 6px rgba(217, 70, 168, 0.6));
+}
+@keyframes marker-pulse {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-3px); }
+}
+
+/* 지난 마커 — 흐리게 + 회색 */
+.timeline-marker.is-passed {
+  opacity: 0.45;
+  z-index: 0;
+}
+.timeline-marker.is-passed .timeline-marker__pin {
+  background: var(--bg-subtle);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  animation: none;
+}
+.timeline-marker.is-passed .timeline-marker__name,
+.timeline-marker.is-passed .timeline-marker__time {
+  color: var(--text-3);
+  text-shadow: none;
+}
+.timeline-marker.is-passed .timeline-marker__arrow {
+  border-top-color: var(--text-3);
+  filter: none;
+}
+
+/* 진행 막대 — 그림자 inset + 사쿠라 그라데이션 fill + 빛나는 끝 */
+.timeline-bar {
+  position: relative;
+  height: 14px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.06), rgba(0, 0, 0, 0.02));
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.08);
+}
+.timeline-bar__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: linear-gradient(90deg, #ec4899 0%, #f472b6 50%, #f9a8d4 100%);
+  border-radius: 999px;
+  transition: width 0.3s linear;
+  box-shadow:
+    0 0 12px rgba(236, 72, 153, 0.6),
+    0 0 24px rgba(236, 72, 153, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+/* 막대 끝에 빛나는 spot (현재 진행 위치) */
+.timeline-bar__fill::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translate(50%, -50%);
+  width: 16px;
+  height: 16px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow:
+    0 0 8px #fff,
+    0 0 18px var(--accent),
+    0 0 32px var(--accent);
+  animation: timeline-glow 1.4s ease-in-out infinite;
+}
+@keyframes timeline-glow {
+  0%, 100% { opacity: 0.85; transform: translate(50%, -50%) scale(1); }
+  50%      { opacity: 1;    transform: translate(50%, -50%) scale(1.25); }
+}
+
+/* 막대 위에 박힌 마커 점 — 마커 핀이 가리키는 정확한 위치 */
+.timeline-bar__marker-dot {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--bg-card);
+  border: 2px solid var(--border2, var(--border));
+  box-shadow: 0 1px 3px rgba(180, 80, 160, 0.3);
+  z-index: 1;
+}
+.timeline-bar__marker-dot--me {
+  width: 14px;
+  height: 14px;
+  background: #fff;
+  border: 2.5px solid var(--accent);
+  box-shadow:
+    0 0 0 3px rgba(217, 70, 168, 0.25),
+    0 0 12px rgba(217, 70, 168, 0.6);
+  animation: marker-dot-pulse 1.8s ease-in-out infinite;
+  z-index: 2;
+}
+@keyframes marker-dot-pulse {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); }
+  50%      { transform: translate(-50%, -50%) scale(1.15); }
+}
+.timeline-bar__marker-dot.is-passed {
+  opacity: 0.4;
+  animation: none;
+  box-shadow: none;
+}
+
+/* 시간축 — 현재 시간을 칩으로 강조 */
+.timeline-axis {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.timeline-axis__now {
+  background: var(--grad-sakura);
+  color: #fff;
+  font-weight: 800;
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  box-shadow:
+    0 2px 8px rgba(217, 70, 168, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  letter-spacing: -0.2px;
+}
+
+/* 비활성 안내 */
+.timeline-empty {
+  font-size: 12px;
+  color: var(--text-3);
+  margin: 16px 0;
+  text-align: center;
+  font-style: italic;
+}
+
+@media (max-width: 768px) {
+  .timeline { padding: 56px 42px 4px; }
+  .timeline-markers { inset: 0 42px auto 42px; height: 50px; }
+  .timeline-marker__pin { padding: 3px 7px; min-width: 38px; }
+  .timeline-marker__name { font-size: 11px; max-width: 80px; }
+  .timeline-marker__time { font-size: 9px; }
+  .timeline-marker__arrow { border-width: 5px; }
+  .timeline-bar { height: 12px; }
+  .timeline-bar__fill::after { width: 13px; height: 13px; }
+  .timeline-bar__marker-dot { width: 8px; height: 8px; }
+  .timeline-bar__marker-dot--me { width: 12px; height: 12px; }
+  .timeline-axis { font-size: 10px; }
+  .timeline-axis__now { font-size: 11px; padding: 2px 8px; }
+}
+
 /* ── PersonalPanel 전용 ── */
 .personal-panel h3 { margin: 0 0 8px; font-size: 15px; }
 .personal-panel .march-input-row {
@@ -696,6 +959,47 @@ input:focus, select:focus, textarea:focus, .input:focus {
   border-radius: 6px;
   font-size: 13px;
   margin: 0 0 8px;
+}
+
+/* PersonalPanel — 내 그룹 정보 (Phase F) */
+.my-rally-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0 12px;
+}
+.my-rally-card {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.my-rally-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-1);
+  margin-bottom: 4px;
+}
+.my-rally-members {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.my-rally-members li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.my-rally-member-name {
+  font-weight: 500;
+}
+.my-rally-member-march {
+  color: var(--text-3);
 }
 
 /* ── 카운트다운 섹션 ── */
@@ -1281,6 +1585,43 @@ input:focus, select:focus, textarea:focus, .input:focus {
 .role-badge--admin     { background: rgba(99, 102, 241, 0.2); color: #818cf8; }
 .role-badge--member    { background: rgba(148, 163, 184, 0.15); color: var(--text-secondary); }
 
+/* 집결장 배지 */
+.leader-badge {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(22, 163, 74, 0.18);
+  color: var(--green);
+  border: 1px solid rgba(22, 163, 74, 0.3);
+  flex-shrink: 0;
+}
+
+/* 집결장 토글 버튼 */
+.admin-leader-toggle {
+  border-color: var(--green);
+  color: var(--green);
+}
+.admin-leader-toggle:hover:not(:disabled) {
+  background: var(--green-soft);
+}
+.admin-leader-toggle.is-leader {
+  background: rgba(22, 163, 74, 0.12);
+  border-color: rgba(22, 163, 74, 0.4);
+  color: var(--green);
+}
+.admin-leader-toggle.is-leader:hover:not(:disabled) {
+  background: rgba(22, 163, 74, 0.2);
+}
+
+/* 카드 닉네임+배지 가로 정렬 */
+.admin-card-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 /* 모바일 카드 목록 (기본 hidden, 모바일에서 표시) */
 .admin-card-list { display: none; }
 
@@ -1717,8 +2058,6 @@ input, textarea, select, .input {
   display: flex; align-items: center; gap: 8px;
   padding: 6px 0; border-bottom: 1px solid var(--border);
 }
-.rally-user-role { font-size: 11px; color: var(--text-3); text-transform: uppercase; }
-
 /* Countdown running view */
 .rally-group-countdown { display: flex; flex-direction: column; gap: 10px; }
 .rally-group-countdown__main {

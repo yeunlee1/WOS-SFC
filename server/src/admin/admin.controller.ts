@@ -10,7 +10,7 @@ import {
   ParseIntPipe,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { IsEnum, IsNotEmpty } from 'class-validator';
+import { IsBoolean, IsEnum, IsNotEmpty } from 'class-validator';
 import { Request } from 'express';
 import { AdminService } from './admin.service';
 import type { AssignableRole } from './admin.service';
@@ -21,6 +21,11 @@ class ChangeRoleDto {
   @IsEnum(['admin', 'member'])
   @IsNotEmpty()
   role: AssignableRole;
+}
+
+class SetLeaderDto {
+  @IsBoolean()
+  isLeader: boolean;
 }
 
 @UseGuards(AuthGuard('jwt'), DeveloperGuard)
@@ -39,6 +44,11 @@ export class AdminController {
     @Body() body: ChangeRoleDto,
   ) {
     return this.adminService.changeRole(id, body.role);
+  }
+
+  @Patch('users/:id/leader')
+  setLeader(@Param('id', ParseIntPipe) id: number, @Body() body: SetLeaderDto) {
+    return this.adminService.setLeader(id, body.isLeader);
   }
 
   @Delete('users/:id')

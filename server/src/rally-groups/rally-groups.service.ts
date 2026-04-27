@@ -40,6 +40,7 @@ function sanitizeUser(u: any) {
     role: u.role,
     language: u.language,
     marchSeconds: u.marchSeconds,
+    isLeader: u.isLeader,
   };
 }
 
@@ -134,7 +135,15 @@ export class RallyGroupsService implements OnModuleInit {
 
   async listAssignableUsers() {
     return this.userRepo.find({
-      select: ['id', 'nickname', 'allianceName', 'role', 'language'],
+      where: { isLeader: true },
+      select: [
+        'id',
+        'nickname',
+        'allianceName',
+        'role',
+        'language',
+        'isLeader',
+      ],
       order: { allianceName: 'ASC', nickname: 'ASC' },
     });
   }
