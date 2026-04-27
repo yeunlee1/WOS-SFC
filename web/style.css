@@ -671,6 +671,83 @@ input:focus, select:focus, textarea:focus, .input:focus {
   }
 }
 
+/* ── Phase E: 두 번째 행 (시각화) ── */
+.battle-viz-row {
+  grid-column: 1 / -1;          /* 첫 번째 행의 3열 폭 전체 차지 */
+  display: grid;
+  grid-template-columns: 1fr 1fr; /* 50/50 분할 */
+  gap: 12px;
+}
+.battle-viz h4 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: var(--text-2);
+}
+
+/* 모바일: 두 번째 행 숨기고 1번/3번 카드 안 inline 시각화 노출 */
+.battle-viz-mobile {
+  display: none;  /* 데스크탑 기본 숨김 */
+  margin-top: 12px;
+}
+@media (max-width: 768px) {
+  .battle-viz-row { display: none; }
+  .battle-viz-mobile { display: block; }
+}
+
+/* ── Phase E: 점(dot) 시각화 ── */
+.dots-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: flex-end;
+  padding: 4px 0;
+}
+.dot-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 10px;
+}
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--green);
+  transition: background .15s ease;
+  flex-shrink: 0;
+}
+.dot--red { background: var(--red); }
+.dot-label {
+  font-size: 10px;
+  color: var(--text-2);
+  white-space: nowrap;
+  transform: rotate(-45deg);
+  transform-origin: top left;
+  margin-top: 2px;
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dots-empty {
+  font-size: 12px;
+  color: var(--text-3);
+  margin: 8px 0;
+  text-align: center;
+}
+
+@media (max-width: 768px) {
+  .dot {
+    width: 8px;
+    height: 8px;
+  }
+  .dots-row { gap: 3px; }
+  .dot-label {
+    font-size: 9px;
+    max-width: 60px;
+  }
+}
+
 /* ── PersonalPanel 전용 ── */
 .personal-panel h3 { margin: 0 0 8px; font-size: 15px; }
 .personal-panel .march-input-row {

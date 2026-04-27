@@ -5,6 +5,7 @@ import { formatUser } from '../../utils/formatUser';
 import RallyGroupEditor from './RallyGroupEditor';
 import RallyGroupCountdown from './RallyGroupCountdown';
 import { stopRallyCountdown } from './rallyGroupPlayer';
+import RallyDots from './RallyDots';
 
 const canAdmin = (role) => role === 'admin' || role === 'developer';
 const MAX_GROUPS = 6;
@@ -90,6 +91,10 @@ export default function RallyGroupPanel() {
       </div>
 
       {error && <div className="rally-error">{error}</div>}
+
+      <div className="battle-viz-mobile">
+        <RallyDots />
+      </div>
 
       {rallyGroups.length === 0 && (
         <div className="rally-empty">등록된 공격 카운트 그룹이 없습니다.</div>

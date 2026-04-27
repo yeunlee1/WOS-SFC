@@ -10,6 +10,7 @@ import {
   setCountdownVolume,
 } from './countdownPlayer';
 import { RESCHEDULE_THRESHOLD_MS } from '../../clockSync';
+import CountdownDots from './CountdownDots';
 
 // ── SVG 원형 프로그레스 링 ──────────────────────
 const RADIUS = 120;
@@ -351,6 +352,10 @@ export default function Countdown() {
       {!canControl && !isActive && (
         <p className="cd-viewer-msg">SFC가 수비 카운트를 시작하면 여기에 표시됩니다</p>
       )}
+
+      <div className="battle-viz-mobile">
+        <CountdownDots />
+      </div>
     </section>
   );
 }
