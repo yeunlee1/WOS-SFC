@@ -36,16 +36,45 @@ export class AdminService {
     });
   }
 
-  async changeRole(id: number, role: AssignableRole): Promise<User> {
-    const user = await this.usersRepo.findOne({ where: { id } });
-    if (!user) throw new NotFoundException('유저를 찾을 수 없습니다');
-    user.role = role;
-    const saved = await this.usersRepo.save(user);
+  async changeRole(
+    id: number,
+    role: AssignableRole,
+  ): Promise<
+    Pick<
+      User,
+      | 'id'
+      | 'nickname'
+      | 'allianceName'
+      | 'role'
+      | 'isLeader'
+      | 'language'
+      | 'marchSeconds'
+      | 'createdAt'
+    >
+  > {
+    const result = await this.usersRepo.update(id, { role });
+    if (!result.affected) {
+      throw new NotFoundException('유저를 찾을 수 없습니다');
+    }
+    // getUsers/setLeader와 동일한 화이트리스트로 응답 — passwordHash/birthDate/name/refreshTokenHash 모두 제외
+    const user = await this.usersRepo.findOne({
+      where: { id },
+      select: [
+        'id',
+        'nickname',
+        'allianceName',
+        'role',
+        'isLeader',
+        'language',
+        'marchSeconds',
+        'createdAt',
+      ],
+    });
     // JWT payload의 role은 만료(최대 1시간)까지 stale 상태가 됩니다.
     // 역할 변경 즉시 해당 유저의 소켓을 강제 종료하면, 재연결 시 새 JWT를 발급받아
     // stale role 창을 0으로 줄입니다 (권한 강등 즉시 반영).
-    this.realtimeGateway.kickUser(saved.nickname);
-    return saved;
+    this.realtimeGateway.kickUser(user!.nickname);
+    return user!;
   }
 
   // isLeader는 권한 게이트가 아니라 listAssignableUsers 필터용 메타데이터 —
