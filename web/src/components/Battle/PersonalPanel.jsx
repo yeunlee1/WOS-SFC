@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useStore } from '../../store';
 import { useI18n } from '../../i18n';
 import { api } from '../../api';
 import { speak } from './tts';
 import PersonalSyncOffset from './PersonalSyncOffset';
+import { formatUser } from '../../utils/formatUser';
 
 // PersonalPanel — 개인 현황판
 // 유저 본인의 행군 시간(marchSeconds)을 저장하고,
@@ -14,6 +15,15 @@ export default function PersonalPanel() {
   const timeOffset         = useStore((s) => s.timeOffset + s.personalOffsetMs);
   const setMyMarchSeconds  = useStore((s) => s.setMyMarchSeconds);
   const { lang }           = useI18n();
+
+  // 내가 가입한 공격 카운트 그룹 목록 — primitive/refs만 구독하고 파생값은 useMemo로 산출.
+  // (인라인 selector에서 .filter()를 쓰면 매 호출 새 배열 참조라 zustand가 불필요한 리렌더 트리거)
+  const rallyGroups = useStore((s) => s.rallyGroups);
+  const userId = useStore((s) => s.user?.id);
+  const myGroups = useMemo(() => {
+    if (!userId) return [];
+    return rallyGroups.filter((g) => g.members?.some((m) => m.userId === userId));
+  }, [rallyGroups, userId]);
 
   // marchSeconds: null(미설정) | 1~180(설정됨)
   const [marchSeconds, setMarchSeconds] = useState(null);
@@ -170,6 +180,30 @@ export default function PersonalPanel() {
       {saveError && (
         <div className="march-error" role="alert" id="personal-save-error">
           {saveError}
+        </div>
+      )}
+
+      {/* 내가 가입한 공격 카운트 그룹 정보 (Phase F) */}
+      {myGroups.length > 0 && (
+        <div className="my-rally-info">
+          {myGroups.map((g) => (
+            <div key={g.id} className="my-rally-card">
+              <div className="my-rally-name">{g.name}</div>
+              <ul className="my-rally-members">
+                {[...g.members].sort((a, b) => a.orderIndex - b.orderIndex).map((m) => {
+                  const eff = m.marchSecondsOverride ?? m.user?.marchSeconds;
+                  const effText = eff != null ? `${eff}초` : '미설정';
+                  return (
+                    <li key={m.id}>
+                      <span className="leader-badge">집결장</span>
+                      <span className="my-rally-member-name">{formatUser(m.user)}</span>
+                      <span className="my-rally-member-march">— {effText}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
         </div>
       )}
 
