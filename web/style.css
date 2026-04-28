@@ -4328,6 +4328,8 @@ body.theme-frost .cd-arc-bg svg {
   max-width: 600px;
   opacity: 0.7;
 }
+body.theme-frost .cd-arc-bg.warn .cd-arc-fill { stroke: var(--warn); }
+body.theme-frost .cd-arc-bg.danger .cd-arc-fill { stroke: var(--danger); }
 
 /* ── cd-mega: 거대한 카운트다운 숫자 ── */
 body.theme-frost .cd-mega {
@@ -4362,6 +4364,10 @@ body.theme-frost .cd-mega.danger {
   25%       { transform: translateX(-3px); }
   75%       { transform: translateX(3px); }
 }
+@keyframes pulse {
+  0%, 100% { opacity: 0.95; }
+  50%       { opacity: 0.6; }
+}
 
 /* ── cd-dial: 21-틱 다이얼 ── */
 body.theme-frost .cd-dial {
@@ -4375,11 +4381,12 @@ body.theme-frost .cd-dial {
 }
 body.theme-frost .cd-tick {
   width: 2px;
+  height: 8px;
   background: rgba(124, 220, 255, 0.25);
   border-radius: 1px;
   transition: all 0.2s;
 }
-body.theme-frost .cd-tick.major { background: var(--ice-2); }
+body.theme-frost .cd-tick.major { background: var(--ice-2); height: 12px; }
 body.theme-frost .cd-tick.passed { background: rgba(124, 220, 255, 0.08); }
 body.theme-frost .cd-tick.now {
   background: var(--ice-0);

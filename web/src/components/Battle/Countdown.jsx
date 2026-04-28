@@ -37,7 +37,7 @@ function CdDial({ value, total }) {
     ticks.push({ key: i, cls });
   }
   return (
-    <div className="cd-dial">
+    <div className="cd-dial" aria-hidden="true">
       {ticks.map((t) => <div key={t.key} className={t.cls} />)}
     </div>
   );
@@ -262,14 +262,33 @@ export default function Countdown() {
     getSocket()?.emit('countdown:stop');
   }
 
+  // ── 전역 키보드 단축키 (SPACE / R) ────────────────
+  useEffect(() => {
+    if (!canControl) return;
+    function handleGlobalKey(e) {
+      const t = e.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      if (e.code === 'Space') {
+        e.preventDefault();
+        if (active) handleStop();
+        else handleStart();
+      } else if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        handleStop();
+      }
+    }
+    window.addEventListener('keydown', handleGlobalKey);
+    return () => window.removeEventListener('keydown', handleGlobalKey);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canControl, active, inputSec]);
+
   // ── SVG 아크 계산 ──────────────────────────────
   const arcPct    = total > 0 ? Math.max(0, Math.min(1, (secs ?? total) / total)) : (secs === null ? 1 : 0);
   const arcOffset = ARC_C * (1 - arcPct);
-  const arcStroke = secs !== null && secs <= 5
-    ? '#f87171'
-    : secs !== null && secs <= 10
-      ? '#fbbf24'
-      : 'url(#arcGrad)';
+  // 아크 색상: CSS 클래스(warn/danger) 기반 — 하드코딩 hex 제거
+  const arcBgCls  = 'cd-arc-bg'
+    + (secs !== null && secs <= 5  ? ' danger' : '')
+    + (secs !== null && secs > 5 && secs <= 10 ? ' warn' : '');
 
   // ── mega number 클래스 ─────────────────────────
   let megaCls = 'cd-mega';
@@ -303,7 +322,7 @@ export default function Countdown() {
         </div>
 
         {/* SVG 아크 백드롭 */}
-        <div className="cd-arc-bg">
+        <div className={arcBgCls} aria-hidden="true">
           <svg viewBox={`0 0 ${ARC_SIZE} ${ARC_SIZE}`}>
             <defs>
               <linearGradient id="arcGrad" x1="0" x2="1" y1="0" y2="1">
@@ -318,9 +337,10 @@ export default function Countdown() {
               strokeWidth="2"
             />
             <circle
+              className="cd-arc-fill"
               cx={ARC_SIZE / 2} cy={ARC_SIZE / 2} r={ARC_R}
               fill="none"
-              stroke={arcStroke}
+              stroke="url(#arcGrad)"
               strokeWidth="3"
               strokeLinecap="round"
               strokeDasharray={ARC_C}
@@ -335,7 +355,7 @@ export default function Countdown() {
         </div>
 
         {/* 메가 숫자 */}
-        <div className={megaCls}>{displayNum}</div>
+        <div className={megaCls} role="timer" aria-live="polite" aria-atomic="true">{displayNum}</div>
 
         {/* 21-틱 다이얼 */}
         <CdDial value={secs ?? 0} total={total} />
