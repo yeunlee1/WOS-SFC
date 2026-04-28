@@ -3841,8 +3841,8 @@ body.theme-frost .chat-online-avatar::after {
   border: 2px solid rgba(5, 8, 17, 1);
 }
 
-/* 메시지 영역 (공용 .chat-msgs) */
-body.theme-frost .chat-msgs {
+/* 메시지 영역 (.chat-dock-msgs) */
+body.theme-frost .chat-dock-msgs {
   flex: 1;
   overflow-y: auto;
   padding: 12px;
@@ -3851,13 +3851,13 @@ body.theme-frost .chat-msgs {
   gap: 6px;
   min-height: 0;
 }
-body.theme-frost .chat-msgs::-webkit-scrollbar { width: 6px; }
-body.theme-frost .chat-msgs::-webkit-scrollbar-thumb {
+body.theme-frost .chat-dock-msgs::-webkit-scrollbar { width: 6px; }
+body.theme-frost .chat-dock-msgs::-webkit-scrollbar-thumb {
   background: rgba(124, 220, 255, 0.2);
   border-radius: 3px;
 }
-/* 공용 .chat-msg 메시지 카드 */
-body.theme-frost .chat-msg {
+/* .chat-dock-msg 메시지 카드 */
+body.theme-frost .chat-dock-msg {
   display: grid;
   grid-template-columns: 28px 1fr;
   gap: 8px;
@@ -3865,10 +3865,10 @@ body.theme-frost .chat-msg {
   border-radius: 6px;
   animation: chat-in 0.3s cubic-bezier(.22, 1, .36, 1);
 }
-body.theme-frost .chat-msg:hover {
+body.theme-frost .chat-dock-msg:hover {
   background: rgba(124, 220, 255, 0.04);
 }
-body.theme-frost .chat-msg-avatar {
+body.theme-frost .chat-dock-msg-avatar {
   width: 28px; height: 28px;
   border-radius: 6px;
   display: flex; align-items: center; justify-content: center;
@@ -3879,31 +3879,31 @@ body.theme-frost .chat-msg-avatar {
   letter-spacing: 0.05em;
   flex-shrink: 0;
 }
-body.theme-frost .chat-msg-body { min-width: 0; }
-body.theme-frost .chat-msg-head {
+body.theme-frost .chat-dock-msg-body { min-width: 0; }
+body.theme-frost .chat-dock-msg-head {
   display: flex;
   align-items: baseline;
   gap: 8px;
   margin-bottom: 2px;
 }
-body.theme-frost .chat-msg-nick {
+body.theme-frost .chat-dock-msg-nick {
   font-weight: 700;
   font-size: 12px;
   color: var(--ice-0);
 }
-body.theme-frost .chat-msg-time {
+body.theme-frost .chat-dock-msg-time {
   font-family: 'JetBrains Mono', monospace;
   font-size: 9px;
   color: var(--text-3);
 }
-body.theme-frost .chat-msg-text {
+body.theme-frost .chat-dock-msg-text {
   font-size: 13px;
   line-height: 1.5;
   color: var(--text-1);
   word-wrap: break-word;
   margin: 0;
 }
-body.theme-frost .chat-msg-tr {
+body.theme-frost .chat-dock-msg-tr {
   font-size: 11px;
   color: var(--text-2);
   font-style: italic;
@@ -3911,7 +3911,7 @@ body.theme-frost .chat-msg-tr {
   padding-left: 6px;
   border-left: 2px solid var(--line);
 }
-body.theme-frost .chat-system {
+body.theme-frost .chat-dock-system {
   text-align: center;
   font-family: 'JetBrains Mono', monospace;
   font-size: 10px;
@@ -3944,8 +3944,8 @@ body.theme-frost .chat-dock-translate-bar label {
   user-select: none;
 }
 
-/* 도크 입력 행 (공용 .chat-input-row 재사용) */
-body.theme-frost .chat-input-row {
+/* 도크 입력 행 (.chat-dock-input-row) */
+body.theme-frost .chat-dock-input-row {
   flex-shrink: 0;
   display: flex;
   gap: 6px;
@@ -3953,7 +3953,7 @@ body.theme-frost .chat-input-row {
   border-top: 1px solid var(--line);
   background: rgba(4, 6, 13, 0.6);
 }
-body.theme-frost .chat-input-row .input {
+body.theme-frost .chat-dock-input-row .input {
   flex: 1;
   padding: 9px 12px;
   font-size: 13px;
@@ -3965,13 +3965,13 @@ body.theme-frost .chat-input-row .input {
   font-family: inherit;
   transition: border 0.2s, box-shadow 0.2s;
 }
-body.theme-frost .chat-input-row .input:focus {
+body.theme-frost .chat-dock-input-row .input:focus {
   outline: none;
   border-color: var(--ice-2);
   box-shadow: 0 0 0 3px rgba(124, 220, 255, 0.15);
 }
-body.theme-frost .chat-input-row .input::placeholder { color: var(--text-3); }
-body.theme-frost .chat-input-row .btn-primary {
+body.theme-frost .chat-dock-input-row .input::placeholder { color: var(--text-3); }
+body.theme-frost .chat-dock-input-row .btn-primary {
   flex-shrink: 0;
   padding: 8px 14px;
   background: linear-gradient(135deg, var(--ice-1), var(--ice-3));
@@ -3984,7 +3984,7 @@ body.theme-frost .chat-input-row .btn-primary {
   box-shadow: 0 4px 16px rgba(58, 120, 255, 0.4);
   transition: box-shadow 0.15s;
 }
-body.theme-frost .chat-input-row .btn-primary:hover {
+body.theme-frost .chat-dock-input-row .btn-primary:hover {
   box-shadow: 0 6px 24px rgba(58, 120, 255, 0.55);
 }
 

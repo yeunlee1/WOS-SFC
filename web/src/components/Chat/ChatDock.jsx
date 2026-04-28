@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, memo } from 'react';
 import { useStore } from '../../store';
 import { useI18n } from '../../i18n';
 import { getSocket, translateChatMessage } from '../../api';
@@ -146,11 +146,11 @@ export default function ChatDock({ onClose }) {
       </div>
 
       {/* 메시지 목록 */}
-      <div className="chat-msgs" ref={messagesContainerRef}>
+      <div className="chat-dock-msgs" ref={messagesContainerRef}>
         {messages.map((msg, idx) => {
           if (msg._type === 'system') {
             return (
-              <div key={msg._id ?? idx} className="chat-system">
+              <div key={msg._id ?? idx} className="chat-dock-system">
                 — {msg.text} —
               </div>
             );
@@ -175,12 +175,12 @@ export default function ChatDock({ onClose }) {
           id="dock-auto-translate"
         />
         <label htmlFor="dock-auto-translate">
-          {(t('viewTranslation') || 'AUTO-TRANSLATE').toUpperCase()}
+          {(t('autoTranslate') || 'AUTO-TRANSLATE').toUpperCase()}
         </label>
       </div>
 
       {/* 입력 영역 */}
-      <div className="chat-input-row">
+      <div className="chat-dock-input-row">
         <input
           className="input"
           type="text"
@@ -196,12 +196,16 @@ export default function ChatDock({ onClose }) {
 }
 
 // ── 도크 개별 메시지 컴포넌트 ──
-function DockMessage({ msg, autoTranslate }) {
-  const { t } = useI18n();
+const localeMap = { ko: 'ko-KR', en: 'en-US', ja: 'ja-JP', zh: 'zh-CN' };
+
+const DockMessage = memo(function DockMessage({ msg, autoTranslate }) {
+  const { t, lang } = useI18n();
   const [showOriginal, setShowOriginal] = useState(false);
 
+  // locale-aware 시간 형식
+  const locale = localeMap[lang] || 'ko-KR';
   const time = msg.createdAt
-    ? new Date(msg.createdAt).toLocaleTimeString('ko-KR', {
+    ? new Date(msg.createdAt).toLocaleTimeString(locale, {
         hour: '2-digit',
         minute: '2-digit',
       })
@@ -219,19 +223,19 @@ function DockMessage({ msg, autoTranslate }) {
   const avatarColor = getAllianceColor(msg.allianceName);
 
   return (
-    <div className="chat-msg">
-      <div className="chat-msg-avatar" style={{ background: avatarColor }}>
+    <div className="chat-dock-msg">
+      <div className="chat-dock-msg-avatar" style={{ background: avatarColor }}>
         {initials}
       </div>
-      <div className="chat-msg-body">
-        <div className="chat-msg-head">
-          <span className="chat-msg-nick">{msg.nickname}</span>
-          <span className="chat-msg-time">{time}</span>
+      <div className="chat-dock-msg-body">
+        <div className="chat-dock-msg-head">
+          <span className="chat-dock-msg-nick">{msg.nickname}</span>
+          <span className="chat-dock-msg-time">{time}</span>
         </div>
-        <p className="chat-msg-text">{displayContent}</p>
+        <p className="chat-dock-msg-text">{displayContent}</p>
         {autoTranslate && hasTranslation && (
           <div
-            className="chat-msg-tr"
+            className="chat-dock-msg-tr"
             style={{ cursor: 'pointer' }}
             onClick={() => setShowOriginal((v) => !v)}
           >
@@ -241,4 +245,4 @@ function DockMessage({ msg, autoTranslate }) {
       </div>
     </div>
   );
-}
+});

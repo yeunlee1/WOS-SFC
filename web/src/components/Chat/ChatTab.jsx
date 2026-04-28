@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, memo } from 'react';
 import { useStore, ALLIANCES } from '../../store';
 import { useI18n } from '../../i18n';
 import { getSocket, translateChatMessage } from '../../api';
@@ -136,7 +136,7 @@ export default function ChatTab() {
               checked={autoTranslate}
               onChange={(e) => setAutoTranslate(e.target.checked)}
             />
-            <span>{t('viewTranslation') || 'Auto-translate'}</span>
+            <span>{t('autoTranslate') || 'Auto-translate'}</span>
           </label>
         </div>
 
@@ -184,7 +184,7 @@ export default function ChatTab() {
         </div>
         <div className="chat-tab-sidebar-body">
           {groups.length === 0 ? (
-            <span className="chat-tab-sidebar-empty">접속자 없음</span>
+            <span className="chat-tab-sidebar-empty">{t('noOnlineUsers')}</span>
           ) : (
             groups.map(({ alliance, users }) => (
               <div key={alliance} className="chat-tab-alliance-group">
@@ -217,13 +217,16 @@ export default function ChatTab() {
 }
 
 // ── 개별 채팅 메시지 컴포넌트 ──
-function ChatMessage({ msg, autoTranslate }) {
-  const { t } = useI18n();
+const localeMap = { ko: 'ko-KR', en: 'en-US', ja: 'ja-JP', zh: 'zh-CN' };
+
+const ChatMessage = memo(function ChatMessage({ msg, autoTranslate }) {
+  const { t, lang } = useI18n();
   const [showOriginal, setShowOriginal] = useState(false);
 
-  // createdAt 방어 처리
+  // createdAt 방어 처리 — locale-aware 시간 형식
+  const locale = localeMap[lang] || 'ko-KR';
   const time = msg.createdAt
-    ? new Date(msg.createdAt).toLocaleTimeString('ko-KR', {
+    ? new Date(msg.createdAt).toLocaleTimeString(locale, {
         hour: '2-digit',
         minute: '2-digit',
       })
@@ -271,4 +274,4 @@ function ChatMessage({ msg, autoTranslate }) {
       </div>
     </div>
   );
-}
+});
