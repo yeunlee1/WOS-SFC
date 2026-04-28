@@ -120,95 +120,562 @@
 }
 
 /* ─── 테마 Spring (명시적 클래스 — 벚꽃 기본) ─── */
-/* :root 기본값을 그대로 사용 — 별도 override 불필요 */
+/* :root 기본값을 그대로 사용 — 별도 override 불필요. Phase 8에서 frost 수준으로 풀 리뉴얼 예정. */
 
-/* ─── 테마 Anthropic (클로드 공식 — 따뜻한 미니멀) ─── */
-body.theme-anthropic {
-  --bg-page:    #faf9f5;
-  --bg-card:    #ffffff;
-  --bg-hover:   #efebe0;
-  --bg-subtle:  #f5f3ee;
-  --bg-input:   #ffffff;
-  --bg-glass:   rgba(250,249,245,.82);
-  --bg-glass-strong: rgba(255,255,255,.95);
-  --accent:       #d97757;
-  --accent-hover: #c86540;
-  --accent-soft:  #f7e9df;
-  --accent-dim:   rgba(217,119,87,0.12);
-  --accent-glow:  rgba(217,119,87,.22);
-  --green:      #16a34a;
-  --green-soft: #dcfce7;
-  --orange:     #ca8a04;
-  --orange-soft:#fef9c3;
-  --red:        #dc2626;
-  --red-soft:   #fef2f2;
-  --text-1: #1f1e1d;
-  --text-2: #6b6763;
-  --text-3: #a8a39c;
-  --border:  #eae6dc;
-  --border2: #d6cfbf;
-  --shadow-sm: 0 1px 2px rgba(31,30,29,0.04);
-  --shadow-md: 0 2px 8px rgba(31,30,29,0.06);
-  --shadow-lg: 0 8px 24px rgba(31,30,29,0.08);
-  --grad-sakura: linear-gradient(135deg,#d97757 0%,#ca8a04 100%);
-  --grad-spring: linear-gradient(160deg,#faf9f5 0%,#f5f3ee 60%,#efebe0 100%);
-  --grad-title: linear-gradient(135deg,#d97757 0%,#c86540 100%);
-  --grad-cd-normal: linear-gradient(135deg,#d97757 0%,#ca8a04 100%);
-  --body-bg: linear-gradient(160deg,#faf9f5 0%,#f5f3ee 60%,#efebe0 100%);
-  /* Countdown SVG 링 (Anthropic) */
-  --cd-grad-1: #d97757;
-  --cd-grad-2: #ca8a04;
-  --cd-ring-bg: #eae6dc;
-  --cd-ring-idle: #d6cfbf;
+/* ─── 테마 Frost (FROST PROTOCOL — 얼어붙은 전장) ─── */
+body.theme-frost {
+  --bg-page:    #04060d;
+  --bg-card:    rgba(12,26,46,0.55);
+  --bg-hover:   rgba(124,220,255,0.08);
+  --bg-subtle:  #0c1a2e;
+  --bg-input:   rgba(7,16,30,0.70);
+  --bg-glass:   rgba(12,26,46,0.55);
+  --bg-glass-strong: rgba(12,26,46,0.92);
+  --accent:       #7cdcff;
+  --accent-hover: #3a78ff;
+  --accent-soft:  rgba(124,220,255,0.14);
+  --accent-dim:   rgba(124,220,255,0.10);
+  --accent-glow:  rgba(124,220,255,0.45);
+  --green:      #4ade80;
+  --green-soft: rgba(74,222,128,0.18);
+  --orange:     #fbbf24;
+  --orange-soft:rgba(251,191,36,0.15);
+  --red:        #f87171;
+  --red-soft:   rgba(248,113,113,0.15);
+  --text-1: #eaf6ff;
+  --text-2: #8fa6c2;
+  --text-3: #4a627e;
+  --border:  rgba(124,220,255,0.14);
+  --border2: rgba(124,220,255,0.28);
+  --shadow-sm: 0 0 0 1px rgba(124,220,255,0.06);
+  --shadow-md: 0 8px 32px rgba(0,8,24,0.5), 0 0 0 1px rgba(124,220,255,0.06);
+  --shadow-lg: 0 24px 64px rgba(0,8,24,0.7), 0 0 0 1px rgba(124,220,255,0.10);
+  --grad-sakura: linear-gradient(135deg,#a8e6ff 0%,#7cdcff 55%,#3a78ff 100%);
+  --grad-spring: linear-gradient(180deg,#04060d 0%,#07101e 100%);
+  --grad-title:  linear-gradient(135deg,#eaf6ff 0%,#7cdcff 100%);
+  --grad-cd-normal: linear-gradient(135deg,#a8e6ff 0%,#3a78ff 100%);
+  --body-bg:
+    radial-gradient(ellipse at 70% 0%, #0a1d3a 0%, transparent 55%),
+    radial-gradient(ellipse at 20% 100%, #0a2540 0%, transparent 55%),
+    linear-gradient(180deg, #04060d 0%, #07101e 100%);
+  /* Countdown SVG 링 (Frost) */
+  --cd-grad-1: #a8e6ff;
+  --cd-grad-2: #3a78ff;
+  --cd-ring-bg:  rgba(124,220,255,0.06);
+  --cd-ring-idle: rgba(124,220,255,0.14);
+
+  /* ─── Frost 전용 추가 토큰 (클로드 디자인 원본) ─── */
+  /* Ice 5단계: 텍스트·아이콘 강도 차등 */
+  --ice-0: #eaf6ff;  /* 가장 밝음 — 강조 텍스트 */
+  --ice-1: #a8e6ff;  /* 밝은 시안 — 보조 강조 */
+  --ice-2: #7cdcff;  /* 메인 액센트 */
+  --ice-3: #3a78ff;  /* 진한 블루 — 그라데이션 끝 */
+  --ice-4: #1f3fa8;  /* 가장 진한 블루 — 깊이감 */
+  /* Rail 전용 진한 배경 — body-bg보다 한 단계 더 어두움 */
+  --bg-rail: #050811;
+  /* Line 2단계 — border와 동일하지만 의미적 alias */
+  --line:    rgba(124,220,255,0.14);
+  --line-2:  rgba(124,220,255,0.28);
+  /* Frost 한정 dimension — Icon Rail이 다른 테마(64px)보다 약간 더 넉넉 */
+  --rail-w:    72px;
+  --topbar-h:  56px;
 }
 
-/* ─── 테마 Dark (리니어 — 샤프 다크) ─── */
-body.theme-dark {
-  --bg-page:    #08090a;
-  --bg-card:    #1c1d22;
-  --bg-hover:   #26272d;
-  --bg-subtle:  #141518;
-  --bg-input:   #1c1d22;
-  --bg-glass:   rgba(20,21,24,.88);
-  --bg-glass-strong: rgba(28,29,34,.96);
-  --accent:       #818cf8;
-  --accent-hover: #6366f1;
-  --accent-soft:  rgba(129,140,248,0.16);
-  --accent-dim:   rgba(129,140,248,0.10);
-  --accent-glow:  rgba(129,140,248,.45);
-  --green:      #10b981;
-  --green-soft: rgba(16,185,129,0.18);
-  --orange:     #f59e0b;
-  --orange-soft:rgba(245,158,11,0.18);
-  --red:        #ef4444;
-  --red-soft:   rgba(239,68,68,0.18);
-  --text-1: #f4f4f5;
-  --text-2: #a1a1aa;
-  --text-3: #71717a;
-  --border:  #27272a;
-  --border2: #3f3f46;
-  --shadow-sm: 0 0 0 1px rgba(255,255,255,0.06);
-  --shadow-md: 0 4px 16px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.08);
-  --shadow-lg: 0 16px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.1);
-  --grad-sakura: linear-gradient(135deg,#a78bfa 0%,#818cf8 55%,#5e6ad2 100%);
-  --grad-spring: linear-gradient(160deg,#08090a 0%,#141518 60%,#1c1d22 100%);
-  --grad-title: linear-gradient(135deg,#a78bfa 0%,#818cf8 100%);
-  --grad-cd-normal: linear-gradient(135deg,#c4b5fd 0%,#818cf8 100%);
-  --body-bg: radial-gradient(ellipse at top, #141627 0%, #08090a 55%, #020304 100%);
-  /* Countdown SVG 링 (Dark) */
-  --cd-grad-1: #a78bfa;
-  --cd-grad-2: #5e6ad2;
-  --cd-ring-bg: #27272a;
-  --cd-ring-idle: #3f3f46;
+/* 벚꽃 애니메이션: Spring 테마에서만 — Frost에서 숨김. */
+body.theme-frost .petals-bg { display: none !important; }
+
+/* ─── Frost 전역 배경 효과 (snow canvas + 그리드 오버레이 + vignette) ─── */
+/* z-index 계층:
+ *   body bg(:0)        — radial gradients via --body-bg
+ *   .snow-canvas(:1)   — 강설 파티클
+ *   ::before(:2)       — 그리드 오버레이
+ *   ::after(:2)        — vignette
+ *   .app-container(:5) — 메인 콘텐츠(frost 한정 위로 끌어올림)
+ *   .app-header(:100), .auth-modal-wrap(:200+) — 그대로 */
+.snow-canvas {
+  position: fixed; inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  /* frost 테마의 핵심 시각 요소 — prefers-reduced-motion에서도 표시 (정지 상태로).
+   * SnowCanvas.jsx 가 reduce 환경에서도 첫 프레임은 그려지도록 보장. */
+}
+body.theme-frost::before {
+  content: '';
+  position: fixed; inset: 0;
+  background-image:
+    linear-gradient(to right, rgba(124, 220, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(124, 220, 255, 0.03) 1px, transparent 1px);
+  background-size: 56px 56px;
+  pointer-events: none;
+  z-index: 2;
+  -webkit-mask-image: radial-gradient(ellipse at center, black 0%, transparent 75%);
+          mask-image: radial-gradient(ellipse at center, black 0%, transparent 75%);
+}
+body.theme-frost::after {
+  content: '';
+  position: fixed; inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  background: radial-gradient(ellipse at center, transparent 30%, rgba(4,6,13,0.7) 100%);
+}
+/* frost 한정: .app-container를 그리드/vignette 위로 끌어올림.
+ * (다른 테마는 ::before/::after 자체가 없으므로 영향 없음.) */
+body.theme-frost .app-container {
+  position: relative;
+  z-index: 5;
+}
+/* prefers-reduced-motion: snow는 frost 테마의 핵심 시각이므로 숨기지 않음.
+ * 대신 SnowCanvas.jsx가 reduce 환경에서 정지된 한 프레임만 그리고 raf를 멈춘다 */
+
+/* ════════════════════════════════════════════════════════════
+   Phase 2 — Layout Shell
+   Icon Rail (좌) + Canvas (중앙: Topbar + 메인) + OnlinePanel/ChatDock (우)
+   모든 테마에서 동일 골격. 색은 CSS 변수 cascade로 변환.
+   ════════════════════════════════════════════════════════════ */
+:root {
+  --rail-w: 64px;
+  --topbar-h: 56px;
+  --chat-dock-w: 340px;
 }
 
-/* 벚꽃 애니메이션: Spring 테마에서만 — Anthropic/Dark에서 숨김 */
-body.theme-anthropic .petals-bg,
-body.theme-dark .petals-bg { display: none !important; }
+/* console grid: rail | canvas | (dock) */
+.app-container.console {
+  display: grid;
+  grid-template-columns: var(--rail-w) minmax(0, 1fr);
+  grid-template-rows: 100%;
+  height: 100dvh;
+  overflow: hidden;
+}
+.app-container.console--with-dock {
+  grid-template-columns: var(--rail-w) minmax(0, 1fr) auto;
+}
 
-/* ════════════════════════════════════
-   테마 선택기 (Header 및 Drawer)
-════════════════════════════════════ */
+/* ═══ ICON RAIL (좌측) ═══ */
+.rail {
+  background: var(--bg-card-strong, var(--bg-card));
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 0 10px;
+  gap: 6px;
+  z-index: 10;
+}
+.rail-logo {
+  width: 40px; height: 40px;
+  border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, var(--accent-soft), var(--accent-dim));
+  border: 1px solid var(--border2);
+  color: var(--accent);
+  margin-bottom: 4px;
+  box-shadow: inset 0 0 14px var(--accent-dim);
+}
+.rail-divider {
+  width: 28px; height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+.rail-btn {
+  position: relative;
+  width: 40px; height: 40px;
+  border: none;
+  border-radius: 12px;
+  background: var(--bg-hover);
+  color: var(--text-2);
+  font-size: 16px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, border-radius 0.18s ease, box-shadow 0.18s ease;
+}
+.rail-btn:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-radius: 14px;
+}
+.rail-btn.active {
+  background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+  color: var(--bg-page);
+  border-radius: 14px;
+  box-shadow: 0 4px 16px var(--accent-glow);
+}
+.rail-btn.active::before {
+  content: '';
+  position: absolute;
+  left: -12px; top: 50%;
+  transform: translateY(-50%);
+  width: 4px; height: 24px;
+  background: var(--accent);
+  border-radius: 0 4px 4px 0;
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+.rail-btn-tooltip {
+  position: absolute;
+  left: calc(100% + 12px);
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--bg-glass-strong);
+  border: 1px solid var(--border2);
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--text-1);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s, transform 0.15s;
+  z-index: 100;
+}
+.rail-btn:hover .rail-btn-tooltip {
+  opacity: 1;
+  transform: translateY(-50%) translateX(4px);
+}
+.rail-spacer { flex: 1; }
+.rail-user {
+  position: relative;
+  width: 40px; height: 40px;
+  border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 800;
+  font-size: 13px;
+  color: white;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: transform 0.15s, border-color 0.15s;
+}
+.rail-user:hover { transform: scale(1.05); border-color: var(--accent); }
+.rail-user-leader::after {
+  content: '★';
+  position: absolute;
+  bottom: -3px; right: -3px;
+  background: var(--orange);
+  color: var(--bg-page);
+  border-radius: 50%;
+  width: 14px; height: 14px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px;
+  border: 2px solid var(--bg-card-strong, var(--bg-card));
+}
+
+/* ═══ CANVAS (메인 콘텐츠 영역) ═══ */
+.canvas {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ═══ TOPBAR (Header.jsx) ═══ */
+.topbar {
+  flex-shrink: 0;
+  height: var(--topbar-h);
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-glass);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  z-index: 5;
+}
+.topbar-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  color: var(--text-1);
+  white-space: nowrap;
+}
+.topbar-breadcrumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.10em;
+  color: var(--text-3);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.topbar-breadcrumb-current { color: var(--accent); }
+.topbar-spacer { flex: 1; }
+
+.world-clock {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-hover);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.world-clock::before {
+  content: ''; width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--accent); box-shadow: 0 0 6px var(--accent-glow);
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+@keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+.kbd-hint {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 9px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 11px;
+  color: var(--text-2);
+  cursor: pointer;
+  font-family: inherit;
+}
+.kbd-hint:hover { border-color: var(--border2); color: var(--accent); }
+.kbd-hint kbd {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  padding: 1px 5px;
+  background: var(--accent-soft);
+  border: 1px solid var(--border2);
+  border-radius: 3px;
+  color: var(--accent);
+}
+
+.topbar-icon-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 5px 10px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-1);
+  font-size: 13px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.topbar-icon-btn:hover { border-color: var(--border2); }
+.topbar-icon-btn.active {
+  background: var(--accent);
+  color: var(--bg-page);
+  border-color: transparent;
+}
+
+/* topbar에서 사용되는 lang-select / theme-picker / RTT 배지는 기존 정의 그대로 cascade. */
+
+/* tab-content 가 .canvas 안에서 남은 공간을 차지하도록 — 기존 .main-with-sidebar 대체 */
+.app-container.console > .canvas > .tab-content {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* ═══ COMMAND PALETTE (⌘K) ═══ */
+.cmdk-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  z-index: 200;
+  display: flex; align-items: flex-start; justify-content: center;
+  padding-top: 14vh;
+  animation: cmdk-fade-in 0.18s ease-out;
+}
+@keyframes cmdk-fade-in { from { opacity: 0; } to { opacity: 1; } }
+.cmdk {
+  width: min(560px, 92vw);
+  background: var(--bg-glass-strong);
+  border: 1px solid var(--border2);
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  animation: cmdk-rise 0.22s cubic-bezier(.22,1,.36,1);
+}
+@keyframes cmdk-rise {
+  from { opacity: 0; transform: translateY(-8px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.cmdk-input {
+  width: 100%;
+  padding: 14px 18px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-1);
+  font-size: 15px;
+  outline: none;
+  font-family: inherit;
+}
+.cmdk-input::placeholder { color: var(--text-3); }
+.cmdk-list {
+  max-height: 50vh;
+  overflow-y: auto;
+  padding: 6px 0;
+}
+.cmdk-empty {
+  padding: 22px 16px;
+  text-align: center;
+  color: var(--text-3);
+  font-size: 13px;
+}
+.cmdk-section {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  color: var(--text-3);
+  text-transform: uppercase;
+  padding: 8px 14px 4px;
+}
+.cmdk-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 14px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.12s;
+}
+.cmdk-item:hover, .cmdk-item.active {
+  background: var(--accent-soft);
+}
+.cmdk-item-icon {
+  width: 26px; height: 26px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg-hover);
+  border-radius: 6px;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+.cmdk-item-label { flex: 1; color: var(--text-1); font-weight: 500; }
+.cmdk-item-shortcut {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--text-3);
+}
+.cmdk-item-shortcut kbd {
+  padding: 1px 5px;
+  background: var(--accent-soft);
+  border: 1px solid var(--border2);
+  border-radius: 3px;
+  color: var(--accent);
+}
+
+/* ═══ USER POPOVER (rail-user 클릭) ═══ */
+.user-popover {
+  position: fixed;
+  bottom: 14px;
+  left: calc(var(--rail-w) + 6px);
+  width: 240px;
+  background: var(--bg-glass-strong);
+  border: 1px solid var(--border2);
+  border-radius: 12px;
+  padding: 14px;
+  z-index: 105;
+  box-shadow: var(--shadow-lg);
+  animation: cmdk-rise 0.18s ease-out;
+}
+.user-pop-head {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 10px;
+}
+.user-pop-avatar {
+  width: 40px; height: 40px;
+  flex-shrink: 0;
+}
+.user-pop-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.user-pop-name {
+  font-weight: 800; color: var(--text-1); font-size: 14px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.user-pop-sub {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px; color: var(--text-2);
+  letter-spacing: 0.08em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.user-pop-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 7px 0;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.user-pop-row + .user-pop-row { border-top: 1px solid var(--border); }
+.user-pop-value {
+  color: var(--accent);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+}
+.user-pop-actions {
+  display: flex; gap: 6px;
+  margin-top: 8px; padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.user-pop-actions button { flex: 1; }
+
+/* ═══ MOBILE: Rail 슬라이드 + 햄버거 ═══ */
+.mobile-toggle-rail {
+  display: none;
+  align-items: center; justify-content: center;
+  width: 36px; height: 36px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--accent);
+  font-size: 18px;
+  cursor: pointer;
+}
+.mobile-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.25s ease;
+  z-index: 90;
+}
+.mobile-overlay.is-open { opacity: 1; pointer-events: auto; }
+
+/* ═══ 반응형 ═══ */
+@media (max-width: 768px) {
+  /* rail은 모바일에서 슬라이드 패널로 */
+  .app-container.console,
+  .app-container.console--with-dock {
+    grid-template-columns: 1fr;
+  }
+  .rail {
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    width: 64px;
+    z-index: 95;
+    transform: translateX(-100%);
+    transition: transform 0.25s cubic-bezier(.22,1,.36,1);
+    border-right: 1px solid var(--border2);
+  }
+  .rail.is-open { transform: translateX(0); box-shadow: 16px 0 48px rgba(0, 0, 0, 0.5); }
+  .mobile-toggle-rail { display: inline-flex; }
+
+  .topbar { padding: 0 10px; gap: 6px; }
+  .topbar-title { font-size: 11px; letter-spacing: 0.12em; }
+  .topbar-breadcrumb { display: none; }
+  .world-clock { font-size: 10px; padding: 3px 8px; }
+  .kbd-hint { display: none; }
+  .tts-volume-control { display: none; }
+  .tts-test-btn { display: none; }
+  .time-sync-badge { display: none; }
+  .lang-select { padding: 4px 6px; font-size: 11px; }
+
+  /* user-popover 모바일 위치 */
+  .user-popover { left: 50%; transform: translateX(-50%); bottom: 12px; }
+}
+@media (max-width: 480px) {
+  .topbar-title { display: none; }
+  .lang-select { font-size: 10px; }
+}
+
+
 .theme-picker { position: relative; display: inline-flex; }
 .theme-picker__trigger {
   display: inline-flex; align-items: center; gap: 6px;
@@ -2136,3 +2603,711 @@ input, textarea, select, .input {
   .rally-member-row { font-size: 13px; }
   .rally-local-mute-btn { width: 100%; font-size: 15px; }
 }
+
+/* ════════════════════════════════════════════════════════════
+   Phase 3 — AuthModal (FROST PROTOCOL 인증 모달)
+   클로드 디자인 reference/auth.jsx + reference/app.css:1006-1130 기반.
+   모든 테마에서 작동, 색은 CSS 변수 cascade.
+   ════════════════════════════════════════════════════════════ */
+.auth-modal-wrap {
+  position: fixed; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  z-index: 200;
+  padding: 24px;
+  animation: auth-fade-in 0.4s ease-out both;
+}
+@keyframes auth-fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+.auth-modal {
+  width: 100%;
+  max-width: 460px;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 32px 28px;
+  background: var(--bg-glass-strong);
+  border: 1px solid var(--border2);
+  border-radius: 16px;
+  box-shadow: var(--shadow-lg);
+  position: relative;
+  animation: auth-rise 0.5s cubic-bezier(.22,1,.36,1) both;
+}
+@keyframes auth-rise {
+  from { opacity: 0; transform: translateY(-8px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+/* 상단 highlight strip — 액센트 라인 */
+.auth-modal::before {
+  content: '';
+  position: absolute;
+  top: -1px; left: 20%; right: 20%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  box-shadow: 0 0 16px var(--accent-glow);
+  pointer-events: none;
+}
+
+.auth-modal-head {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 8px;
+  margin-bottom: 22px;
+}
+.auth-modal-mark {
+  width: 56px; height: 56px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--accent-soft), var(--accent-dim));
+  border: 1px solid var(--border2);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--accent);
+  box-shadow:
+    inset 0 0 24px var(--accent-dim),
+    0 8px 32px var(--accent-glow);
+  animation: auth-mark-pulse 3s ease-in-out infinite;
+}
+@keyframes auth-mark-pulse {
+  0%, 100% {
+    box-shadow: inset 0 0 24px var(--accent-dim), 0 8px 32px var(--accent-glow);
+  }
+  50% {
+    box-shadow: inset 0 0 32px var(--accent-soft), 0 12px 48px var(--accent-glow);
+  }
+}
+.auth-modal h2 {
+  margin: 0;
+  font-size: 26px; font-weight: 800;
+  letter-spacing: -0.02em;
+  background: var(--grad-title);
+  -webkit-background-clip: text; background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 12px var(--accent-glow));
+  text-align: center;
+}
+.auth-subtitle {
+  margin: 0;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  color: var(--accent);
+  text-align: center;
+}
+
+.auth-tabs {
+  display: flex; gap: 4px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px;
+  margin-bottom: 18px;
+}
+.auth-tab {
+  flex: 1;
+  padding: 9px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-2);
+  font-size: 13px; font-weight: 600;
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s;
+  font-family: inherit;
+}
+.auth-tab:hover { color: var(--text-1); }
+.auth-tab.active {
+  background: var(--accent-soft);
+  color: var(--text-1);
+  box-shadow: inset 0 0 0 1px var(--border2);
+}
+
+.auth-form {
+  width: 100%;
+  display: flex; flex-direction: column;
+}
+.auth-field {
+  display: flex; flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.auth-field label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--text-2);
+  text-transform: uppercase;
+}
+.auth-field .input { width: 100%; }
+.auth-help {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: var(--text-3);
+  line-height: 1.4;
+}
+.auth-server-question {
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  font-family: inherit !important;
+  font-size: 13px !important;
+  color: var(--text-2) !important;
+  font-weight: 600;
+}
+.input-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.auth-error {
+  padding: 9px 12px;
+  background: var(--red-soft);
+  border: 1px solid var(--red);
+  border-radius: 6px;
+  color: var(--red);
+  font-size: 12px;
+  margin: 4px 0 8px;
+  font-weight: 600;
+}
+
+.auth-submit {
+  width: 100%;
+  padding: 12px !important;
+  margin-top: 8px;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.auth-switch {
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-2);
+  margin-top: 12px;
+}
+.auth-switch a {
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: none;
+  font-weight: 600;
+}
+.auth-switch a:hover { text-decoration: underline; }
+
+/* DEV 빠른 로그인 영역 */
+.auth-dev {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px dashed var(--border);
+}
+.auth-dev-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  color: var(--text-3);
+  text-transform: uppercase;
+  margin-bottom: 10px;
+  text-align: center;
+}
+.dev-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.dev-btn {
+  padding: 9px 8px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-1);
+  font-size: 11px;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: center;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+}
+.dev-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent);
+}
+.dev-btn:active { transform: translateY(1px); }
+.dev-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.dev-btn-name {
+  font-weight: 700;
+  color: var(--text-1);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.dev-btn-meta {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  color: var(--text-3);
+  margin-top: 2px;
+  letter-spacing: 0.08em;
+}
+
+@media (max-width: 480px) {
+  .auth-modal { padding: 26px 20px; }
+  .auth-modal h2 { font-size: 22px; }
+  .input-grid-2 { grid-template-columns: 1fr; }
+  .dev-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ════════════════════════════════════════════════════════════
+   Phase 3.5 — Frost 시각 완성도 강화
+   클로드 디자인 reference/app.css 의 frost 특유 디테일을
+   `body.theme-frost ...` 스코프로 그대로 가져옴.
+   다른 테마(spring)에는 영향 없음.
+   ════════════════════════════════════════════════════════════ */
+
+/* ─── Icon Rail — 진한 단색 배경 + 굵은 액티브 강조 ─── */
+body.theme-frost .rail {
+  background: var(--bg-rail);
+  border-right: 1px solid var(--line);
+  padding: 14px 0 10px;
+  gap: 8px;
+}
+body.theme-frost .rail-logo {
+  width: 44px; height: 44px;
+  background: linear-gradient(135deg, rgba(124,220,255,0.15), rgba(58,120,255,0.15));
+  border: 1px solid var(--line-2);
+  box-shadow: inset 0 0 16px rgba(124,220,255,0.2);
+  color: var(--ice-1);
+}
+body.theme-frost .rail-divider {
+  width: 30px;
+  background: var(--line);
+  margin: 4px 0 6px;
+}
+body.theme-frost .rail-btn {
+  width: 44px; height: 44px;
+  background: rgba(124,220,255,0.04);
+  color: var(--text-2);
+  font-size: 18px;
+  transition: all 0.2s cubic-bezier(.22,1,.36,1);
+}
+body.theme-frost .rail-btn:hover {
+  background: rgba(124,220,255,0.12);
+  color: var(--ice-1);
+}
+body.theme-frost .rail-btn.active {
+  background: linear-gradient(135deg, var(--ice-1), var(--ice-3));
+  color: #04101e;
+  box-shadow: 0 4px 16px rgba(58,120,255,0.4);
+}
+body.theme-frost .rail-btn.active::before {
+  width: 4px; height: 28px;
+  background: var(--ice-2);
+  box-shadow: 0 0 8px var(--ice-2);
+}
+body.theme-frost .rail-btn-tooltip {
+  background: var(--bg-glass-strong);
+  border: 1px solid var(--line-2);
+  font-weight: 600;
+  color: var(--ice-0);
+}
+body.theme-frost .rail-user {
+  width: 44px; height: 44px;
+  font-size: 14px;
+}
+body.theme-frost .rail-user:hover { border-color: var(--ice-2); }
+body.theme-frost .rail-user-leader::after {
+  background: var(--orange);
+  color: #04101e;
+  width: 16px; height: 16px;
+  font-size: 10px;
+  border: 2px solid var(--bg-rail);
+}
+
+/* ─── Topbar — glass + 하단 라인 + 강한 blur ─── */
+body.theme-frost .topbar {
+  height: 56px;
+  padding: 0 20px;
+  gap: 14px;
+  background: rgba(4,6,13,0.6);
+  border-bottom: 1px solid var(--line);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+body.theme-frost .topbar-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  color: var(--ice-0);
+}
+body.theme-frost .topbar-breadcrumb {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--text-3);
+}
+body.theme-frost .topbar-breadcrumb-current { color: var(--ice-1); }
+
+body.theme-frost .world-clock {
+  padding: 5px 12px;
+  border: 1px solid var(--line);
+  background: rgba(124, 220, 255, 0.04);
+  color: var(--ice-1);
+}
+body.theme-frost .world-clock::before {
+  background: var(--ice-2);
+  box-shadow: 0 0 8px var(--ice-2);
+}
+
+body.theme-frost .kbd-hint {
+  background: rgba(7, 16, 30, 0.6);
+  border: 1px solid var(--line);
+  color: var(--text-2);
+}
+body.theme-frost .kbd-hint:hover {
+  border-color: var(--line-2);
+  color: var(--ice-1);
+}
+body.theme-frost .kbd-hint kbd {
+  background: rgba(124,220,255,0.1);
+  border: 1px solid var(--line-2);
+  color: var(--ice-1);
+}
+
+body.theme-frost .topbar-icon-btn {
+  background: rgba(7, 16, 30, 0.6);
+  border: 1px solid var(--line);
+  color: var(--text-1);
+}
+body.theme-frost .topbar-icon-btn:hover { border-color: var(--line-2); }
+body.theme-frost .topbar-icon-btn.active {
+  background: linear-gradient(135deg, var(--ice-1), var(--ice-3));
+  color: #04101e;
+  border-color: transparent;
+}
+
+body.theme-frost .lang-select {
+  padding: 5px 10px;
+  background: rgba(7, 16, 30, 0.6);
+  border: 1px solid var(--line);
+  color: var(--text-1);
+  font-size: 12px;
+}
+body.theme-frost .lang-select:hover { border-color: var(--line-2); }
+
+/* ─── 버튼 일반 — 강한 그라데이션 + inset glow ─── */
+body.theme-frost .btn-primary {
+  background: linear-gradient(135deg, var(--ice-1), var(--ice-3));
+  color: #04101e;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  border: none;
+  box-shadow:
+    0 4px 16px rgba(58, 120, 255, 0.4),
+    inset 0 1px 0 rgba(255,255,255,0.4);
+  transition: box-shadow 0.18s ease, transform 0.1s;
+}
+body.theme-frost .btn-primary:hover {
+  box-shadow:
+    0 6px 24px rgba(58, 120, 255, 0.55),
+    inset 0 1px 0 rgba(255,255,255,0.4);
+}
+body.theme-frost .btn-primary:active { transform: translateY(1px); }
+body.theme-frost .btn-primary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+body.theme-frost .btn-ghost {
+  background: rgba(124, 220, 255, 0.05);
+  border: 1px solid var(--line-2);
+  color: var(--ice-1);
+  font-weight: 600;
+}
+body.theme-frost .btn-ghost:hover { background: rgba(124, 220, 255, 0.12); }
+
+body.theme-frost .btn-danger {
+  background: rgba(248, 113, 113, 0.12);
+  border: 1px solid rgba(248, 113, 113, 0.4);
+  color: var(--red);
+  font-weight: 600;
+}
+body.theme-frost .btn-danger:hover { background: rgba(248, 113, 113, 0.2); }
+
+/* ─── 입력 필드 — focus glow ─── */
+body.theme-frost .input {
+  background: var(--bg-input);
+  border: 1px solid var(--line);
+  color: var(--text-1);
+}
+body.theme-frost .input:focus {
+  outline: none;
+  border-color: var(--ice-2);
+  box-shadow: 0 0 0 3px rgba(124, 220, 255, 0.15);
+}
+body.theme-frost .input::placeholder { color: var(--text-3); }
+
+/* ─── AuthModal — 진한 그라데이션 + 강한 highlight strip ─── */
+body.theme-frost .auth-modal {
+  background: linear-gradient(180deg, rgba(12, 26, 46, 0.9), rgba(7, 16, 30, 0.95));
+  border: 1px solid var(--line-2);
+  box-shadow: var(--shadow-lg);
+}
+body.theme-frost .auth-modal::before {
+  background: linear-gradient(90deg, transparent, var(--ice-2), transparent);
+  box-shadow: 0 0 16px var(--ice-2);
+}
+body.theme-frost .auth-modal-mark {
+  background: linear-gradient(135deg, rgba(124,220,255,0.15), rgba(58,120,255,0.15));
+  border: 1px solid var(--line-2);
+  color: var(--ice-1);
+  box-shadow:
+    inset 0 0 24px rgba(124,220,255,0.2),
+    0 8px 32px rgba(58,120,255,0.3);
+  animation: frost-mark-pulse 3s ease-in-out infinite;
+}
+@keyframes frost-mark-pulse {
+  0%, 100% {
+    box-shadow:
+      inset 0 0 24px rgba(124,220,255,0.2),
+      0 8px 32px rgba(58,120,255,0.3);
+  }
+  50% {
+    box-shadow:
+      inset 0 0 32px rgba(124,220,255,0.4),
+      0 12px 48px rgba(58,120,255,0.5);
+  }
+}
+body.theme-frost .auth-modal h2 {
+  background: linear-gradient(180deg, var(--ice-0), var(--ice-2));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 0 12px rgba(124, 220, 255, 0.3));
+}
+body.theme-frost .auth-subtitle {
+  letter-spacing: 0.2em;
+  color: var(--ice-1);
+}
+body.theme-frost .auth-tabs {
+  background: rgba(7, 16, 30, 0.5);
+  border: 1px solid var(--line);
+}
+body.theme-frost .auth-tab.active {
+  background: rgba(124, 220, 255, 0.12);
+  color: var(--ice-0);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+}
+body.theme-frost .auth-field label {
+  letter-spacing: 0.15em;
+  color: var(--text-2);
+}
+body.theme-frost .auth-error {
+  background: rgba(248, 113, 113, 0.1);
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  color: var(--red);
+}
+body.theme-frost .auth-switch a { color: var(--ice-2); }
+body.theme-frost .auth-dev { border-top: 1px dashed var(--line); }
+body.theme-frost .auth-dev-title {
+  letter-spacing: 0.18em;
+  color: var(--text-3);
+}
+body.theme-frost .dev-btn {
+  background: rgba(7, 16, 30, 0.6);
+  border: 1px solid var(--line);
+  color: var(--text-1);
+}
+body.theme-frost .dev-btn:hover {
+  border-color: var(--ice-2);
+  background: var(--bg-hover);
+}
+body.theme-frost .dev-btn-name { color: var(--ice-0); }
+body.theme-frost .dev-btn-meta { color: var(--text-3); }
+
+/* ─── Command Palette — 그라데이션 배경 + 진한 borders ─── */
+body.theme-frost .cmdk-overlay {
+  background: rgba(4, 6, 13, 0.7);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+body.theme-frost .cmdk {
+  background: linear-gradient(180deg, rgba(12, 26, 46, 0.95), rgba(7, 16, 30, 0.95));
+  border: 1px solid var(--line-2);
+  box-shadow: var(--shadow-lg);
+}
+body.theme-frost .cmdk-input {
+  border-bottom: 1px solid var(--line);
+  font-size: 16px;
+  color: var(--text-1);
+}
+body.theme-frost .cmdk-input::placeholder { color: var(--text-3); }
+body.theme-frost .cmdk-section {
+  letter-spacing: 0.18em;
+  color: var(--text-3);
+}
+body.theme-frost .cmdk-item:hover,
+body.theme-frost .cmdk-item.active {
+  background: rgba(124, 220, 255, 0.1);
+}
+body.theme-frost .cmdk-item-icon {
+  background: rgba(124, 220, 255, 0.06);
+}
+body.theme-frost .cmdk-item-label { color: var(--ice-0); }
+body.theme-frost .cmdk-item-shortcut kbd {
+  background: rgba(124, 220, 255, 0.06);
+  border: 1px solid var(--line);
+  color: var(--ice-1);
+}
+
+/* ─── User Popover — 진한 강조 ─── */
+body.theme-frost .user-popover {
+  background: var(--bg-glass-strong);
+  border: 1px solid var(--line-2);
+  box-shadow: var(--shadow-lg);
+}
+body.theme-frost .user-pop-name { color: var(--ice-0); }
+body.theme-frost .user-pop-sub { color: var(--text-2); }
+body.theme-frost .user-pop-row + .user-pop-row { border-top: 1px solid var(--line); }
+body.theme-frost .user-pop-actions { border-top: 1px solid var(--line); }
+body.theme-frost .user-pop-value { color: var(--ice-1); }
+
+/* ─── 시간 동기화 배지 — 시안 톤 ─── */
+body.theme-frost .time-sync-badge {
+  color: var(--ice-1);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+}
+
+/* ─── TTS 볼륨 컨트롤 — 시안 accent ─── */
+body.theme-frost .tts-volume-control {
+  background: rgba(7, 16, 30, 0.6);
+  border: 1px solid var(--line);
+}
+body.theme-frost .tts-mute-btn {
+  background: transparent;
+  border: none;
+  color: var(--ice-1);
+}
+body.theme-frost .tts-volume-control input[type=range] { accent-color: var(--ice-2); }
+
+/* ─── Snow canvas / 그리드 / vignette 강화 ─── */
+body.theme-frost .snow-canvas { z-index: 1; }
+
+/* ─── Mobile rail 슬라이드 그림자 강화 ─── */
+@media (max-width: 768px) {
+  body.theme-frost .rail.is-open {
+    box-shadow: 16px 0 48px rgba(0, 0, 0, 0.5);
+    border-right: 1px solid var(--line-2);
+  }
+}
+
+/* ─── 본문 카드/패널 frost 글래스 일괄 강화 ─── */
+/* tab-content 자체는 투명 (body-bg 그라데이션 + snow + grid 효과 보이게) */
+body.theme-frost .tab-content {
+  background: transparent;
+}
+
+/* 모든 주요 카드/패널 = 반투명 글래스 + ice border + blur.
+ * 이 selector 묶음은 우리 React 컴포넌트의 카드형 클래스를 한 번에 frost 글래스로 변환한다. */
+body.theme-frost .battle-slot,
+body.theme-frost .personal-panel,
+body.theme-frost .rally-group-panel,
+body.theme-frost .rally-group-card,
+body.theme-frost .my-rally-card,
+body.theme-frost .member-card,
+body.theme-frost .board-post-card,
+body.theme-frost .board-write-form,
+body.theme-frost .compose-card,
+body.theme-frost .post-card,
+body.theme-frost .admin-card,
+body.theme-frost .admin-table,
+body.theme-frost .dashboard-panel,
+body.theme-frost .notice-row {
+  background: rgba(12, 26, 46, 0.55);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: var(--text-1);
+  box-shadow: var(--shadow-md);
+}
+body.theme-frost .battle-slot:hover,
+body.theme-frost .board-post-card:hover,
+body.theme-frost .post-card:hover,
+body.theme-frost .admin-card:hover {
+  border-color: var(--line-2);
+}
+
+/* admin-table 셀/헤더 frost — 표 형식 강조 */
+body.theme-frost .admin-table th {
+  background: rgba(7, 16, 30, 0.7);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  color: var(--text-2);
+  text-transform: uppercase;
+  font-weight: 700;
+}
+body.theme-frost .admin-table th,
+body.theme-frost .admin-table td {
+  border-bottom: 1px solid var(--line);
+}
+body.theme-frost .admin-table tbody tr:hover {
+  background: var(--bg-hover);
+}
+
+/* online-panel 우측 사이드 — 글래스 + ice */
+body.theme-frost .online-panel {
+  background: rgba(7, 16, 30, 0.55);
+  border-left: 1px solid var(--line);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+body.theme-frost .online-user-item {
+  color: var(--text-1);
+}
+body.theme-frost .online-user-item:hover {
+  background: var(--accent-soft);
+}
+
+/* board-write-form 입력 영역 — 글래스 강화 */
+body.theme-frost .board-write-form input,
+body.theme-frost .board-write-form textarea,
+body.theme-frost .board-write-form select {
+  background: var(--bg-input);
+  border: 1px solid var(--line);
+  color: var(--text-1);
+}
+body.theme-frost .board-write-form input:focus,
+body.theme-frost .board-write-form textarea:focus,
+body.theme-frost .board-write-form select:focus {
+  outline: none;
+  border-color: var(--ice-2);
+  box-shadow: 0 0 0 3px rgba(124, 220, 255, 0.15);
+}
+
+/* 텍스트 컬러 cascade — section title / heading */
+body.theme-frost h1,
+body.theme-frost h2,
+body.theme-frost h3,
+body.theme-frost h4,
+body.theme-frost h5 {
+  color: var(--ice-0);
+}
+body.theme-frost .cd-section,
+body.theme-frost .admin-header h2 {
+  color: var(--ice-0);
+}
+
+/* 일반 sub tab nav (커뮤니티 탭 안의 공지/게시판 토글) */
+body.theme-frost .sub-tab-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-2);
+}
+body.theme-frost .sub-tab-btn:hover {
+  color: var(--ice-1);
+  border-color: var(--line);
+}
+body.theme-frost .sub-tab-btn.active {
+  background: rgba(124, 220, 255, 0.1);
+  border-color: var(--line-2);
+  color: var(--ice-0);
+}
+
+/* notice-row 등 작은 항목 — 글래스 약화 (지나치게 진한 카드 위 카드 방지) */
+body.theme-frost .notice-row { padding: 12px 14px; }
+
+
+
