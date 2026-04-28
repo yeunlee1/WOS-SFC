@@ -3312,22 +3312,34 @@ body.theme-frost .notice-row { padding: 12px 14px; }
 /* ════════════════════════════════════
    FROST PROTOCOL — Community Classes
    (Phase 4: post-card, compose-card, sub-tab)
+   ⚠ 모든 새 규칙은 body.theme-frost 스코프에만 적용.
+   base/spring 테마는 기존 .board-post-card / .notice-row 규칙을 사용.
 ════════════════════════════════════ */
 
-/* ── post-card ── */
-.post-card {
+/* ── post-icon (generic icon wrapper — 모든 테마 공통) ── */
+.post-icon {
+  font-size: 13px;
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-soft);
+  flex-shrink: 0;
+}
+
+/* ── frost-only: post-card ── */
+body.theme-frost .post-card {
   padding: 16px 18px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
+  border-radius: var(--r-md, 10px);
   margin-bottom: 10px;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   transition: border 0.2s, box-shadow 0.2s;
 }
-.post-card:hover { border-color: var(--border2); box-shadow: var(--shadow-md); }
 
-.post-card-head {
+/* ── frost-only: post-card-head ── */
+body.theme-frost .post-card-head {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -3335,35 +3347,28 @@ body.theme-frost .notice-row { padding: 12px 14px; }
   flex-wrap: wrap;
 }
 
-.post-pin {
-  font-size: 10px;
-  padding: 2px 6px;
-  background: rgba(251, 191, 36, 0.15);
-  border: 1px solid rgba(251, 191, 36, 0.4);
-  border-radius: 4px;
-  color: var(--warn, #fbbf24);
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  flex-shrink: 0;
+/* ── frost-only: post-icon override (frost accent) ── */
+body.theme-frost .post-icon {
+  color: var(--accent-soft);
 }
 
-.post-author {
+/* ── frost-only: post-author ── */
+body.theme-frost .post-author {
   font-weight: 700;
-  color: var(--accent);
   font-size: 13px;
 }
 
-.post-meta {
+/* ── frost-only: post-meta ── */
+body.theme-frost .post-meta {
   font-size: 11px;
-  color: var(--text-3);
   margin-left: auto;
   flex-shrink: 0;
 }
 
-.post-title {
+/* ── frost-only: post-title ── */
+body.theme-frost .post-title {
   font-size: 15px;
   font-weight: 700;
-  color: var(--text-1);
   margin-bottom: 6px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3371,48 +3376,44 @@ body.theme-frost .notice-row { padding: 12px 14px; }
   flex: 1;
 }
 
-.post-body {
+/* ── frost-only: post-body ── */
+body.theme-frost .post-body {
   font-size: 13px;
   line-height: 1.55;
-  color: var(--text-2);
   white-space: pre-wrap;
   word-break: break-word;
 }
 
-/* ── compose-card ── */
-.compose-card {
+/* ── frost-only: compose-card ── */
+body.theme-frost .compose-card {
   padding: 14px 16px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
+  border-radius: var(--r-md, 10px);
   margin-bottom: 14px;
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
-.compose-card .input { margin-bottom: 0; }
+body.theme-frost .compose-card .input { margin-bottom: 0; }
 
-/* ── frost 오버라이드 ── */
+/* ── frost 색상 토큰 오버라이드 (위 규칙에 추가되는 frost 전용 값) ── */
 body.theme-frost .post-card {
   background: rgba(12, 26, 46, 0.55);
   border: 1px solid var(--line);
-  border-radius: 10px;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 body.theme-frost .post-card:hover { border-color: var(--line-2); }
 
 body.theme-frost .post-author { color: var(--ice-1); }
 
+body.theme-frost .post-meta { color: var(--text-2); }
+
 body.theme-frost .post-title { color: var(--ice-0); }
+
+body.theme-frost .post-body { color: var(--text-2); }
 
 body.theme-frost .compose-card {
   background: rgba(7, 16, 30, 0.5);
   border: 1px solid var(--line);
-  border-radius: 10px;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
 }
 body.theme-frost .compose-card input,
 body.theme-frost .compose-card textarea,

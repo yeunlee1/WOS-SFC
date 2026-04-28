@@ -100,7 +100,7 @@ export default function AllianceNoticeboard({ alliance }) {
                 className="notice-row post-card"
                 onClick={() => { setDetailId(String(n.id)); setView('detail'); }}
               >
-                <span className="notice-row-icon post-pin">{SOURCE_ICON[n.source] || '📌'}</span>
+                <span className="notice-row-icon post-icon">{SOURCE_ICON[n.source] || '📌'}</span>
                 <span className="notice-row-title post-title">{n.title || '공지'}</span>
                 <span className="notice-row-date post-meta">{n.createdAt || ''}</span>
               </div>
