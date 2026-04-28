@@ -4241,6 +4241,250 @@ body.theme-frost .chat-dock-input-row .btn-primary:hover {
   }
 }
 
+/* ════════════════════════════════════
+   FROST PROTOCOL — Phase 7: Countdown.jsx cd-hero 시각
+   ⚠ 모든 규칙 body.theme-frost 스코프
+════════════════════════════════════ */
+
+/* ── cd-section: frost 컨테이너 리셋 ── */
+body.theme-frost .cd-section {
+  background: transparent;
+  padding: 0;
+}
+
+/* ── cd-hero: 전체 레이아웃 래퍼 ── */
+body.theme-frost .cd-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 20px 28px 56px; /* 하단 56px — cd-key-hint absolute 공간 */
+  position: relative;
+  min-height: 420px;
+}
+
+/* ── cd-hero-head: 상태 태그 + 총 시간 ── */
+body.theme-frost .cd-hero-head {
+  position: absolute;
+  top: 18px;
+  left: 24px;
+  right: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  color: var(--text-3);
+  text-transform: uppercase;
+}
+
+/* ── cd-hero-tag: 상태 필 ── */
+body.theme-frost .cd-hero-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ice-1);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+}
+body.theme-frost .cd-hero-tag.active {
+  background: rgba(74, 222, 128, 0.12);
+  border-color: rgba(74, 222, 128, 0.4);
+  color: var(--green);
+}
+body.theme-frost .cd-hero-tag.active::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 6px var(--green);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+body.theme-frost .cd-hero-tag.danger {
+  background: rgba(248, 113, 113, 0.15);
+  border-color: rgba(248, 113, 113, 0.4);
+  color: var(--danger, #f87171);
+}
+
+/* ── cd-arc-bg: SVG 아크 백드롭 ── */
+body.theme-frost .cd-arc-bg {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+body.theme-frost .cd-arc-bg svg {
+  width: min(80vh, 80%);
+  height: auto;
+  max-width: 600px;
+  opacity: 0.7;
+}
+
+/* ── cd-mega: 거대한 카운트다운 숫자 ── */
+body.theme-frost .cd-mega {
+  position: relative;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 800;
+  font-size: clamp(120px, 22vw, 280px);
+  line-height: 0.85;
+  letter-spacing: -0.06em;
+  color: var(--ice-0);
+  font-variant-numeric: tabular-nums;
+  text-shadow:
+    0 0 40px rgba(124, 220, 255, 0.3),
+    0 0 80px rgba(58, 120, 255, 0.2);
+  filter: drop-shadow(0 8px 32px rgba(58, 120, 255, 0.4));
+}
+body.theme-frost .cd-mega.warn {
+  color: var(--warn, #fbbf24);
+  text-shadow:
+    0 0 40px rgba(251, 191, 36, 0.4),
+    0 0 80px rgba(249, 115, 22, 0.3);
+}
+body.theme-frost .cd-mega.danger {
+  color: var(--danger, #f87171);
+  text-shadow:
+    0 0 40px rgba(248, 113, 113, 0.5),
+    0 0 80px rgba(220, 38, 38, 0.4);
+  animation: cd-shake 0.4s ease-in-out infinite;
+}
+@keyframes cd-shake {
+  0%, 100% { transform: translateX(0); }
+  25%       { transform: translateX(-3px); }
+  75%       { transform: translateX(3px); }
+}
+
+/* ── cd-dial: 21-틱 다이얼 ── */
+body.theme-frost .cd-dial {
+  width: 100%;
+  max-width: 460px;
+  display: flex;
+  justify-content: space-between;
+  position: relative;
+  margin-top: 10px;
+  height: 22px;
+}
+body.theme-frost .cd-tick {
+  width: 2px;
+  background: rgba(124, 220, 255, 0.25);
+  border-radius: 1px;
+  transition: all 0.2s;
+}
+body.theme-frost .cd-tick.major { background: var(--ice-2); }
+body.theme-frost .cd-tick.passed { background: rgba(124, 220, 255, 0.08); }
+body.theme-frost .cd-tick.now {
+  background: var(--ice-0);
+  box-shadow: 0 0 12px var(--ice-2);
+  width: 4px;
+}
+body.theme-frost .cd-tick.now.warn {
+  background: var(--warn, #fbbf24);
+  box-shadow: 0 0 8px var(--warn, #fbbf24);
+}
+body.theme-frost .cd-tick.now.danger {
+  background: var(--danger, #f87171);
+  box-shadow: 0 0 12px var(--danger, #f87171);
+}
+
+/* ── cd-controls: frost 오버라이드 ── */
+body.theme-frost .cd-controls {
+  width: 100%;
+  max-width: 460px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: stretch;
+}
+body.theme-frost .cd-presets {
+  display: flex;
+  gap: 6px;
+}
+body.theme-frost .cd-preset-btn {
+  flex: 1;
+  padding: 10px;
+  background: rgba(7, 16, 30, 0.6);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text-1);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+body.theme-frost .cd-preset-btn:hover:not(:disabled) {
+  border-color: var(--ice-2);
+}
+body.theme-frost .cd-preset-btn.selected {
+  background: rgba(124, 220, 255, 0.1);
+  border-color: var(--ice-2);
+  color: var(--ice-0);
+}
+body.theme-frost .cd-preset-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ── cd-key-hint: 키보드 단축키 힌트 ── */
+body.theme-frost .cd-key-hint {
+  position: absolute;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  color: var(--text-3);
+  display: flex;
+  gap: 12px;
+  white-space: nowrap;
+}
+body.theme-frost .cd-key-hint kbd {
+  padding: 2px 6px;
+  background: rgba(124, 220, 255, 0.06);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  color: var(--ice-1);
+}
+
+/* ── 모바일 반응형 ── */
+@media (max-width: 768px) {
+  body.theme-frost .cd-hero {
+    padding: 16px 14px 52px;
+    min-height: 360px;
+    gap: 14px;
+  }
+  body.theme-frost .cd-mega {
+    font-size: clamp(80px, 30vw, 180px);
+  }
+  body.theme-frost .cd-controls {
+    max-width: 100%;
+  }
+  body.theme-frost .cd-dial {
+    max-width: 100%;
+  }
+}
+@media (max-width: 480px) {
+  body.theme-frost .cd-hero {
+    padding: 14px 10px 48px;
+    min-height: 300px;
+  }
+  body.theme-frost .cd-mega {
+    font-size: clamp(64px, 32vw, 140px);
+  }
+  body.theme-frost .cd-hero-head {
+    font-size: 9px;
+  }
+}
+
 /* ChatTab 모바일 반응형 */
 @media (max-width: 768px) {
   body.theme-frost .chat-tab-layout {

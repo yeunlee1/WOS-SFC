@@ -12,71 +12,33 @@ import {
 import { RESCHEDULE_THRESHOLD_MS } from '../../clockSync';
 import CountdownDots from './CountdownDots';
 
-// ── SVG 원형 프로그레스 링 ──────────────────────
-const RADIUS = 120;
-const STROKE = 10;
-const CIRC   = 2 * Math.PI * RADIUS;
+// ── SVG 아크 백드롭 상수 ────────────────────────
+const ARC_SIZE = 600;
+const ARC_R    = 240;
+const ARC_C    = 2 * Math.PI * ARC_R;
 
-function RingProgress({ progress, secs, total }) {
-  const offset = CIRC * (1 - progress);
-
-  const size   = RADIUS * 2 + STROKE * 2 + 8;
-  const center = size / 2;
-
-  const numClass = secs === null  ? 'countdown-number'
-                 : secs <= 10   ? 'countdown-number countdown-danger'
-                 : secs <= 30   ? 'countdown-number countdown-warning'
-                 :                'countdown-number';
-
-  // idle 상태는 CSS 변수 --cd-ring-idle 사용 (테마별 오버라이드)
-  const ringStroke = secs === null   ? 'var(--cd-ring-idle, #e9d5ff)'
-                   : secs <= 10     ? 'url(#cd-grad-danger)'
-                   : secs <= 30     ? 'url(#cd-grad-warning)'
-                   :                  'url(#cd-grad-normal)';
-
-  const display = secs === null ? '--' : String(secs);
-
+// ── 21-틱 다이얼 컴포넌트 ───────────────────────
+function CdDial({ value, total }) {
+  const ticks = [];
+  const span  = 10;
+  for (let i = -span; i <= span; i++) {
+    const at = value - i; // upcoming seconds
+    if (at < 0 || at > total) {
+      ticks.push({ key: i, cls: 'cd-tick passed' });
+      continue;
+    }
+    let cls = 'cd-tick';
+    if (i === 0) {
+      cls += value <= 5 ? ' now danger' : value <= 10 ? ' now warn' : ' now';
+    } else if (at % 5 === 0) {
+      cls += ' major';
+    }
+    if (i < 0) cls += ' passed';
+    ticks.push({ key: i, cls });
+  }
   return (
-    <div className="cd-ring-wrap" style={{ position: 'relative', width: size, height: size }}>
-      <svg width={size} height={size} style={{ display: 'block' }}>
-        <defs>
-          {/* normal 그라데이션은 테마 CSS 변수로 — Spring(핑크/퍼플), Anthropic(코랄/겨자), Dark(인디고/바이올렛) */}
-          <linearGradient id="cd-grad-normal" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%"   style={{ stopColor: 'var(--cd-grad-1, #ec4899)' }} />
-            <stop offset="100%" style={{ stopColor: 'var(--cd-grad-2, #a855f7)' }} />
-          </linearGradient>
-          <linearGradient id="cd-grad-warning" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#fbbf24" />
-            <stop offset="100%" stopColor="#f97316" />
-          </linearGradient>
-          <linearGradient id="cd-grad-danger" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#f87171" />
-            <stop offset="100%" stopColor="#dc2626" />
-          </linearGradient>
-        </defs>
-        <circle cx={center} cy={center} r={RADIUS}
-          fill="none" stroke="var(--cd-ring-bg, #f3e8ff)" strokeWidth={STROKE} />
-        <circle cx={center} cy={center} r={RADIUS}
-          fill="none"
-          stroke={ringStroke}
-          strokeWidth={STROKE}
-          strokeLinecap="round"
-          strokeDasharray={CIRC}
-          strokeDashoffset={offset}
-          transform={`rotate(-90 ${center} ${center})`}
-          style={{ transition: 'stroke-dashoffset .25s linear, stroke .3s ease' }}
-        />
-      </svg>
-      <div style={{
-        position: 'absolute', inset: 0,
-        display: 'flex', flexDirection: 'column',
-        alignItems: 'center', justifyContent: 'center', gap: 2,
-      }}>
-        <span className={numClass}>{display}</span>
-        {secs !== null && total > 0 && (
-          <span className="cd-total">/ {total}s</span>
-        )}
-      </div>
+    <div className="cd-dial">
+      {ticks.map((t) => <div key={t.key} className={t.cls} />)}
     </div>
   );
 }
@@ -300,70 +262,150 @@ export default function Countdown() {
     getSocket()?.emit('countdown:stop');
   }
 
-  const statusLabel = isActive
-    ? (secs === 0 ? '🎯 전투 시작!' : '📡 공유 중')
-    : '⏸ 대기 중';
+  // ── SVG 아크 계산 ──────────────────────────────
+  const arcPct    = total > 0 ? Math.max(0, Math.min(1, (secs ?? total) / total)) : (secs === null ? 1 : 0);
+  const arcOffset = ARC_C * (1 - arcPct);
+  const arcStroke = secs !== null && secs <= 5
+    ? '#f87171'
+    : secs !== null && secs <= 10
+      ? '#fbbf24'
+      : 'url(#arcGrad)';
+
+  // ── mega number 클래스 ─────────────────────────
+  let megaCls = 'cd-mega';
+  if (secs !== null && isActive && secs <= 5)  megaCls += ' danger';
+  else if (secs !== null && isActive && secs <= 10) megaCls += ' warn';
+
+  // ── 상태 태그 ─────────────────────────────────
+  const statusActive = isActive && secs !== 0;
+  const statusDanger = isActive && secs !== null && secs <= 5 && secs !== 0;
+  let statusText;
+  if (!isActive)        statusText = '대기';
+  else if (secs === 0)  statusText = '종료';
+  else                  statusText = '진행중';
+
+  const heroTagCls = 'cd-hero-tag'
+    + (statusActive ? ' active' : '')
+    + (statusDanger ? ' danger' : '');
+
+  // ── 표시 숫자 ─────────────────────────────────
+  const displayNum = secs !== null ? secs : '--';
 
   return (
     <section className="cd-section">
-      <div className={`cd-status-badge ${isActive ? (secs === 0 ? 'finished' : 'active') : ''}`}>
-        {statusLabel}
-      </div>
-
-      <RingProgress progress={progress} secs={secs} total={total} />
-
-      {canControl && (
-        <div className="cd-controls">
-          <div className="cd-presets">
-            {PRESETS.map((p) => (
-              <button
-                key={p.value}
-                className={`cd-preset-btn ${!isActive && parseInt(inputSec) === p.value ? 'selected' : ''}`}
-                onClick={() => {
-                  setInputSec(String(p.value));
-                  if (!isActive) handleStart(p.value);
-                }}
-                disabled={isActive || blockedByOther}
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="cd-input-row">
-            <input
-              className="input cd-input"
-              type="number"
-              min="1"
-              max="180"
-              placeholder="직접 입력 (1~180초)"
-              value={inputSec}
-              onChange={(e) => setInputSec(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && !isActive && !blockedByOther && handleStart()}
-              disabled={isActive || blockedByOther}
-            />
-            {!isActive ? (
-              <button
-                className="btn btn-primary cd-btn-start"
-                onClick={() => handleStart()}
-                disabled={!inputSec || parseInt(inputSec) < 1 || parseInt(inputSec) > 180 || blockedByOther}
-              >
-                ▶ 시작
-              </button>
-            ) : (
-              <button className="btn btn-danger cd-btn-stop" onClick={handleStop}>
-                ■ 중지
-              </button>
-            )}
-          </div>
+      <div className="cd-hero">
+        {/* 상단 헤더: 상태 태그 + 총 시간 */}
+        <div className="cd-hero-head">
+          <span className={heroTagCls}>
+            {statusText.toUpperCase()}
+          </span>
+          <span>T · {total}초</span>
         </div>
-      )}
 
-      {errorMsg && <p className="cd-error-msg" style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: '0.5rem', textAlign: 'center' }}>{errorMsg}</p>}
+        {/* SVG 아크 백드롭 */}
+        <div className="cd-arc-bg">
+          <svg viewBox={`0 0 ${ARC_SIZE} ${ARC_SIZE}`}>
+            <defs>
+              <linearGradient id="arcGrad" x1="0" x2="1" y1="0" y2="1">
+                <stop offset="0%" stopColor="#a8e6ff" stopOpacity="0.4"/>
+                <stop offset="100%" stopColor="#3a78ff" stopOpacity="0.05"/>
+              </linearGradient>
+            </defs>
+            <circle
+              cx={ARC_SIZE / 2} cy={ARC_SIZE / 2} r={ARC_R}
+              fill="none"
+              stroke="rgba(124,220,255,0.06)"
+              strokeWidth="2"
+            />
+            <circle
+              cx={ARC_SIZE / 2} cy={ARC_SIZE / 2} r={ARC_R}
+              fill="none"
+              stroke={arcStroke}
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeDasharray={ARC_C}
+              strokeDashoffset={arcOffset}
+              transform={`rotate(-90 ${ARC_SIZE / 2} ${ARC_SIZE / 2})`}
+              style={{
+                transition: 'stroke-dashoffset 0.3s linear',
+                filter: 'drop-shadow(0 0 12px currentColor)',
+              }}
+            />
+          </svg>
+        </div>
 
-      {!canControl && !isActive && (
-        <p className="cd-viewer-msg">SFC가 수비 카운트를 시작하면 여기에 표시됩니다</p>
-      )}
+        {/* 메가 숫자 */}
+        <div className={megaCls}>{displayNum}</div>
+
+        {/* 21-틱 다이얼 */}
+        <CdDial value={secs ?? 0} total={total} />
+
+        {/* 컨트롤: 프리셋 + 입력 + 시작/중지 */}
+        {canControl && (
+          <div className="cd-controls">
+            <div className="cd-presets">
+              {PRESETS.map((p) => (
+                <button
+                  key={p.value}
+                  className={`cd-preset-btn ${!isActive && parseInt(inputSec) === p.value ? 'selected' : ''}`}
+                  onClick={() => {
+                    setInputSec(String(p.value));
+                    if (!isActive) handleStart(p.value);
+                  }}
+                  disabled={isActive || blockedByOther}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="cd-input-row">
+              <input
+                className="input cd-input"
+                type="number"
+                min="1"
+                max="180"
+                placeholder="직접 입력 (1~180초)"
+                value={inputSec}
+                onChange={(e) => setInputSec(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && !isActive && !blockedByOther && handleStart()}
+                disabled={isActive || blockedByOther}
+              />
+              {!isActive ? (
+                <button
+                  className="btn btn-primary cd-btn-start"
+                  onClick={() => handleStart()}
+                  disabled={!inputSec || parseInt(inputSec) < 1 || parseInt(inputSec) > 180 || blockedByOther}
+                >
+                  ▶ 시작
+                </button>
+              ) : (
+                <button className="btn btn-danger cd-btn-stop" onClick={handleStop}>
+                  ■ 중지
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {errorMsg && (
+          <p className="cd-error-msg" style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: '0.5rem', textAlign: 'center' }}>
+            {errorMsg}
+          </p>
+        )}
+
+        {!canControl && !isActive && (
+          <p className="cd-viewer-msg">SFC가 수비 카운트를 시작하면 여기에 표시됩니다</p>
+        )}
+
+        {/* 키보드 힌트 */}
+        {canControl && (
+          <div className="cd-key-hint">
+            <span><kbd>SPACE</kbd> 시작/정지</span>
+            <span><kbd>R</kbd> 초기화</span>
+          </div>
+        )}
+      </div>
 
       <div className="battle-viz-mobile">
         <CountdownDots />
