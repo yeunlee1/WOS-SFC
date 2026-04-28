@@ -131,7 +131,7 @@ export default function Board({ alliance }) {
       </h2>
 
       {/* ── 글쓰기 폼 ── */}
-      <div className="board-write-form">
+      <div className="board-write-form compose-card">
         <div style={{ position: 'relative' }}>
           <textarea
             ref={textareaRef}
@@ -217,13 +217,13 @@ export default function Board({ alliance }) {
             const canDelete = isOwn || isManager;
 
             return (
-              <div key={p.id} className="board-post-card">
-                <div className="board-post-header">
+              <div key={p.id} className="board-post-card post-card">
+                <div className="board-post-header post-card-head">
                   <span className="board-post-alliance" style={{ background: color }}>
                     {p.userAlliance || p.alliance}
                   </span>
-                  <span className="board-post-nickname">{p.nickname}</span>
-                  <span className="board-post-date">{p.createdAt || ''}</span>
+                  <span className="board-post-nickname post-author">{p.nickname}</span>
+                  <span className="board-post-date post-meta">{p.createdAt || ''}</span>
                   {canDelete && (
                     <button
                       className="btn btn-danger board-delete-btn"
@@ -236,7 +236,7 @@ export default function Board({ alliance }) {
                 </div>
 
                 {/* 본문 */}
-                <div className="board-post-content">
+                <div className="board-post-content post-body">
                   {translated ? (
                     <>
                       <div className="translated">{translated}</div>

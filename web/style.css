@@ -3309,5 +3309,140 @@ body.theme-frost .sub-tab-btn.active {
 /* notice-row 등 작은 항목 — 글래스 약화 (지나치게 진한 카드 위 카드 방지) */
 body.theme-frost .notice-row { padding: 12px 14px; }
 
+/* ════════════════════════════════════
+   FROST PROTOCOL — Community Classes
+   (Phase 4: post-card, compose-card, sub-tab)
+════════════════════════════════════ */
+
+/* ── post-card ── */
+.post-card {
+  padding: 16px 18px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  margin-bottom: 10px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: border 0.2s, box-shadow 0.2s;
+}
+.post-card:hover { border-color: var(--border2); box-shadow: var(--shadow-md); }
+
+.post-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.post-pin {
+  font-size: 10px;
+  padding: 2px 6px;
+  background: rgba(251, 191, 36, 0.15);
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  border-radius: 4px;
+  color: var(--warn, #fbbf24);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+}
+
+.post-author {
+  font-weight: 700;
+  color: var(--accent);
+  font-size: 13px;
+}
+
+.post-meta {
+  font-size: 11px;
+  color: var(--text-3);
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.post-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-1);
+  margin-bottom: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.post-body {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-2);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ── compose-card ── */
+.compose-card {
+  padding: 14px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  margin-bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.compose-card .input { margin-bottom: 0; }
+
+/* ── frost 오버라이드 ── */
+body.theme-frost .post-card {
+  background: rgba(12, 26, 46, 0.55);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+body.theme-frost .post-card:hover { border-color: var(--line-2); }
+
+body.theme-frost .post-author { color: var(--ice-1); }
+
+body.theme-frost .post-title { color: var(--ice-0); }
+
+body.theme-frost .compose-card {
+  background: rgba(7, 16, 30, 0.5);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+body.theme-frost .compose-card input,
+body.theme-frost .compose-card textarea,
+body.theme-frost .compose-card select {
+  background: var(--bg-input);
+  border: 1px solid var(--line);
+  color: var(--text-1);
+}
+body.theme-frost .compose-card input:focus,
+body.theme-frost .compose-card textarea:focus,
+body.theme-frost .compose-card select:focus {
+  outline: none;
+  border-color: var(--ice-2);
+  box-shadow: 0 0 0 3px rgba(124, 220, 255, 0.15);
+}
+
+/* frost notice-row post-card 중복 스타일 정리 */
+body.theme-frost .notice-row.post-card {
+  border-radius: 10px;
+  margin-bottom: 6px;
+  padding: 12px 16px;
+}
+
+/* frost sub-tab-nav--secondary 강화 */
+body.theme-frost .sub-tab-nav--secondary {
+  background: rgba(7, 16, 30, 0.3);
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 10px;
+  margin-bottom: 14px;
+  border-top: none;
+}
 
 

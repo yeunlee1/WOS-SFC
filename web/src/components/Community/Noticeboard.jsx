@@ -89,12 +89,12 @@ export default function Noticeboard() {
             notices.map((n) => (
               <div
                 key={n.id}
-                className="notice-row"
+                className="notice-row post-card"
                 onClick={() => { setDetailId(String(n.id)); setView('detail'); }}
               >
-                <span className="notice-row-icon">{SOURCE_ICON[n.source] || '📌'}</span>
-                <span className="notice-row-title">{n.title || '공지'}</span>
-                <span className="notice-row-date">{n.createdAt || ''}</span>
+                <span className="notice-row-icon post-pin">{SOURCE_ICON[n.source] || '📌'}</span>
+                <span className="notice-row-title post-title">{n.title || '공지'}</span>
+                <span className="notice-row-date post-meta">{n.createdAt || ''}</span>
               </div>
             ))
           )}
@@ -114,7 +114,7 @@ export default function Noticeboard() {
           <h2 className="section-title">{t('noticeWriteTitle')}</h2>
         </div>
 
-        <div className="input-col">
+        <div className="input-col compose-card">
           <select className="input" value={source} onChange={(e) => setSource(e.target.value)}>
             <option value="discord">{t('discord')}</option>
             <option value="kakao">{t('kakao')}</option>
