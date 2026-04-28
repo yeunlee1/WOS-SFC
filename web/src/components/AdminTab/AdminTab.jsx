@@ -13,6 +13,17 @@ const roleBadge = (role) => {
   return <span className={`role-badge ${cls}`}>{label}</span>;
 };
 
+// 연맹 배지 렌더링 헬퍼 — 연맹명을 대문자 코드로 매핑 후 색상 클래스 부여
+const allianceBadge = (allianceName) => {
+  if (!allianceName) return null;
+  const key = allianceName.toUpperCase();
+  return (
+    <span className={`user-alliance-badge user-alliance-badge--${key.toLowerCase()}`}>
+      {allianceName}
+    </span>
+  );
+};
+
 export default function AdminTab() {
   // 현재 로그인 유저
   const user = useStore((s) => s.user);
@@ -112,16 +123,18 @@ export default function AdminTab() {
               {users.map((u) => (
                 <tr key={u.id}>
                   <td>
-                    {u.nickname}
-                    {u.isLeader && <span className="leader-badge">집결장</span>}
+                    <span className="admin-cell-nick">
+                      {u.nickname}
+                      {u.isLeader && <span className="leader-badge">★ 집결장</span>}
+                    </span>
                   </td>
-                  <td>{u.allianceName}</td>
+                  <td>{allianceBadge(u.allianceName)}</td>
                   <td>{roleBadge(u.role)}</td>
                   <td>{new Date(u.createdAt).toLocaleDateString('ko-KR')}</td>
                   <td className="admin-actions">
                     {/* 집결장 토글 — 모든 유저 가능 (role 무관) */}
                     <button
-                      className={`btn btn-sm admin-leader-toggle${u.isLeader ? ' is-leader' : ''}`}
+                      className={`admin-action-btn admin-leader-toggle${u.isLeader ? ' is-leader' : ''}`}
                       onClick={() => handleLeaderToggle(u)}
                       disabled={leaderBusyId === u.id}
                     >
@@ -130,7 +143,7 @@ export default function AdminTab() {
                     {/* developer는 역할 변경 불가 */}
                     {u.role !== 'developer' && (
                       <button
-                        className="btn btn-sm"
+                        className="admin-action-btn"
                         onClick={() => handleRoleChange(u)}
                       >
                         {u.role === 'admin' ? '일반으로' : '관리자로'}
@@ -139,7 +152,7 @@ export default function AdminTab() {
                     {/* developer 및 자기 자신은 밴 불가 */}
                     {u.role !== 'developer' && u.id !== user?.id && (
                       <button
-                        className="btn btn-sm btn-danger"
+                        className="admin-action-btn admin-action-btn--danger"
                         onClick={() => handleBan(u)}
                       >
                         밴
@@ -158,18 +171,18 @@ export default function AdminTab() {
                 <div className="admin-card-top">
                   <div className="admin-card-name-row">
                     <span className="admin-card-nickname">{u.nickname}</span>
-                    {u.isLeader && <span className="leader-badge">집결장</span>}
+                    {u.isLeader && <span className="leader-badge">★ 집결장</span>}
                   </div>
                   {roleBadge(u.role)}
                 </div>
                 <div className="admin-card-info">
-                  <span>{u.allianceName}</span>
+                  {allianceBadge(u.allianceName)}
                   <span>{new Date(u.createdAt).toLocaleDateString('ko-KR')}</span>
                 </div>
                 <div className="admin-card-actions">
                   {/* 집결장 토글 — 모든 유저 가능 (role 무관) */}
                   <button
-                    className={`btn btn-sm admin-leader-toggle${u.isLeader ? ' is-leader' : ''}`}
+                    className={`admin-action-btn admin-leader-toggle${u.isLeader ? ' is-leader' : ''}`}
                     onClick={() => handleLeaderToggle(u)}
                     disabled={leaderBusyId === u.id}
                   >
@@ -177,13 +190,13 @@ export default function AdminTab() {
                   </button>
                   {/* developer는 역할 변경 불가 */}
                   {u.role !== 'developer' && (
-                    <button className="btn btn-sm" onClick={() => handleRoleChange(u)}>
+                    <button className="admin-action-btn" onClick={() => handleRoleChange(u)}>
                       {u.role === 'admin' ? '일반으로' : '관리자로'}
                     </button>
                   )}
                   {/* developer 및 자기 자신은 밴 불가 */}
                   {u.role !== 'developer' && u.id !== user?.id && (
-                    <button className="btn btn-sm btn-danger" onClick={() => handleBan(u)}>
+                    <button className="admin-action-btn admin-action-btn--danger" onClick={() => handleBan(u)}>
                       밴
                     </button>
                   )}

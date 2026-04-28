@@ -2103,6 +2103,42 @@ input:focus, select:focus, textarea:focus, .input:focus {
   gap: 6px;
 }
 
+/* 테이블 닉네임+집결장 배지 가로 정렬 */
+.admin-cell-nick {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* admin-action-btn 기본 테마 스타일 */
+.admin-action-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-family: inherit;
+  font-weight: 600;
+  border-radius: 6px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  color: var(--text-primary, var(--text-1));
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+.admin-action-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+.admin-action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.admin-action-btn--danger {
+  color: var(--red, #dc2626);
+  border-color: rgba(220, 38, 38, 0.3);
+  background: var(--red-soft, #fef2f2);
+}
+.admin-action-btn--danger:hover:not(:disabled) {
+  background: rgba(220, 38, 38, 0.12);
+}
+
 /* 모바일 카드 목록 (기본 hidden, 모바일에서 표시) */
 .admin-card-list { display: none; }
 
@@ -3308,6 +3344,207 @@ body.theme-frost .sub-tab-btn.active {
 
 /* notice-row 등 작은 항목 — 글래스 약화 (지나치게 진한 카드 위 카드 방지) */
 body.theme-frost .notice-row { padding: 12px 14px; }
+
+/* ════════════════════════════════════
+   FROST PROTOCOL — Phase 6: AdminTab
+   (admin-tab, table, cards, badges)
+   ⚠ 모든 규칙 body.theme-frost 스코프
+════════════════════════════════════ */
+
+/* ── admin-tab 페이지 컨테이너 ── */
+body.theme-frost .admin-tab {
+  background: transparent;
+  color: var(--text-1);
+}
+
+/* ── admin-loading / admin-error ── */
+body.theme-frost .admin-loading {
+  background: rgba(12, 26, 46, 0.55);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  color: var(--text-2);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+body.theme-frost .admin-error {
+  background: rgba(248, 113, 113, 0.08);
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  border-radius: var(--r-md);
+  color: var(--danger, #f87171);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* ── admin-table: 셀/행 추가 스타일 (frost 전용) ── */
+body.theme-frost .admin-table {
+  border-radius: var(--r-md);
+  border-collapse: separate;
+  border-spacing: 0;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+body.theme-frost .admin-table tbody tr:nth-child(even) {
+  background: rgba(124, 220, 255, 0.03);
+}
+body.theme-frost .admin-table tr:last-child td {
+  border-bottom: none;
+}
+
+/* ── admin-cell-nick — 닉네임 + 배지 정렬 ── */
+body.theme-frost .admin-cell-nick {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+  color: var(--ice-0);
+}
+
+/* ── role-badge frost 토큰 오버라이드 ── */
+body.theme-frost .role-badge--developer {
+  background: rgba(124, 220, 255, 0.15);
+  border: 1px solid rgba(124, 220, 255, 0.4);
+  color: var(--ice-0);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+body.theme-frost .role-badge--admin {
+  background: rgba(58, 120, 255, 0.18);
+  border: 1px solid rgba(58, 120, 255, 0.4);
+  color: var(--ice-1);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+body.theme-frost .role-badge--member {
+  background: rgba(124, 220, 255, 0.05);
+  border: 1px solid var(--line);
+  color: var(--text-2);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+/* ── leader-badge frost 오버라이드 ── */
+body.theme-frost .leader-badge {
+  background: rgba(251, 191, 36, 0.15);
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  border-radius: 4px;
+  color: var(--warn, #fbbf24);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 2px 6px;
+}
+
+/* ── user-alliance-badge frost — 연맹별 색상 ── */
+body.theme-frost .user-alliance-badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  border-radius: 5px;
+  padding: 3px 8px;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+body.theme-frost .user-alliance-badge--kor { background: var(--kor, #3b82f6); }
+body.theme-frost .user-alliance-badge--nsl { background: var(--nsl, #22c55e); }
+body.theme-frost .user-alliance-badge--jky { background: var(--jky, #a855f7); }
+body.theme-frost .user-alliance-badge--gpx { background: var(--gpx, #f97316); }
+body.theme-frost .user-alliance-badge--ufo { background: var(--ufo, #ec4899); }
+/* 알 수 없는 연맹 fallback */
+body.theme-frost .user-alliance-badge:not([class*="--"]) {
+  background: rgba(124, 220, 255, 0.15);
+  border: 1px solid var(--line);
+  color: var(--ice-1);
+}
+
+/* ── admin-action-btn — 액션 버튼 (frost ghost style) ── */
+body.theme-frost .admin-action-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-family: inherit;
+  font-weight: 600;
+  border-radius: 6px;
+  background: rgba(124, 220, 255, 0.06);
+  border: 1px solid var(--line-2);
+  color: var(--ice-1);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+  white-space: nowrap;
+}
+body.theme-frost .admin-action-btn:hover:not(:disabled) {
+  background: rgba(124, 220, 255, 0.14);
+  border-color: var(--ice-2);
+  box-shadow: 0 0 8px rgba(124, 220, 255, 0.2);
+}
+body.theme-frost .admin-action-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+/* 위험 (밴) 버튼 */
+body.theme-frost .admin-action-btn--danger {
+  background: rgba(248, 113, 113, 0.08);
+  border-color: rgba(248, 113, 113, 0.35);
+  color: var(--danger, #f87171);
+}
+body.theme-frost .admin-action-btn--danger:hover:not(:disabled) {
+  background: rgba(248, 113, 113, 0.18);
+  border-color: rgba(248, 113, 113, 0.6);
+  box-shadow: 0 0 8px rgba(248, 113, 113, 0.25);
+}
+
+/* ── admin-leader-toggle frost 오버라이드 ── */
+body.theme-frost .admin-leader-toggle {
+  border-color: rgba(74, 222, 128, 0.4);
+  color: var(--green, #4ade80);
+  background: rgba(74, 222, 128, 0.06);
+}
+body.theme-frost .admin-leader-toggle:hover:not(:disabled) {
+  background: rgba(74, 222, 128, 0.14);
+  border-color: rgba(74, 222, 128, 0.6);
+  box-shadow: 0 0 8px rgba(74, 222, 128, 0.2);
+}
+body.theme-frost .admin-leader-toggle.is-leader {
+  background: rgba(74, 222, 128, 0.12);
+  border-color: rgba(74, 222, 128, 0.5);
+  color: var(--green, #4ade80);
+}
+body.theme-frost .admin-leader-toggle.is-leader:hover:not(:disabled) {
+  background: rgba(74, 222, 128, 0.2);
+}
+
+/* ── admin-card frost 추가 스타일 ── */
+body.theme-frost .admin-card-nickname {
+  font-weight: 700;
+  color: var(--ice-0);
+  font-size: 14px;
+}
+body.theme-frost .admin-card-info {
+  color: var(--text-2);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+}
+
+/* ── 모바일: admin-tab frost 반응형 ── */
+@media (max-width: 768px) {
+  body.theme-frost .admin-table { display: none; }
+  body.theme-frost .admin-card-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+}
+@media (max-width: 480px) {
+  body.theme-frost .admin-tab { padding: 10px; }
+  body.theme-frost .admin-card { padding: 10px 12px; }
+}
 
 /* ════════════════════════════════════
    FROST PROTOCOL — Community Classes
