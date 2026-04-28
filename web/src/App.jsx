@@ -18,6 +18,7 @@ import CommandPalette from './components/Layout/CommandPalette';
 import BattleTab from './components/Battle/BattleTab';
 import CommunityTab from './components/Community/CommunityTab';
 import ChatTab from './components/Chat/ChatTab';
+import ChatDock from './components/Chat/ChatDock';
 import AdminTab from './components/AdminTab/AdminTab';
 
 // chatDockOpen 초기값 — localStorage 우선, 없으면 false (도크 닫힘)
@@ -201,13 +202,7 @@ export default function App() {
           </main>
         </div>
         {dockActuallyOpen && (
-          <>
-            <div
-              className="resize-handle resize-handle--vertical"
-              onMouseDown={startSidebarResize}
-            />
-            <OnlinePanel style={{ width: sidebarWidth }} isOpen={dockActuallyOpen} />
-          </>
+          <ChatDock onClose={() => setIsOnlineOpen(false)} />
         )}
         {/* 모바일: 오버레이 클릭으로 사이드바 닫기 */}
         {isOnlineOpen && activeTab !== 'chat' && (

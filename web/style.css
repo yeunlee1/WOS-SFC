@@ -3446,4 +3446,588 @@ body.theme-frost .sub-tab-nav--secondary {
   border-top: none;
 }
 
+/* ════════════════════════════════════
+   Phase 5 — ChatTab (풀페이지) frost 비주얼
+   body.theme-frost 스코프 — 다른 테마 무영향
+════════════════════════════════════ */
+
+/* ChatTab 전체 레이아웃: 좌(채팅) + 우(사이드바) */
+body.theme-frost .chat-tab-layout {
+  display: grid;
+  grid-template-columns: 1fr 220px;
+  gap: 14px;
+  height: 100%;
+  padding: 20px 24px;
+  min-height: 0;
+  box-sizing: border-box;
+}
+
+/* 왼쪽 채팅 패널 */
+body.theme-frost .chat-tab-main {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: rgba(7, 16, 30, 0.5);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+/* 채팅 상단 바 */
+body.theme-frost .chat-tab-topbar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(4, 6, 13, 0.3);
+}
+body.theme-frost .chat-tab-channel {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  color: var(--ice-1);
+  font-weight: 700;
+}
+body.theme-frost .chat-tab-spacer { flex: 1; }
+body.theme-frost .chat-autotranslate-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--text-2);
+  cursor: pointer;
+  user-select: none;
+}
+body.theme-frost .chat-autotranslate-toggle input {
+  accent-color: var(--ice-2);
+  cursor: pointer;
+}
+
+/* 메시지 목록 */
+body.theme-frost .chat-tab-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
+}
+body.theme-frost .chat-tab-messages::-webkit-scrollbar { width: 6px; }
+body.theme-frost .chat-tab-messages::-webkit-scrollbar-thumb {
+  background: rgba(124, 220, 255, 0.2);
+  border-radius: 3px;
+}
+
+/* 시스템 메시지 */
+body.theme-frost .chat-tab-system-msg {
+  text-align: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  color: var(--text-3);
+  padding: 4px;
+}
+
+/* 개별 메시지 */
+body.theme-frost .chat-tab-msg {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  animation: chat-in 0.3s cubic-bezier(.22, 1, .36, 1);
+}
+@keyframes chat-in {
+  from { opacity: 0; transform: translateX(-6px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+body.theme-frost .chat-tab-msg:hover {
+  background: rgba(124, 220, 255, 0.04);
+}
+body.theme-frost .chat-tab-msg-avatar {
+  width: 28px; height: 28px;
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 800;
+  color: white;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+}
+body.theme-frost .chat-tab-msg-body { min-width: 0; }
+body.theme-frost .chat-tab-msg-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 2px;
+  flex-wrap: wrap;
+}
+body.theme-frost .chat-tab-msg-nick {
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--ice-0);
+}
+body.theme-frost .chat-tab-msg-alliance {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+}
+body.theme-frost .chat-tab-msg-time {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  color: var(--text-3);
+}
+body.theme-frost .chat-tab-msg-text {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-1);
+  word-wrap: break-word;
+  margin: 0;
+}
+body.theme-frost .chat-tab-toggle-original {
+  font-size: 11px;
+  color: var(--ice-2);
+  cursor: pointer;
+  font-style: italic;
+  margin-top: 2px;
+  display: block;
+}
+body.theme-frost .chat-tab-toggle-original:hover {
+  color: var(--ice-1);
+  text-decoration: underline;
+}
+
+/* 입력 행 */
+body.theme-frost .chat-tab-input-row {
+  flex-shrink: 0;
+  display: flex;
+  gap: 6px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--line);
+  background: rgba(4, 6, 13, 0.5);
+}
+body.theme-frost .chat-tab-input {
+  flex: 1;
+  padding: 9px 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text-1);
+  font-size: 13px;
+  font-family: inherit;
+  transition: border 0.2s, box-shadow 0.2s;
+  min-width: 0;
+}
+body.theme-frost .chat-tab-input:focus {
+  outline: none;
+  border-color: var(--ice-2);
+  box-shadow: 0 0 0 3px rgba(124, 220, 255, 0.15);
+}
+body.theme-frost .chat-tab-input::placeholder { color: var(--text-3); }
+body.theme-frost .chat-tab-send-btn {
+  flex-shrink: 0;
+  padding: 8px 14px;
+}
+
+/* 오른쪽 사이드바 — 동맹별 온라인 */
+body.theme-frost .chat-tab-sidebar {
+  display: flex;
+  flex-direction: column;
+  background: rgba(7, 16, 30, 0.5);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  min-height: 0;
+}
+body.theme-frost .chat-tab-sidebar-header {
+  flex-shrink: 0;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(4, 6, 13, 0.3);
+}
+body.theme-frost .chat-tab-sidebar-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  color: var(--ice-1);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+body.theme-frost .chat-tab-sidebar-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 12px;
+}
+body.theme-frost .chat-tab-sidebar-body::-webkit-scrollbar { width: 4px; }
+body.theme-frost .chat-tab-sidebar-body::-webkit-scrollbar-thumb {
+  background: rgba(124, 220, 255, 0.15);
+  border-radius: 2px;
+}
+body.theme-frost .chat-tab-sidebar-empty {
+  font-size: 12px;
+  color: var(--text-3);
+  font-style: italic;
+}
+body.theme-frost .chat-tab-alliance-group {
+  margin-bottom: 12px;
+}
+body.theme-frost .chat-tab-alliance-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  color: var(--text-2);
+  margin-bottom: 4px;
+}
+body.theme-frost .chat-tab-alliance-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+body.theme-frost .chat-tab-alliance-name {
+  font-weight: 700;
+}
+body.theme-frost .chat-tab-alliance-count {
+  margin-left: auto;
+  color: var(--text-3);
+}
+body.theme-frost .chat-tab-user-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--ice-0);
+}
+body.theme-frost .chat-tab-user-row:hover {
+  background: rgba(124, 220, 255, 0.05);
+}
+body.theme-frost .chat-tab-user-dot {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 4px var(--green);
+  flex-shrink: 0;
+}
+body.theme-frost .chat-tab-user-nick {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+body.theme-frost .chat-tab-user-you {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  color: var(--ice-2);
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+}
+
+/* ════════════════════════════════════
+   Phase 5 — ChatDock (우측 슬라이딩 도크) frost 비주얼
+   .chat-dock 은 도크 전용 — OnlinePanel 대체
+════════════════════════════════════ */
+
+body.theme-frost .chat-dock {
+  display: flex;
+  flex-direction: column;
+  background: rgba(7, 16, 30, 0.55);
+  border-left: 1px solid var(--line);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  min-width: var(--chat-dock-w);
+  max-width: var(--chat-dock-w);
+  height: 100%;
+  overflow: hidden;
+}
+
+body.theme-frost .chat-dock-head {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+}
+body.theme-frost .chat-dock-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  letter-spacing: 0.15em;
+  color: var(--ice-1);
+  font-weight: 700;
+}
+/* chat-online-pill은 전역 정의 (app.css 참조) — frost에서 재정의 */
+body.theme-frost .chat-online-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  background: rgba(74, 222, 128, 0.12);
+  border: 1px solid rgba(74, 222, 128, 0.3);
+  border-radius: 999px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--green);
+}
+body.theme-frost .chat-online-pill::before {
+  content: '';
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 5px var(--green);
+}
+
+body.theme-frost .chat-dock-close {
+  margin-left: auto;
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--text-2);
+  width: 28px; height: 28px;
+  border-radius: 6px;
+  font-size: 18px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  padding: 0;
+  line-height: 1;
+}
+body.theme-frost .chat-dock-close:hover {
+  color: var(--ice-1);
+  border-color: var(--line-2);
+}
+
+/* 온라인 아바타 스트립 */
+body.theme-frost .chat-online-strip {
+  flex-shrink: 0;
+  display: flex;
+  gap: 4px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+  background: rgba(4, 6, 13, 0.4);
+  scrollbar-width: none;
+}
+body.theme-frost .chat-online-strip::-webkit-scrollbar { display: none; }
+body.theme-frost .chat-online-avatar {
+  flex-shrink: 0;
+  width: 26px; height: 26px;
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 800;
+  color: white;
+  letter-spacing: 0.05em;
+  position: relative;
+  cursor: default;
+}
+body.theme-frost .chat-online-avatar::after {
+  content: '';
+  position: absolute;
+  right: -2px; bottom: -2px;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+  border: 2px solid rgba(5, 8, 17, 1);
+}
+
+/* 메시지 영역 (공용 .chat-msgs) */
+body.theme-frost .chat-msgs {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+}
+body.theme-frost .chat-msgs::-webkit-scrollbar { width: 6px; }
+body.theme-frost .chat-msgs::-webkit-scrollbar-thumb {
+  background: rgba(124, 220, 255, 0.2);
+  border-radius: 3px;
+}
+/* 공용 .chat-msg 메시지 카드 */
+body.theme-frost .chat-msg {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  animation: chat-in 0.3s cubic-bezier(.22, 1, .36, 1);
+}
+body.theme-frost .chat-msg:hover {
+  background: rgba(124, 220, 255, 0.04);
+}
+body.theme-frost .chat-msg-avatar {
+  width: 28px; height: 28px;
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 800;
+  color: white;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+}
+body.theme-frost .chat-msg-body { min-width: 0; }
+body.theme-frost .chat-msg-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+body.theme-frost .chat-msg-nick {
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--ice-0);
+}
+body.theme-frost .chat-msg-time {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  color: var(--text-3);
+}
+body.theme-frost .chat-msg-text {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-1);
+  word-wrap: break-word;
+  margin: 0;
+}
+body.theme-frost .chat-msg-tr {
+  font-size: 11px;
+  color: var(--text-2);
+  font-style: italic;
+  margin-top: 2px;
+  padding-left: 6px;
+  border-left: 2px solid var(--line);
+}
+body.theme-frost .chat-system {
+  text-align: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--text-3);
+  letter-spacing: 0.15em;
+  padding: 4px;
+}
+
+/* 자동번역 토글 바 */
+body.theme-frost .chat-dock-translate-bar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  height: 32px;
+  border-top: 1px solid var(--line);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--text-2);
+  background: rgba(4, 6, 13, 0.3);
+}
+body.theme-frost .chat-dock-translate-bar input {
+  accent-color: var(--ice-2);
+  cursor: pointer;
+}
+body.theme-frost .chat-dock-translate-bar label {
+  cursor: pointer;
+  user-select: none;
+}
+
+/* 도크 입력 행 (공용 .chat-input-row 재사용) */
+body.theme-frost .chat-input-row {
+  flex-shrink: 0;
+  display: flex;
+  gap: 6px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--line);
+  background: rgba(4, 6, 13, 0.6);
+}
+body.theme-frost .chat-input-row .input {
+  flex: 1;
+  padding: 9px 12px;
+  font-size: 13px;
+  min-width: 0;
+  background: var(--bg-input);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text-1);
+  font-family: inherit;
+  transition: border 0.2s, box-shadow 0.2s;
+}
+body.theme-frost .chat-input-row .input:focus {
+  outline: none;
+  border-color: var(--ice-2);
+  box-shadow: 0 0 0 3px rgba(124, 220, 255, 0.15);
+}
+body.theme-frost .chat-input-row .input::placeholder { color: var(--text-3); }
+body.theme-frost .chat-input-row .btn-primary {
+  flex-shrink: 0;
+  padding: 8px 14px;
+  background: linear-gradient(135deg, var(--ice-1), var(--ice-3));
+  border: none;
+  border-radius: 6px;
+  color: #04101e;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(58, 120, 255, 0.4);
+  transition: box-shadow 0.15s;
+}
+body.theme-frost .chat-input-row .btn-primary:hover {
+  box-shadow: 0 6px 24px rgba(58, 120, 255, 0.55);
+}
+
+/* 모바일: 도크는 floating 오버레이로 */
+@media (max-width: 1180px) {
+  body.theme-frost .console--with-dock {
+    grid-template-columns: var(--rail-w) 1fr;
+  }
+  body.theme-frost .chat-dock {
+    position: fixed;
+    top: 0; right: 0; bottom: 0;
+    min-width: min(360px, 90vw);
+    max-width: min(360px, 90vw);
+    z-index: 95;
+    transform: translateX(0);
+    box-shadow: -16px 0 48px rgba(0, 0, 0, 0.5);
+  }
+}
+
+/* ChatTab 모바일 반응형 */
+@media (max-width: 768px) {
+  body.theme-frost .chat-tab-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr auto;
+    padding: 12px;
+    gap: 10px;
+  }
+  body.theme-frost .chat-tab-sidebar {
+    max-height: 180px;
+    grid-row: 2;
+  }
+  body.theme-frost .chat-tab-sidebar-body {
+    overflow-x: auto;
+    overflow-y: hidden;
+    display: flex;
+    flex-direction: row;
+    gap: 12px;
+    padding: 8px 10px;
+  }
+  body.theme-frost .chat-tab-alliance-group {
+    margin-bottom: 0;
+    flex-shrink: 0;
+  }
+}
+
 
