@@ -119,8 +119,87 @@
   --cd-ring-idle: #e9d5ff;
 }
 
-/* ─── 테마 Spring (명시적 클래스 — 벚꽃 기본) ─── */
-/* :root 기본값을 그대로 사용 — 별도 override 불필요. Phase 8에서 frost 수준으로 풀 리뉴얼 예정. */
+/* ─── 테마 Spring (명시적 클래스 — 벚꽃 리뉴얼 Phase 8) ─── */
+body.theme-spring {
+  /* Sakura 5단계 팔레트 — ice-0..4 대응 */
+  --sakura-0: #fff0f5;  /* 가장 밝음 — 강조 텍스트/하이라이트 */
+  --sakura-1: #ffe5ec;  /* 연분홍 — 밝은 보조 강조 */
+  --sakura-2: #ffc9d4;  /* 중간 분홍 — 메인 액센트 보조 */
+  --sakura-3: #ff8fa3;  /* 진분홍 — 그라데이션 끝 */
+  --sakura-4: #d063a8;  /* 자주 — 깊이감 */
+
+  /* 배경 계층 */
+  --bg-page:    #1a0a14;        /* 깊은 자주빛 다크 */
+  --bg-card:    rgba(60,18,42,0.60);   /* 따뜻한 분홍 유리 */
+  --bg-card-strong: rgba(40,10,28,0.90);
+  --bg-hover:   rgba(255,105,157,0.10);
+  --bg-subtle:  rgba(255,182,193,0.08);
+  --bg-input:   rgba(40,10,28,0.70);
+  --bg-glass:   rgba(60,18,42,0.55);
+  --bg-glass-strong: rgba(40,10,28,0.92);
+
+  /* Rail — 더 짙은 딸기/베리 톤 */
+  --bg-rail: #200c18;
+
+  /* 액센트 */
+  --accent:       #ff6b9d;
+  --accent-2:     #c084fc;  /* 보조 라벤더 */
+  --accent-hover: #ff4785;
+  --accent-soft:  rgba(255,107,157,0.16);
+  --accent-dim:   rgba(255,107,157,0.10);
+  --accent-glow:  rgba(255,107,157,0.45);
+
+  /* 시맨틱 상태 색 (다크 배경 위 가독성 확보) */
+  --green:      #4ade80;
+  --green-soft: rgba(74,222,128,0.18);
+  --orange:     #fbbf24;
+  --orange-soft:rgba(251,191,36,0.15);
+  --red:        #f87171;
+  --red-soft:   rgba(248,113,113,0.15);
+
+  /* 텍스트 — 따뜻한 뉴트럴 */
+  --text-1: #fff0f5;     /* 거의 흰색, 분홍 틴트 */
+  --text-2: #e8b4d0;     /* 중간 톤 */
+  --text-3: #9e6b8a;     /* 희미한 톤 */
+
+  /* 보더 */
+  --border:  rgba(255,107,157,0.18);
+  --border2: rgba(255,107,157,0.32);
+  --line:    rgba(255,107,157,0.18);
+  --line-2:  rgba(255,107,157,0.32);
+
+  /* 그림자 — 따뜻한 분홍빛 */
+  --shadow-sm: 0 0 0 1px rgba(255,107,157,0.08);
+  --shadow-md: 0 8px 32px rgba(80,0,30,0.5), 0 0 0 1px rgba(255,107,157,0.10);
+  --shadow-lg: 0 24px 64px rgba(80,0,30,0.7), 0 0 0 1px rgba(255,107,157,0.14);
+
+  /* 그라데이션 */
+  --grad-sakura: linear-gradient(135deg,#ffb6c8 0%,#ff6b9d 55%,#c084fc 100%);
+  --grad-spring: linear-gradient(180deg,#1a0a14 0%,#2a0a1e 100%);
+  --grad-title:  linear-gradient(135deg,#fff0f5 0%,#ff6b9d 100%);
+  --grad-cd-normal: linear-gradient(135deg,#ffb6c8 0%,#c084fc 100%);
+  --body-bg:
+    radial-gradient(ellipse at 70% 0%, #3a0a28 0%, transparent 55%),
+    radial-gradient(ellipse at 20% 100%, #2a0a1e 0%, transparent 55%),
+    linear-gradient(180deg, #1a0a14 0%, #2a0a1e 100%);
+
+  /* Countdown SVG 링 */
+  --cd-grad-1: #ffb6c8;
+  --cd-grad-2: #c084fc;
+  --cd-ring-bg:  rgba(255,107,157,0.08);
+  --cd-ring-idle: rgba(255,107,157,0.16);
+
+  /* 동맹 컬러 — spring 조화 (가독성 확보, 파스텔 계열) */
+  --kor: #60a5fa;   /* 파스텔 블루 */
+  --nsl: #4ade80;   /* 민트 그린 */
+  --jky: #c084fc;   /* 라벤더 */
+  --gpx: #fb923c;   /* 피치/오렌지 */
+  --ufo: #f472b6;   /* 로즈 */
+
+  /* Rail 치수 (frost와 동일) */
+  --rail-w:    72px;
+  --topbar-h:  56px;
+}
 
 /* ─── 테마 Frost (FROST PROTOCOL — 얼어붙은 전장) ─── */
 body.theme-frost {
@@ -199,6 +278,12 @@ body.theme-frost .petals-bg { display: none !important; }
   /* frost 테마의 핵심 시각 요소 — prefers-reduced-motion에서도 표시 (정지 상태로).
    * SnowCanvas.jsx 가 reduce 환경에서도 첫 프레임은 그려지도록 보장. */
 }
+.blossom-canvas {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+}
 body.theme-frost::before {
   content: '';
   position: fixed; inset: 0;
@@ -226,6 +311,22 @@ body.theme-frost .app-container {
 }
 /* prefers-reduced-motion: snow는 frost 테마의 핵심 시각이므로 숨기지 않음.
  * 대신 SnowCanvas.jsx가 reduce 환경에서 정지된 한 프레임만 그리고 raf를 멈춘다 */
+
+/* ─── Spring 전역 배경 효과 (blossom canvas + 비네트) ─── */
+/* z-index: body bg(:0) → .blossom-canvas(:1) → ::after(:2) → .app-container(:5) */
+body.theme-spring::after {
+  content: '';
+  position: fixed; inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  background: radial-gradient(ellipse at center, transparent 30%, rgba(26,10,20,0.65) 100%);
+}
+body.theme-spring .app-container {
+  position: relative;
+  z-index: 5;
+}
+/* spring: petals-bg는 z-index:0, blossom-canvas도 z-index:1 — 레이어 겹침 허용 */
+body.theme-spring .petals-bg { display: block; }
 
 /* ════════════════════════════════════════════════════════════
    Phase 2 — Layout Shell
@@ -4518,4 +4619,1052 @@ body.theme-frost .cd-key-hint kbd {
   }
 }
 
+/* ════════════════════════════════════════════════════════════
+   Phase 8 — Spring 테마 컴포넌트 override
+   frost 수준 시각 품질. body.theme-spring 스코프로 완전 격리.
+   ════════════════════════════════════════════════════════════ */
 
+/* ─── Icon Rail ─── */
+body.theme-spring .rail {
+  background: var(--bg-rail);
+  border-right: 1px solid var(--line);
+  padding: 14px 0 10px;
+}
+body.theme-spring .rail-logo {
+  background: var(--grad-sakura);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+body.theme-spring .rail-divider {
+  background: var(--line);
+  height: 1px;
+  margin: 6px 10px;
+}
+body.theme-spring .rail-btn {
+  color: var(--text-3);
+  border-radius: var(--r-md);
+  transition: background .18s, color .18s, box-shadow .18s;
+}
+body.theme-spring .rail-btn:hover {
+  background: rgba(255,107,157,0.14);
+  color: var(--sakura-3);
+}
+body.theme-spring .rail-btn.active {
+  background: rgba(255,107,157,0.18);
+  color: var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+body.theme-spring .rail-btn.active::before {
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+body.theme-spring .rail-btn-tooltip {
+  background: var(--bg-card-strong, var(--bg-card));
+  color: var(--text-1);
+  border: 1px solid var(--line);
+}
+body.theme-spring .rail-user {
+  border: 2px solid var(--line);
+}
+body.theme-spring .rail-user:hover { border-color: var(--accent); }
+body.theme-spring .rail-user-leader::after {
+  background: var(--grad-sakura);
+  box-shadow: 0 0 6px var(--accent-glow);
+}
+
+/* ─── Topbar / Header ─── */
+body.theme-spring .topbar {
+  background: var(--bg-glass);
+  border-bottom: 1px solid var(--line);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 1px 0 var(--line);
+}
+body.theme-spring .topbar-title {
+  background: var(--grad-title);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+body.theme-spring .topbar-breadcrumb { color: var(--text-2); }
+body.theme-spring .topbar-breadcrumb-current { color: var(--sakura-3); }
+body.theme-spring .world-clock {
+  background: rgba(255,107,157,0.08);
+  border: 1px solid var(--line);
+  color: var(--text-2);
+  border-radius: var(--r-sm);
+  padding: 4px 10px;
+}
+body.theme-spring .world-clock::before {
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent-glow);
+}
+body.theme-spring .kbd-hint {
+  border-color: var(--line);
+  color: var(--text-3);
+  background: var(--bg-glass);
+}
+body.theme-spring .kbd-hint:hover { border-color: var(--line-2); }
+body.theme-spring .kbd-hint kbd {
+  color: var(--sakura-3);
+  background: var(--accent-soft);
+}
+body.theme-spring .topbar-icon-btn {
+  color: var(--text-3);
+  border: 1px solid var(--line);
+  background: var(--bg-glass);
+  border-radius: var(--r-sm);
+}
+body.theme-spring .topbar-icon-btn:hover { border-color: var(--line-2); }
+body.theme-spring .topbar-icon-btn.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+body.theme-spring .lang-select {
+  background: var(--bg-glass);
+  border: 1px solid var(--line);
+  color: var(--text-2);
+  border-radius: var(--r-sm);
+}
+body.theme-spring .lang-select:hover { border-color: var(--line-2); }
+
+/* ─── 버튼 시스템 ─── */
+body.theme-spring .btn-primary {
+  background: var(--grad-sakura);
+  color: white;
+  border: none;
+  box-shadow: 0 3px 14px rgba(255,107,157,0.4);
+  background-size: 200% 200%;
+  animation: gradientShift 4s ease infinite;
+}
+body.theme-spring .btn-primary:hover {
+  box-shadow: 0 6px 20px rgba(255,107,157,0.55);
+  transform: translateY(-1px);
+}
+body.theme-spring .btn-primary:active { transform: translateY(1px); }
+body.theme-spring .btn-primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+body.theme-spring .btn-ghost {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--text-2);
+}
+body.theme-spring .btn-ghost:hover { background: rgba(255,107,157,0.12); }
+body.theme-spring .btn-danger {
+  background: transparent;
+  border: 1px solid rgba(248,113,113,0.4);
+  color: var(--red);
+}
+body.theme-spring .btn-danger:hover { background: rgba(248,113,113,0.2); }
+
+/* ─── Input 공통 ─── */
+body.theme-spring .input {
+  background: var(--bg-input);
+  border: 1px solid var(--line);
+  color: var(--text-1);
+  border-radius: var(--r-sm);
+}
+body.theme-spring .input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(255,107,157,0.18);
+  outline: none;
+}
+body.theme-spring .input::placeholder { color: var(--text-3); }
+
+/* ─── AuthModal ─── */
+body.theme-spring .auth-modal {
+  background: linear-gradient(160deg, rgba(60,18,42,0.96) 0%, rgba(40,10,28,0.98) 100%);
+  border: 1px solid var(--line);
+  box-shadow: 0 32px 80px rgba(80,0,30,0.6), 0 0 0 1px rgba(255,107,157,0.12);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+}
+body.theme-spring .auth-modal::before {
+  background: radial-gradient(ellipse at 60% -20%, rgba(255,107,157,0.18) 0%, transparent 65%);
+}
+body.theme-spring .auth-modal-mark {
+  background: var(--grad-sakura);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+body.theme-spring .auth-modal h2 {
+  background: var(--grad-title);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+body.theme-spring .auth-subtitle { color: var(--text-2); }
+body.theme-spring .auth-tabs {
+  border-bottom: 1px solid var(--line);
+}
+body.theme-spring .auth-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+body.theme-spring .auth-field label { color: var(--text-2); }
+body.theme-spring .auth-error { color: var(--red); }
+body.theme-spring .auth-switch a { color: var(--sakura-3); }
+body.theme-spring .auth-dev { border-top: 1px dashed var(--line); }
+body.theme-spring .auth-dev-title { color: var(--text-3); }
+body.theme-spring .dev-btn {
+  background: var(--bg-glass);
+  border: 1px solid var(--line);
+  color: var(--text-2);
+}
+body.theme-spring .dev-btn:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+body.theme-spring .dev-btn-name { color: var(--sakura-0); }
+body.theme-spring .dev-btn-meta { color: var(--text-3); }
+
+/* ─── Command Palette ─── */
+body.theme-spring .cmdk-overlay {
+  background: rgba(26,10,20,0.7);
+  backdrop-filter: blur(6px);
+}
+body.theme-spring .cmdk {
+  background: rgba(40,10,28,0.96);
+  border: 1px solid var(--line);
+  box-shadow: 0 24px 60px rgba(80,0,30,0.6);
+}
+body.theme-spring .cmdk-input {
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--text-1);
+}
+body.theme-spring .cmdk-input::placeholder { color: var(--text-3); }
+body.theme-spring .cmdk-section { color: var(--text-3); }
+body.theme-spring .cmdk-item:hover,
+body.theme-spring .cmdk-item.active {
+  background: rgba(255,107,157,0.14);
+}
+body.theme-spring .cmdk-item-icon { color: var(--accent); }
+body.theme-spring .cmdk-item-label { color: var(--sakura-0); }
+body.theme-spring .cmdk-item-shortcut kbd {
+  background: var(--accent-soft);
+  border: 1px solid var(--line);
+  color: var(--accent);
+}
+
+/* ─── User Popover ─── */
+body.theme-spring .user-popover {
+  background: rgba(40,10,28,0.96);
+  border: 1px solid var(--line);
+  box-shadow: 0 16px 48px rgba(80,0,30,0.5);
+  backdrop-filter: blur(20px);
+}
+body.theme-spring .user-pop-name { color: var(--sakura-0); }
+body.theme-spring .user-pop-sub { color: var(--text-2); }
+body.theme-spring .user-pop-row + .user-pop-row { border-top: 1px solid var(--line); }
+body.theme-spring .user-pop-actions { border-top: 1px solid var(--line); }
+body.theme-spring .user-pop-value { color: var(--sakura-2); }
+
+/* ─── Time sync badge / TTS controls ─── */
+body.theme-spring .time-sync-badge {
+  background: var(--accent-soft);
+  border: 1px solid var(--line);
+  color: var(--accent);
+}
+body.theme-spring .tts-volume-control {
+  background: var(--bg-glass);
+  border: 1px solid var(--line);
+}
+body.theme-spring .tts-mute-btn {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1px solid var(--line);
+}
+body.theme-spring .tts-volume-control input[type=range] { accent-color: var(--accent); }
+
+/* blossom canvas z-index 명시 */
+body.theme-spring .blossom-canvas { z-index: 1; }
+
+/* ─── tab-content 배경 ─── */
+body.theme-spring .tab-content {
+  background: transparent;
+}
+
+/* ─── 카드 계열 공통 glass feel ─── */
+body.theme-spring .battle-slot,
+body.theme-spring .personal-panel,
+body.theme-spring .rally-group-panel,
+body.theme-spring .rally-group-card,
+body.theme-spring .my-rally-card,
+body.theme-spring .member-card,
+body.theme-spring .board-post-card,
+body.theme-spring .board-write-form,
+body.theme-spring .compose-card,
+body.theme-spring .post-card,
+body.theme-spring .admin-card,
+body.theme-spring .admin-table,
+body.theme-spring .dashboard-panel,
+body.theme-spring .notice-row {
+  background: var(--bg-card);
+  border-color: var(--line);
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+body.theme-spring .battle-slot:hover,
+body.theme-spring .board-post-card:hover,
+body.theme-spring .post-card:hover,
+body.theme-spring .admin-card:hover {
+  border-color: var(--line-2);
+  box-shadow: var(--shadow-md);
+}
+body.theme-spring .admin-table th {
+  background: rgba(255,107,157,0.10);
+  color: var(--sakura-3);
+  border-bottom: 1px solid var(--line);
+}
+body.theme-spring .admin-table th,
+body.theme-spring .admin-table td {
+  border-color: var(--line);
+}
+body.theme-spring .admin-table tbody tr:hover {
+  background: rgba(255,107,157,0.08);
+}
+
+/* ─── Online Panel ─── */
+body.theme-spring .online-panel {
+  background: var(--bg-glass);
+  border-left: 1px solid var(--line);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+body.theme-spring .online-user-item {
+  border-bottom: 1px solid var(--line);
+}
+body.theme-spring .online-user-item:hover {
+  background: var(--bg-hover);
+}
+
+/* ─── Form inputs 공통 ─── */
+body.theme-spring .board-write-form input,
+body.theme-spring .board-write-form textarea,
+body.theme-spring .board-write-form select {
+  background: var(--bg-input);
+  border: 1px solid var(--line);
+  color: var(--text-1);
+}
+body.theme-spring .board-write-form input:focus,
+body.theme-spring .board-write-form textarea:focus,
+body.theme-spring .board-write-form select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(255,107,157,0.18);
+  outline: none;
+}
+
+/* ─── 헤딩 ─── */
+body.theme-spring h1,
+body.theme-spring h2,
+body.theme-spring h3,
+body.theme-spring h4,
+body.theme-spring h5 {
+  color: var(--text-1);
+}
+body.theme-spring .cd-section,
+body.theme-spring .admin-header h2 {
+  background: var(--grad-title);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ─── Sub-tab nav ─── */
+body.theme-spring .sub-tab-btn {
+  color: var(--text-3);
+}
+body.theme-spring .sub-tab-btn:hover {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+body.theme-spring .sub-tab-btn.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  background: var(--accent-soft);
+}
+body.theme-spring .notice-row { padding: 12px 14px; }
+
+/* ─── Admin Tab ─── */
+body.theme-spring .admin-tab {
+  background: transparent;
+  color: var(--text-1);
+}
+body.theme-spring .role-badge--developer {
+  background: var(--grad-sakura);
+  color: white;
+  box-shadow: 0 2px 8px rgba(255,107,157,0.35);
+}
+body.theme-spring .role-badge--admin {
+  background: linear-gradient(135deg, var(--sakura-4), var(--accent-2));
+  color: white;
+}
+body.theme-spring .role-badge--member {
+  background: var(--accent-soft);
+  border: 1px solid var(--line);
+  color: var(--text-2);
+}
+body.theme-spring .leader-badge {
+  background: var(--grad-sakura);
+  color: white;
+}
+body.theme-spring .user-alliance-badge {
+  color: white;
+  font-weight: 700;
+  border-radius: 4px;
+  padding: 2px 7px;
+  font-size: 10px;
+}
+body.theme-spring .user-alliance-badge--kor { background: var(--kor, #60a5fa); }
+body.theme-spring .user-alliance-badge--nsl { background: var(--nsl, #4ade80); }
+body.theme-spring .user-alliance-badge--jky { background: var(--jky, #c084fc); }
+body.theme-spring .user-alliance-badge--gpx { background: var(--gpx, #fb923c); }
+body.theme-spring .user-alliance-badge--ufo { background: var(--ufo, #f472b6); }
+body.theme-spring .user-alliance-badge:not([class*="--"]) {
+  background: var(--bg-subtle);
+  border: 1px solid var(--line);
+  color: var(--text-2);
+}
+body.theme-spring .admin-action-btn {
+  background: var(--bg-glass);
+  border: 1px solid var(--line);
+  color: var(--text-2);
+}
+body.theme-spring .admin-action-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+body.theme-spring .admin-action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+body.theme-spring .admin-action-btn--danger {
+  border-color: rgba(248,113,113,0.3);
+  color: var(--red);
+}
+body.theme-spring .admin-action-btn--danger:hover:not(:disabled) {
+  background: rgba(248,113,113,0.18);
+}
+body.theme-spring .admin-leader-toggle {
+  background: var(--bg-glass);
+  border: 1px solid var(--line);
+  color: var(--text-3);
+}
+body.theme-spring .admin-leader-toggle:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+body.theme-spring .admin-leader-toggle.is-leader {
+  background: var(--grad-sakura);
+  border-color: transparent;
+  color: white;
+}
+body.theme-spring .admin-leader-toggle.is-leader:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+/* ─── Community / Post cards ─── */
+body.theme-spring .post-card {
+  background: var(--bg-card);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(10px);
+}
+body.theme-spring .post-card:hover { border-color: var(--line-2); }
+body.theme-spring .post-author { color: var(--sakura-2); }
+body.theme-spring .post-meta { color: var(--text-2); }
+body.theme-spring .post-title { color: var(--sakura-0); }
+body.theme-spring .post-body { color: var(--text-2); }
+body.theme-spring .compose-card {
+  background: var(--bg-card);
+  border: 1px solid var(--line);
+}
+body.theme-spring .compose-card input,
+body.theme-spring .compose-card textarea,
+body.theme-spring .compose-card select {
+  background: var(--bg-input);
+  border-color: var(--line);
+  color: var(--text-1);
+}
+body.theme-spring .compose-card input:focus,
+body.theme-spring .compose-card textarea:focus,
+body.theme-spring .compose-card select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(255,107,157,0.18);
+  outline: none;
+}
+
+/* ─── Countdown (cd) ─── */
+body.theme-spring .cd-section {
+  background: transparent;
+}
+body.theme-spring .cd-hero {
+  background: linear-gradient(160deg, rgba(60,18,42,0.7) 0%, rgba(40,10,28,0.85) 100%);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-lg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: var(--r-xl);
+}
+body.theme-spring .cd-hero-head {
+  color: var(--text-3);
+  font-size: 10px;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+}
+body.theme-spring .cd-hero-tag {
+  background: rgba(255,107,157,0.10);
+  border: 1px solid var(--line);
+  color: var(--text-3);
+  border-radius: var(--r-sm);
+  padding: 3px 10px;
+  font-size: 11px;
+}
+body.theme-spring .cd-hero-tag.active {
+  background: rgba(255,107,157,0.20);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+body.theme-spring .cd-hero-tag.active::before {
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent-glow);
+}
+body.theme-spring .cd-hero-tag.danger {
+  border-color: var(--red);
+  color: var(--red);
+}
+body.theme-spring .cd-arc-bg { filter: drop-shadow(0 4px 20px rgba(255,107,157,0.30)); }
+body.theme-spring .cd-arc-bg svg { overflow: visible; }
+body.theme-spring .cd-mega {
+  font-size: 96px;
+  font-weight: 900;
+  background: var(--grad-cd-normal);
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: drop-shadow(0 2px 14px rgba(255,107,157,0.45));
+  animation: gradientShift 3s ease infinite, countPulse 1s ease-in-out infinite;
+}
+body.theme-spring .cd-mega.warn {
+  background: linear-gradient(135deg,#fbbf24,#f97316);
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+body.theme-spring .cd-mega.danger {
+  background: linear-gradient(135deg,#f87171,#dc2626);
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: dangerGlow .6s ease-in-out infinite, countPulse .6s ease-in-out infinite;
+}
+body.theme-spring .cd-dial {
+  background: var(--bg-glass);
+  border: 1px solid var(--line);
+  border-radius: 50%;
+}
+body.theme-spring .cd-tick { background: var(--line); }
+body.theme-spring .cd-tick.major { background: var(--accent); height: 12px; }
+body.theme-spring .cd-tick.passed { background: rgba(255,107,157,0.08); }
+body.theme-spring .cd-tick.now {
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent-glow);
+}
+body.theme-spring .cd-tick.now.warn { background: #fbbf24; }
+body.theme-spring .cd-tick.now.danger { background: var(--red); }
+body.theme-spring .cd-controls {
+  background: var(--bg-glass);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  backdrop-filter: blur(10px);
+}
+body.theme-spring .cd-presets { gap: 6px; }
+body.theme-spring .cd-preset-btn {
+  background: var(--bg-glass);
+  border: 1px solid var(--line);
+  color: var(--text-2);
+  border-radius: var(--r-sm);
+  font-weight: 600;
+  transition: all .18s;
+}
+body.theme-spring .cd-preset-btn:hover:not(:disabled) {
+  background: rgba(255,107,157,0.14);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+body.theme-spring .cd-preset-btn.selected {
+  background: var(--grad-sakura);
+  border-color: transparent;
+  color: white;
+  box-shadow: 0 2px 10px rgba(255,107,157,0.4);
+}
+body.theme-spring .cd-preset-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+body.theme-spring .cd-key-hint {
+  color: var(--text-3);
+  font-size: 11px;
+}
+body.theme-spring .cd-key-hint kbd {
+  background: var(--accent-soft);
+  border: 1px solid var(--line);
+  color: var(--accent);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+/* ─── ChatTab ─── */
+body.theme-spring .chat-tab-layout {
+  display: grid;
+  grid-template-columns: 1fr 260px;
+  gap: 16px;
+  padding: 16px;
+  height: 100%;
+  box-sizing: border-box;
+}
+body.theme-spring .chat-tab-main {
+  background: var(--bg-card);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  backdrop-filter: blur(12px);
+}
+body.theme-spring .chat-tab-topbar {
+  background: var(--bg-glass);
+  border-bottom: 1px solid var(--line);
+  padding: 10px 14px;
+}
+body.theme-spring .chat-tab-channel {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--sakura-2);
+}
+body.theme-spring .chat-tab-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 14px;
+  background: transparent;
+}
+body.theme-spring .chat-tab-messages::-webkit-scrollbar { width: 6px; }
+body.theme-spring .chat-tab-messages::-webkit-scrollbar-thumb {
+  background: var(--line-2);
+  border-radius: 3px;
+}
+body.theme-spring .chat-tab-system-msg {
+  text-align: center;
+  color: var(--text-3);
+  font-size: 11px;
+  padding: 4px 0;
+}
+body.theme-spring .chat-tab-msg {
+  display: flex;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: var(--r-sm);
+  transition: background .15s;
+}
+body.theme-spring .chat-tab-msg:hover {
+  background: rgba(255,107,157,0.08);
+}
+body.theme-spring .chat-tab-msg-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--grad-sakura);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: white;
+}
+body.theme-spring .chat-tab-msg-nick { color: var(--sakura-2); font-weight: 700; }
+body.theme-spring .chat-tab-msg-alliance { font-size: 10px; font-weight: 700; color: white; border-radius: 4px; padding: 1px 5px; }
+body.theme-spring .chat-tab-msg-time { color: var(--text-3); font-size: 11px; }
+body.theme-spring .chat-tab-msg-text { color: var(--text-1); font-size: 13px; line-height: 1.6; }
+body.theme-spring .chat-tab-toggle-original {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+body.theme-spring .chat-tab-toggle-original:hover {
+  background: var(--accent-soft);
+}
+body.theme-spring .chat-tab-input-row {
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--line);
+  background: var(--bg-glass);
+}
+body.theme-spring .chat-tab-input {
+  flex: 1;
+  background: var(--bg-input);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  color: var(--text-1);
+  padding: 8px 12px;
+  font-size: 13px;
+}
+body.theme-spring .chat-tab-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(255,107,157,0.18);
+  outline: none;
+}
+body.theme-spring .chat-tab-input::placeholder { color: var(--text-3); }
+body.theme-spring .chat-tab-send-btn {
+  background: var(--grad-sakura);
+  border: none;
+  border-radius: var(--r-sm);
+  color: white;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-weight: 600;
+}
+body.theme-spring .chat-tab-sidebar {
+  background: var(--bg-card);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  backdrop-filter: blur(12px);
+}
+body.theme-spring .chat-tab-sidebar-header {
+  background: var(--bg-glass);
+  border-bottom: 1px solid var(--line);
+  padding: 10px 12px;
+}
+body.theme-spring .chat-tab-sidebar-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-3);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+body.theme-spring .chat-tab-sidebar-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+body.theme-spring .chat-tab-sidebar-body::-webkit-scrollbar { width: 4px; }
+body.theme-spring .chat-tab-sidebar-body::-webkit-scrollbar-thumb {
+  background: var(--line-2);
+  border-radius: 2px;
+}
+body.theme-spring .chat-tab-sidebar-empty {
+  color: var(--text-3);
+  font-size: 12px;
+  text-align: center;
+  padding: 16px;
+}
+body.theme-spring .chat-tab-alliance-group { margin-bottom: 12px; }
+body.theme-spring .chat-tab-alliance-label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  padding: 2px 6px;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+body.theme-spring .chat-tab-alliance-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+body.theme-spring .chat-tab-alliance-name { font-size: 11px; color: var(--text-2); }
+body.theme-spring .chat-tab-alliance-count {
+  font-size: 10px;
+  color: var(--text-3);
+  margin-left: auto;
+}
+body.theme-spring .chat-tab-user-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 6px;
+  border-radius: var(--r-sm);
+  cursor: default;
+  transition: background .15s;
+}
+body.theme-spring .chat-tab-user-row:hover { background: rgba(255,107,157,0.10); }
+body.theme-spring .chat-tab-user-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 4px var(--green);
+  flex-shrink: 0;
+}
+body.theme-spring .chat-tab-user-nick {
+  font-size: 12px;
+  color: var(--text-1);
+  flex: 1;
+}
+body.theme-spring .chat-tab-user-you {
+  font-size: 10px;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+/* ─── ChatDock ─── */
+body.theme-spring .chat-dock {
+  background: var(--bg-card);
+  border-left: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 300px;
+  max-width: 400px;
+  width: var(--chat-dock-w);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+body.theme-spring .chat-dock-head {
+  background: var(--bg-glass);
+  border-bottom: 1px solid var(--line);
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+body.theme-spring .chat-dock-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--sakura-0);
+  flex: 1;
+}
+body.theme-spring .chat-online-pill {
+  background: rgba(74,222,128,0.15);
+  border: 1px solid rgba(74,222,128,0.3);
+  color: var(--green);
+  border-radius: 20px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+body.theme-spring .chat-online-pill::before {
+  content: '';
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 4px var(--green);
+}
+body.theme-spring .chat-dock-close {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--text-3);
+  border-radius: var(--r-sm);
+  width: 28px; height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all .15s;
+}
+body.theme-spring .chat-dock-close:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+body.theme-spring .chat-online-strip {
+  display: flex;
+  gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+  flex-shrink: 0;
+}
+body.theme-spring .chat-online-strip::-webkit-scrollbar { display: none; }
+body.theme-spring .chat-online-avatar {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: var(--grad-sakura);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: white;
+  position: relative;
+}
+body.theme-spring .chat-online-avatar::after {
+  content: '';
+  position: absolute;
+  bottom: 0; right: 0;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--green);
+  border: 1.5px solid var(--bg-card);
+  box-shadow: 0 0 4px var(--green);
+}
+body.theme-spring .chat-dock-msgs {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+body.theme-spring .chat-dock-msgs::-webkit-scrollbar { width: 6px; }
+body.theme-spring .chat-dock-msgs::-webkit-scrollbar-thumb {
+  background: var(--line-2);
+  border-radius: 3px;
+}
+body.theme-spring .chat-dock-msg {
+  display: flex;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: var(--r-sm);
+  transition: background .15s;
+}
+body.theme-spring .chat-dock-msg:hover { background: rgba(255,107,157,0.08); }
+body.theme-spring .chat-dock-msg-avatar {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: var(--grad-sakura);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: white;
+}
+body.theme-spring .chat-dock-msg-nick { color: var(--sakura-2); font-weight: 700; font-size: 12px; }
+body.theme-spring .chat-dock-msg-time { color: var(--text-3); font-size: 10px; }
+body.theme-spring .chat-dock-msg-text { color: var(--text-1); font-size: 12px; line-height: 1.5; }
+body.theme-spring .chat-dock-msg-tr { color: var(--text-2); font-size: 11px; font-style: italic; }
+body.theme-spring .chat-dock-system {
+  text-align: center;
+  color: var(--text-3);
+  font-size: 11px;
+  padding: 2px 0;
+}
+body.theme-spring .chat-dock-translate-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-top: 1px solid var(--line);
+  background: var(--bg-glass);
+  flex-shrink: 0;
+}
+body.theme-spring .chat-dock-translate-bar input { accent-color: var(--accent); }
+body.theme-spring .chat-dock-translate-bar label { color: var(--text-2); font-size: 12px; }
+body.theme-spring .chat-dock-input-row {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--line);
+  background: var(--bg-glass);
+  flex-shrink: 0;
+}
+body.theme-spring .chat-dock-input-row .input {
+  flex: 1;
+  background: var(--bg-input);
+  border: 1px solid var(--line);
+  color: var(--text-1);
+  font-size: 13px;
+  padding: 7px 11px;
+  border-radius: var(--r-sm);
+}
+body.theme-spring .chat-dock-input-row .input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(255,107,157,0.18);
+  outline: none;
+}
+body.theme-spring .chat-dock-input-row .input::placeholder { color: var(--text-3); }
+body.theme-spring .chat-dock-input-row .btn-primary {
+  background: var(--grad-sakura);
+  border: none;
+  color: white;
+  font-weight: 600;
+  padding: 7px 14px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(255,107,157,0.35);
+  transition: all .18s;
+}
+body.theme-spring .chat-dock-input-row .btn-primary:hover {
+  box-shadow: 0 4px 14px rgba(255,107,157,0.5);
+  transform: translateY(-1px);
+}
+
+/* ─── 반응형 (모바일) ─── */
+@media (max-width: 768px) {
+  body.theme-spring .rail.is-open {
+    transform: translateX(0);
+    box-shadow: 4px 0 24px rgba(80,0,30,0.5);
+  }
+  body.theme-spring .console--with-dock {
+    grid-template-columns: var(--rail-w) 1fr;
+  }
+  body.theme-spring .chat-dock {
+    position: fixed;
+    right: 0; top: 0; bottom: 0;
+    z-index: 300;
+    width: min(340px, 100vw);
+    box-shadow: -4px 0 24px rgba(80,0,30,0.5);
+  }
+  body.theme-spring .chat-tab-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr auto;
+    padding: 12px;
+    gap: 10px;
+  }
+  body.theme-spring .cd-hero {
+    padding: 20px 14px;
+  }
+  body.theme-spring .cd-mega {
+    font-size: 72px;
+  }
+  body.theme-spring .cd-controls {
+    padding: 12px 14px;
+  }
+  body.theme-spring .cd-dial {
+    width: 140px; height: 140px;
+  }
+  body.theme-spring .chat-tab-sidebar {
+    max-height: 180px;
+    grid-row: 2;
+  }
+  body.theme-spring .chat-tab-sidebar-body {
+    overflow-x: auto;
+    overflow-y: hidden;
+    display: flex;
+    flex-direction: row;
+    gap: 12px;
+    padding: 8px 10px;
+  }
+  body.theme-spring .chat-tab-alliance-group {
+    margin-bottom: 0;
+    flex-shrink: 0;
+  }
+}
+@media (max-width: 480px) {
+  body.theme-spring .cd-mega { font-size: 60px; }
+  body.theme-spring .cd-hero-head { font-size: 9px; }
+}

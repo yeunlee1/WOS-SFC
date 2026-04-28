@@ -10,6 +10,7 @@ import AuthModal from './components/Auth/AuthModal';
 import { warmupRallyAudio } from './components/Battle/rallyGroupPlayer';
 import Petals from './components/Layout/Petals';
 import SnowCanvas from './components/Layout/SnowCanvas';
+import BlossomCanvas from './components/Layout/BlossomCanvas';
 import Header from './components/Layout/Header';
 import OnlinePanel from './components/Layout/OnlinePanel';
 import IconRail from './components/Layout/IconRail';
@@ -164,7 +165,7 @@ export default function App() {
   if (hydrating) return null;
 
   if (!user) {
-    return <><Petals />{theme === 'frost' && <SnowCanvas />}<AuthModal /></>;
+    return <><Petals />{theme === 'frost' && <SnowCanvas />}{theme === 'spring' && <BlossomCanvas />}<AuthModal /></>;
   }
 
   // dock(=OnlinePanel) 실제 표시 여부: chat 탭에서는 풀페이지가 이미 채팅이므로 도크 비활성
@@ -172,8 +173,9 @@ export default function App() {
 
   return (
     <>
-      <Petals />
+      {theme === 'spring' && <Petals />}
       {theme === 'frost' && <SnowCanvas />}
+      {theme === 'spring' && <BlossomCanvas />}
       <div className={'app-container console' + (dockActuallyOpen ? ' console--with-dock' : '')}>
         <IconRail
           activeTab={activeTab}
