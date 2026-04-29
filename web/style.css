@@ -4355,21 +4355,39 @@ body.theme-frost .cd-section {
 
 /* ── cd-hero: 전체 레이아웃 래퍼 ── */
 /* 베이스 레이아웃 — frost/spring 양쪽 공통 (테마 블록은 색만 오버라이드) */
+/*
+ * 수직 분포 정책:
+ *  - cd-hero-head (absolute, top 18) — 상단 고정
+ *  - mega + dial — 자연스러운 flow, 가운데 자리잡음
+ *  - cd-controls / cd-viewer-msg — margin-top: auto 로 하단 push
+ *  - cd-key-hint (absolute, bottom 18) — 하단 고정
+ *  → padding top/bottom 으로 head/hint 절대 영역 확보, min-height 늘려서 콘텐츠 시각 호흡
+ */
 .cd-hero {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 18px;
-  padding: 20px 28px 56px; /* 하단 56px — cd-key-hint absolute 공간 */
+  justify-content: flex-start;
+  gap: 14px;
+  padding: 60px 28px 60px; /* top 60: head 영역 확보 / bottom 60: key-hint 영역 확보 */
   position: relative;
-  min-height: 320px;
+  min-height: 440px;
   container-type: inline-size;
   container-name: cdhero;
   /* width: 100% — 부모 .cd-section이 align-items: center라 cd-hero가 자식 콘텐츠 폭(28px)으로
      쪼그라드는 회귀 방지. 컨테이너 쿼리(38cqw)도 이 폭 기준으로 계산되므로 width 100%가 필수. */
   width: 100%;
   box-sizing: border-box;
+}
+/* 메가 숫자: 위쪽에 16px 여백 추가로 head와 시각적 분리 */
+.cd-hero > .cd-mega {
+  margin-top: 8px;
+}
+/* 컨트롤/뷰어 메시지: 하단으로 push — 가용 수직 공간 사용 */
+.cd-hero > .cd-controls,
+.cd-hero > .cd-viewer-msg {
+  margin-top: auto;
+  width: 100%;
 }
 body.theme-frost .cd-hero {
   /* frost는 베이스 레이아웃 그대로 사용. 색/배경만 별도 오버라이드 없음 */
