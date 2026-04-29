@@ -12,36 +12,7 @@ import {
 import { RESCHEDULE_THRESHOLD_MS } from '../../clockSync';
 import CountdownDots from './CountdownDots';
 
-// ── SVG 아크 백드롭 상수 ────────────────────────
-const ARC_SIZE = 600;
-const ARC_R    = 240;
-const ARC_C    = 2 * Math.PI * ARC_R;
-
-// ── 21-틱 다이얼 컴포넌트 ───────────────────────
-function CdDial({ value, total }) {
-  const ticks = [];
-  const span  = 10;
-  for (let i = -span; i <= span; i++) {
-    const at = value - i; // upcoming seconds
-    if (at < 0 || at > total) {
-      ticks.push({ key: i, cls: 'cd-tick passed' });
-      continue;
-    }
-    let cls = 'cd-tick';
-    if (i === 0) {
-      cls += value <= 5 ? ' now danger' : value <= 10 ? ' now warn' : ' now';
-    } else if (at % 5 === 0) {
-      cls += ' major';
-    }
-    if (i < 0) cls += ' passed';
-    ticks.push({ key: i, cls });
-  }
-  return (
-    <div className="cd-dial" aria-hidden="true">
-      {ticks.map((t) => <div key={t.key} className={t.cls} />)}
-    </div>
-  );
-}
+// 다이얼(.cd-dial) / 아크 백드롭(.cd-arc-bg)는 사용자 요청으로 제거 — 메가 숫자만 깔끔하게.
 
 // ── 프리셋 시간 목록 ────────────────────────────
 const PRESETS = [
@@ -282,14 +253,6 @@ export default function Countdown() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canControl, active, inputSec]);
 
-  // ── SVG 아크 계산 ──────────────────────────────
-  const arcPct    = total > 0 ? Math.max(0, Math.min(1, (secs ?? total) / total)) : (secs === null ? 1 : 0);
-  const arcOffset = ARC_C * (1 - arcPct);
-  // 아크 색상: CSS 클래스(warn/danger) 기반 — 하드코딩 hex 제거
-  const arcBgCls  = 'cd-arc-bg'
-    + (secs !== null && secs <= 5  ? ' danger' : '')
-    + (secs !== null && secs > 5 && secs <= 10 ? ' warn' : '');
-
   // ── mega number 클래스 ─────────────────────────
   let megaCls = 'cd-mega';
   if (secs !== null && isActive && secs <= 5)  megaCls += ' danger';
@@ -330,44 +293,8 @@ export default function Countdown() {
           <span>T · {total}초</span>
         </div>
 
-        {/* SVG 아크 백드롭 */}
-        <div className={arcBgCls} aria-hidden="true">
-          <svg viewBox={`0 0 ${ARC_SIZE} ${ARC_SIZE}`}>
-            <defs>
-              <linearGradient id="arcGrad" x1="0" x2="1" y1="0" y2="1">
-                <stop offset="0%" stopColor="#a8e6ff" stopOpacity="0.4"/>
-                <stop offset="100%" stopColor="#3a78ff" stopOpacity="0.05"/>
-              </linearGradient>
-            </defs>
-            <circle
-              cx={ARC_SIZE / 2} cy={ARC_SIZE / 2} r={ARC_R}
-              fill="none"
-              stroke="rgba(124,220,255,0.06)"
-              strokeWidth="2"
-            />
-            <circle
-              className="cd-arc-fill"
-              cx={ARC_SIZE / 2} cy={ARC_SIZE / 2} r={ARC_R}
-              fill="none"
-              stroke="url(#arcGrad)"
-              strokeWidth="3"
-              strokeLinecap="round"
-              strokeDasharray={ARC_C}
-              strokeDashoffset={arcOffset}
-              transform={`rotate(-90 ${ARC_SIZE / 2} ${ARC_SIZE / 2})`}
-              style={{
-                transition: 'stroke-dashoffset 0.3s linear',
-                filter: 'drop-shadow(0 0 12px currentColor)',
-              }}
-            />
-          </svg>
-        </div>
-
-        {/* 메가 숫자 */}
+        {/* 메가 숫자 — 다이얼/아크 제거하고 숫자만 깔끔하게 */}
         <div className={megaCls} role="timer" aria-live="polite" aria-atomic="true">{displayNum}</div>
-
-        {/* 21-틱 다이얼 */}
-        <CdDial value={secs ?? 0} total={total} />
 
         {/* 컨트롤: 프리셋 + 입력 + 시작/중지 */}
         {canControl && (
