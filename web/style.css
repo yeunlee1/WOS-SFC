@@ -4362,7 +4362,9 @@ body.theme-frost .cd-hero {
   gap: 18px;
   padding: 20px 28px 56px; /* 하단 56px — cd-key-hint absolute 공간 */
   position: relative;
-  min-height: 420px;
+  min-height: 320px;
+  container-type: inline-size;
+  container-name: cdhero;
 }
 
 /* ── cd-hero-head: 상태 태그 + 총 시간 ── */
@@ -4431,9 +4433,9 @@ body.theme-frost .cd-arc-bg {
   pointer-events: none;
 }
 body.theme-frost .cd-arc-bg svg {
-  width: min(80vh, 80%);
+  width: 80cqw;
   height: auto;
-  max-width: 600px;
+  max-width: 100%;
   opacity: 0.7;
 }
 body.theme-frost .cd-arc-bg.warn .cd-arc-fill { stroke: var(--warn); }
@@ -4444,7 +4446,7 @@ body.theme-frost .cd-mega {
   position: relative;
   font-family: 'JetBrains Mono', monospace;
   font-weight: 800;
-  font-size: clamp(120px, 22vw, 280px);
+  font-size: clamp(64px, 38cqw, 140px);
   line-height: 0.85;
   letter-spacing: -0.06em;
   color: var(--ice-0);
@@ -4480,7 +4482,7 @@ body.theme-frost .cd-mega.danger {
 /* ── cd-dial: 21-틱 다이얼 ── */
 body.theme-frost .cd-dial {
   width: 100%;
-  max-width: 460px;
+  max-width: 100%;
   display: flex;
   justify-content: space-between;
   position: relative;
@@ -4513,7 +4515,7 @@ body.theme-frost .cd-tick.now.danger {
 /* ── cd-controls: frost 오버라이드 ── */
 body.theme-frost .cd-controls {
   width: 100%;
-  max-width: 460px;
+  max-width: 100%;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -4578,7 +4580,7 @@ body.theme-frost .cd-key-hint kbd {
     gap: 14px;
   }
   body.theme-frost .cd-mega {
-    font-size: clamp(80px, 30vw, 180px);
+    font-size: clamp(64px, 38cqw, 130px);
   }
   body.theme-frost .cd-controls {
     max-width: 100%;
@@ -4593,7 +4595,7 @@ body.theme-frost .cd-key-hint kbd {
     min-height: 300px;
   }
   body.theme-frost .cd-mega {
-    font-size: clamp(64px, 32vw, 140px);
+    font-size: clamp(56px, 38cqw, 110px);
   }
   body.theme-frost .cd-hero-head {
     font-size: 9px;
@@ -5149,7 +5151,7 @@ body.theme-spring .cd-hero-tag.danger {
 body.theme-spring .cd-arc-bg { filter: drop-shadow(0 4px 20px rgba(255,107,157,0.30)); }
 body.theme-spring .cd-arc-bg svg { overflow: visible; }
 body.theme-spring .cd-mega {
-  font-size: 96px;
+  font-size: clamp(56px, 32cqw, 120px);
   font-weight: 900;
   background: var(--grad-cd-normal);
   background-size: 200% 200%;
@@ -5646,7 +5648,7 @@ body.theme-spring .chat-dock-input-row .btn-primary:hover {
     padding: 20px 14px;
   }
   body.theme-spring .cd-mega {
-    font-size: 72px;
+    font-size: clamp(48px, 36cqw, 100px);
   }
   body.theme-spring .cd-controls {
     padding: 12px 14px;
@@ -5672,6 +5674,6 @@ body.theme-spring .chat-dock-input-row .btn-primary:hover {
   }
 }
 @media (max-width: 480px) {
-  body.theme-spring .cd-mega { font-size: 60px; }
+  body.theme-spring .cd-mega { font-size: clamp(48px, 36cqw, 100px); }
   body.theme-spring .cd-hero-head { font-size: 9px; }
 }
