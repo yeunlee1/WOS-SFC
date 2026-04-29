@@ -308,7 +308,16 @@ export default function Countdown() {
     + (statusDanger ? ' danger' : '');
 
   // ── 표시 숫자 ─────────────────────────────────
-  const displayNum = secs !== null ? secs : '--';
+  // 대기 상태에서 '--' 두 글자가 거대 폰트(clamp 120~280px)로 렌더되면 가로 알약처럼 보이는 회귀 발생.
+  // 따라서 비활성 시: 입력된 inputSec(숫자) → countdown.totalSeconds → 0 우선순위로 단일 숫자 표시.
+  const previewNum = (() => {
+    if (secs !== null) return secs;
+    const parsed = parseInt(inputSec, 10);
+    if (parsed >= 1 && parsed <= 180) return parsed;
+    if (totalSeconds && totalSeconds > 0) return totalSeconds;
+    return 0;
+  })();
+  const displayNum = previewNum;
 
   return (
     <section className="cd-section">

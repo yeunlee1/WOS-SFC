@@ -4366,11 +4366,14 @@ body.theme-frost .cd-hero {
 }
 
 /* ── cd-hero-head: 상태 태그 + 총 시간 ── */
+/* z-index: 2 — cd-mega(거대 숫자 + drop-shadow)가 DOM 후순위라 stacking 우위인데,
+   head를 절대 배치하면서 z-index를 명시하지 않으면 mega 그림자에 시각적으로 묻힘. */
 body.theme-frost .cd-hero-head {
   position: absolute;
   top: 18px;
   left: 24px;
   right: 24px;
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -4379,6 +4382,10 @@ body.theme-frost .cd-hero-head {
   letter-spacing: 0.18em;
   color: var(--text-3);
   text-transform: uppercase;
+  pointer-events: none; /* mega 클릭 영역 침범 방지 */
+}
+body.theme-frost .cd-hero-head > * {
+  pointer-events: auto;
 }
 
 /* ── cd-hero-tag: 상태 필 ── */
