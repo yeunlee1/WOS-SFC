@@ -1243,7 +1243,7 @@ input:focus, select:focus, textarea:focus, .input:focus {
   background: var(--bg-card);
   border: 1.5px solid var(--border);
   border-radius: 12px;
-  padding: 24px 26px;
+  padding: 28px 32px; /* 사용자 피드백 — 텍스트가 박스에 닿는 답답함 해소 */
   min-width: 0;
 }
 @media (max-width: 1180px) {
@@ -1252,7 +1252,7 @@ input:focus, select:focus, textarea:focus, .input:focus {
     gap: 20px;
   }
   .battle-slot {
-    padding: 20px 22px;
+    padding: 22px 24px;
   }
 }
 @media (max-width: 768px) {

@@ -24,12 +24,12 @@ export default function PersonalSyncOffset() {
     : `${offset > 0 ? '+' : ''}${offset}ms`;
 
   return (
-    <section className="personal-sync-offset" style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--border-1, rgba(0,0,0,0.08))' }}>
-      <h4 style={{ fontSize: 13, margin: '0 0 4px', fontWeight: 600 }}>음성 미세 보정</h4>
-      <p style={{ fontSize: 11, color: 'var(--text-3)', margin: '0 0 8px', lineHeight: 1.4 }}>
+    <section className="personal-sync-offset" style={{ marginTop: 24, paddingTop: 20, borderTop: '1px solid var(--border-1, rgba(0,0,0,0.08))' }}>
+      <h4 style={{ fontSize: 14, margin: '0 0 10px', fontWeight: 600 }}>음성 미세 보정</h4>
+      <p style={{ fontSize: 12, color: 'var(--text-3)', margin: '0 0 16px', lineHeight: 1.5 }}>
         다른 사람보다 음성이 늦게 들리면 +, 빠르게 들리면 -. 디바이스별 저장 (폰/PC 따로). 모르겠으면 0 권장.
       </p>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
         <button
           className="btn"
           style={{ padding: '4px 10px', fontSize: 12, minWidth: 60 }}
