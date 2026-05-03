@@ -16,8 +16,8 @@
 import { api, getSocket } from './api';
 import { useStore } from './store';
 
-const SAMPLE_COUNT = 5;
-const SAMPLE_INTERVAL_MS = 80;
+const SAMPLE_COUNT = 3; // 3샘플로 충분 — 한도 절약
+const SAMPLE_INTERVAL_MS = 100;
 // RTT 표준편차가 이 값 이상이면 네트워크가 불안정한 것으로 간주 — 1회 추가 재샘플 실행
 const RTT_STDDEV_RESAMPLE_THRESHOLD_MS = 100;
 /**
@@ -35,10 +35,10 @@ const SMOOTH_OLD_WEIGHT = 0.3;
 const SMOOTH_NEW_WEIGHT = 0.7;
 // ws ping은 keep-alive 연결 위에서 동작 — REST(HTTP overhead 5~20ms)보다 가벼움.
 // BroadcastChannel 멀티탭 흡수 덕에 단일 사용자 N탭은 1번만 보내므로 5초 주기도 서버 부담 미미.
-const PERIODIC_SYNC_MS = 5_000;
-const DRIFT_CHECK_MS = 1000;
-const DRIFT_THRESHOLD_MS = 200;
-const WS_PING_TIMEOUT_MS = 3000;
+const PERIODIC_SYNC_MS = 30_000; // 30초로 늘림 — backend throttle 30/분 한도 대비 여유 확보
+const DRIFT_CHECK_MS = 5000; // 5초 간격 — 검사 빈도 완화
+const DRIFT_THRESHOLD_MS = 1000; // 1000ms — main thread blocking 오탐 방지
+const WS_PING_TIMEOUT_MS = 1500; // 1.5초로 단축 — ack 미도달 시 빠르게 REST fallback
 
 let _hasSynced = false;
 let _periodicTimer = null;
