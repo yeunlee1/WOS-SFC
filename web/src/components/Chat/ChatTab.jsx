@@ -1,9 +1,19 @@
-import { useState, useEffect, useRef } from 'react';
-import { useStore } from '../../store';
+import { useState, useEffect, useRef, memo } from 'react';
+import { useStore, ALLIANCES } from '../../store';
 import { useI18n } from '../../i18n';
 import { getSocket, translateChatMessage } from '../../api';
 
-// ChatTab — 실시간 채팅 탭
+// 5-동맹 pill 색상 — store ALLIANCES 순서와 일치
+const ALLIANCE_COLORS = {
+  KOR: '#3b82f6', NSL: '#22c55e', JKY: '#a855f7',
+  GPX: '#f97316', UFO: '#ec4899',
+};
+
+function getAllianceColor(alliance) {
+  return ALLIANCE_COLORS[alliance] || '#64748b';
+}
+
+// ChatTab — 실시간 채팅 탭 (풀페이지 모드)
 export default function ChatTab() {
   const { t } = useI18n();
   const user = useStore((s) => s.user);
@@ -18,8 +28,14 @@ export default function ChatTab() {
 
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
+  // 자동번역 토글 — localStorage 지속
+  const [autoTranslate, setAutoTranslate] = useState(() => {
+    try { return localStorage.getItem('wos-chat-auto-translate') !== '0'; }
+    catch { return true; }
+  });
 
   const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null);
 
   // Important #2: myLang 변경이 소켓 재구독을 유발하지 않도록 ref로 관리
   const myLangRef = useRef(myLang);
@@ -27,10 +43,21 @@ export default function ChatTab() {
     myLangRef.current = myLang;
   }, [myLang]);
 
-  // 자동 스크롤 — messages 변경 시
+  // 자동 스크롤 — messages 변경 시 (사용자가 하단에 있을 때만)
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 60;
+    if (isAtBottom) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages]);
+
+  // autoTranslate localStorage 동기화
+  useEffect(() => {
+    try { localStorage.setItem('wos-chat-auto-translate', autoTranslate ? '1' : '0'); }
+    catch { /* 무시 */ }
+  }, [autoTranslate]);
 
   // 소켓 이벤트 구독 — 마운트 시 1회만 실행 (deps: [])
   useEffect(() => {
@@ -88,66 +115,118 @@ export default function ChatTab() {
     }
   }
 
+  // 동맹별 온라인 그룹
+  const groups = ALLIANCES.map((alliance) => {
+    const users = onlineUsers.filter((u) => u.alliance === alliance);
+    return { alliance, users };
+  }).filter((g) => g.users.length > 0);
+
   return (
-    <div className="chat-layout">
-      {/* 온라인 유저 바 */}
-      <div className="chat-header">
-        <span className="chat-online-badge">{onlineUsers.length} online</span>
-        <div className="chat-online-list">
-          {onlineUsers.map((u) => (
-            <span key={u.nickname ?? u} className="chat-online-user">
-              {u.nickname ?? u}
-            </span>
-          ))}
+    <div className="chat-tab-layout">
+      {/* 왼쪽: 메인 채팅 패널 */}
+      <div className="chat-tab-main">
+        {/* 채팅 헤더 — 채널명 + 온라인 pill + 자동번역 토글 */}
+        <div className="chat-tab-topbar">
+          <span className="chat-tab-channel"># GENERAL</span>
+          <span className="chat-online-pill">{onlineUsers.length} {t('onlineUsers') || 'online'}</span>
+          <span className="chat-tab-spacer" />
+          <label className="chat-autotranslate-toggle">
+            <input
+              type="checkbox"
+              checked={autoTranslate}
+              onChange={(e) => setAutoTranslate(e.target.checked)}
+            />
+            <span>{t('autoTranslate') || 'Auto-translate'}</span>
+          </label>
+        </div>
+
+        {/* 메시지 목록 */}
+        <div className="chat-tab-messages" ref={messagesContainerRef}>
+          {messages.map((msg, idx) => {
+            if (msg._type === 'system') {
+              return (
+                <div key={msg._id ?? idx} className="chat-tab-system-msg">
+                  — {msg.text} —
+                </div>
+              );
+            }
+            return (
+              <ChatMessage
+                key={msg._id ?? idx}
+                msg={msg}
+                autoTranslate={autoTranslate}
+              />
+            );
+          })}
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* 입력 영역 */}
+        <div className="chat-tab-input-row">
+          <input
+            className="chat-tab-input"
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={t('chatPlaceholder')}
+          />
+          <button className="btn btn-primary chat-tab-send-btn" onClick={sendMessage}>
+            ▶
+          </button>
         </div>
       </div>
 
-      {/* 메시지 목록 */}
-      <div className="chat-messages">
-        {messages.map((msg, idx) => {
-          if (msg._type === 'system') {
-            return (
-              <p key={msg._id ?? idx} className="chat-system-msg">
-                {msg.text}
-              </p>
-            );
-          }
-          return (
-            <ChatMessage
-              key={msg._id ?? idx}
-              msg={msg}
-            />
-          );
-        })}
-        <div ref={messagesEndRef} />
-      </div>
-
-      {/* 입력 영역 */}
-      <div className="chat-input-area">
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={t('chatPlaceholder')}
-        />
-        <button className="btn btn-primary" onClick={sendMessage}>
-          {t('chatSend')}
-        </button>
+      {/* 오른쪽: 동맹별 온라인 사이드바 */}
+      <div className="chat-tab-sidebar">
+        <div className="chat-tab-sidebar-header">
+          <span className="chat-tab-sidebar-title">ONLINE · {onlineUsers.length}</span>
+        </div>
+        <div className="chat-tab-sidebar-body">
+          {groups.length === 0 ? (
+            <span className="chat-tab-sidebar-empty">{t('noOnlineUsers')}</span>
+          ) : (
+            groups.map(({ alliance, users }) => (
+              <div key={alliance} className="chat-tab-alliance-group">
+                <div className="chat-tab-alliance-label">
+                  <span
+                    className="chat-tab-alliance-dot"
+                    style={{ background: getAllianceColor(alliance) }}
+                  />
+                  <span className="chat-tab-alliance-name">{alliance}</span>
+                  <span className="chat-tab-alliance-count">{users.length}</span>
+                </div>
+                {users.map((u) => (
+                  <div key={u.nickname} className="chat-tab-user-row">
+                    <span
+                      className="chat-tab-user-dot"
+                    />
+                    <span className="chat-tab-user-nick">{u.nickname}</span>
+                    {u.nickname === user?.nickname && (
+                      <span className="chat-tab-user-you">YOU</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ))
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
 // ── 개별 채팅 메시지 컴포넌트 ──
-// Minor #4: t를 prop으로 받는 대신 useI18n() 직접 호출 (코드베이스 패턴 준수)
-function ChatMessage({ msg }) {
-  const { t } = useI18n();
+const localeMap = { ko: 'ko-KR', en: 'en-US', ja: 'ja-JP', zh: 'zh-CN' };
+
+const ChatMessage = memo(function ChatMessage({ msg, autoTranslate }) {
+  const { t, lang } = useI18n();
   const [showOriginal, setShowOriginal] = useState(false);
 
-  // Minor #5: createdAt 방어 처리
+  // createdAt 방어 처리 — locale-aware 시간 형식
+  const locale = localeMap[lang] || 'ko-KR';
   const time = msg.createdAt
-    ? new Date(msg.createdAt).toLocaleTimeString('ko-KR', {
+    ? new Date(msg.createdAt).toLocaleTimeString(locale, {
         hour: '2-digit',
         minute: '2-digit',
       })
@@ -156,25 +235,43 @@ function ChatMessage({ msg }) {
   const hasTranslation =
     msg.translatedContent && msg.translatedContent !== msg.content;
 
-  // 원문/번역 토글
-  const displayContent = hasTranslation && !showOriginal
-    ? msg.translatedContent
-    : msg.content;
+  // autoTranslate 꺼지면 항상 원문 표시
+  const displayContent =
+    autoTranslate && hasTranslation && !showOriginal
+      ? msg.translatedContent
+      : msg.content;
+
+  const initials = (msg.nickname || '??').slice(0, 2).toUpperCase();
+  const avatarColor = getAllianceColor(msg.allianceName);
 
   return (
-    <div className="chat-message">
-      <span className="chat-alliance">[{msg.allianceName}]</span>
-      <span className="chat-nickname">{msg.nickname}</span>
-      <span className="chat-time">{time}</span>
-      <p className="chat-content">{displayContent}</p>
-      {hasTranslation && (
-        <span
-          className="chat-toggle-original"
-          onClick={() => setShowOriginal((v) => !v)}
-        >
-          {showOriginal ? t('viewTranslation') : t('viewOriginal')}
-        </span>
-      )}
+    <div className="chat-tab-msg">
+      <div className="chat-tab-msg-avatar" style={{ background: avatarColor }}>
+        {initials}
+      </div>
+      <div className="chat-tab-msg-body">
+        <div className="chat-tab-msg-head">
+          <span className="chat-tab-msg-nick">{msg.nickname}</span>
+          {msg.allianceName && (
+            <span
+              className="chat-tab-msg-alliance"
+              style={{ color: avatarColor }}
+            >
+              [{msg.allianceName}]
+            </span>
+          )}
+          <span className="chat-tab-msg-time">{time}</span>
+        </div>
+        <p className="chat-tab-msg-text">{displayContent}</p>
+        {autoTranslate && hasTranslation && (
+          <span
+            className="chat-tab-toggle-original"
+            onClick={() => setShowOriginal((v) => !v)}
+          >
+            {showOriginal ? t('viewTranslation') : t('viewOriginal')}
+          </span>
+        )}
+      </div>
     </div>
   );
-}
+});

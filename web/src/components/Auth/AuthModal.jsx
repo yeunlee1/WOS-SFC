@@ -29,6 +29,12 @@ const DEV_ACCOUNTS = [
 // 닉네임 정규식 — server/web 양쪽이 동일해야 함. 한쪽만 바꾸면 silent divergence 발생.
 const NICKNAME_REGEX = /^[A-Za-z0-9가-힣]{2,20}$/;
 
+const ROLE_BADGE = {
+  developer: 'DEV',
+  admin: 'ADM',
+  member: 'MEM',
+};
+
 export default function AuthModal() {
   const [mode, setMode] = useState('login');
   const [loading, setLoading] = useState(false);
@@ -42,7 +48,7 @@ export default function AuthModal() {
   const [serverCode, setServerCode] = useState('');
 
   const { setUser, setTimeOffset } = useStore();
-  const { changeLang } = useI18n();
+  const { t, changeLang } = useI18n();
 
   async function initUser(user) {
     setUser(user);
@@ -101,63 +107,197 @@ export default function AuthModal() {
   }
 
   return (
-    <div className="alliance-modal">
-      <div className="alliance-modal-box">
-        <h2>🌸 WOS SFC</h2>
-        <p className="auth-subtitle">{mode === 'login' ? '동맹 지휘 보조 시스템' : '새 계정 만들기'}</p>
+    <div className="auth-modal-wrap">
+      <div className="auth-modal">
+        <div className="auth-modal-head">
+          <div className="auth-modal-mark" aria-hidden>
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none">
+              <path
+                d="M12 2 L12 22 M2 12 L22 12 M5 5 L19 19 M19 5 L5 19"
+                stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"
+              />
+              <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.5" />
+            </svg>
+          </div>
+          <h2>{t('authBrand')}</h2>
+          <p className="auth-subtitle">{t('authBrandSubtitle')}</p>
+        </div>
+
+        <div className="auth-tabs" role="tablist">
+          <button
+            type="button"
+            className={'auth-tab' + (mode === 'login' ? ' active' : '')}
+            onClick={() => { setMode('login'); setError(''); }}
+            role="tab"
+            aria-selected={mode === 'login'}
+          >
+            로그인
+          </button>
+          <button
+            type="button"
+            className={'auth-tab' + (mode === 'signup' ? ' active' : '')}
+            onClick={() => { setMode('signup'); setError(''); }}
+            role="tab"
+            aria-selected={mode === 'signup'}
+          >
+            가입
+          </button>
+        </div>
 
         {mode === 'login' ? (
-          <form onSubmit={handleLogin} style={{ width:'100%', display:'flex', flexDirection:'column' }}>
+          <form onSubmit={handleLogin} className="auth-form">
             <div className="auth-field">
               <label htmlFor="login-nick">닉네임</label>
-              <input id="login-nick" className="modal-nick-input" type="text" placeholder="게임 닉네임" value={nickname} onChange={(e) => setNickname(e.target.value)} maxLength={50} autoComplete="username" />
+              <input
+                id="login-nick"
+                className="input"
+                type="text"
+                placeholder="게임 닉네임"
+                value={nickname}
+                onChange={(e) => setNickname(e.target.value)}
+                maxLength={50}
+                autoComplete="username"
+              />
             </div>
             <div className="auth-field">
               <label htmlFor="login-pw">비밀번호</label>
-              <input id="login-pw" className="modal-nick-input" type="password" placeholder="비밀번호 입력" value={password} onChange={(e) => setPassword(e.target.value)} maxLength={100} autoComplete="current-password" />
+              <input
+                id="login-pw"
+                className="input"
+                type="password"
+                placeholder="비밀번호 입력"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                maxLength={100}
+                autoComplete="current-password"
+              />
             </div>
-            {error && <p className="auth-error">{error}</p>}
-            <button type="submit" className="btn btn-primary" disabled={loading} style={{ marginTop:'8px', display:'flex', alignItems:'center', justifyContent:'center' }}>
+            {error && <div className="auth-error">⚠ {error}</div>}
+            <button type="submit" className="btn btn-primary auth-submit" disabled={loading}>
               {loading && <span className="btn-spinner" aria-hidden="true" />}
               {loading ? '잠시만요…' : '로그인'}
             </button>
-            <p className="auth-switch">계정이 없으신가요? <a href="#" onClick={(e) => { e.preventDefault(); setMode('signup'); setError(''); }}>회원가입</a></p>
+            <p className="auth-switch">
+              계정이 없으신가요?{' '}
+              <a
+                href="#"
+                onClick={(e) => { e.preventDefault(); setMode('signup'); setError(''); }}
+              >
+                가입
+              </a>
+            </p>
           </form>
         ) : (
-          <form onSubmit={handleSignup} style={{ width:'100%', display:'flex', flexDirection:'column' }}>
+          <form onSubmit={handleSignup} className="auth-form">
             <div className="auth-field">
-              <label>게임 닉네임 (= 로그인 ID)</label>
-              <input className="modal-nick-input" type="text" placeholder="한글 또는 영문/숫자, 2~20자" value={signupNickname} onChange={(e) => setSignupNickname(e.target.value)} maxLength={20} autoComplete="username" />
+              <label htmlFor="signup-nick">게임 닉네임 (= 로그인 ID)</label>
+              <input
+                id="signup-nick"
+                className="input"
+                type="text"
+                placeholder="한글 또는 영문/숫자, 2~20자"
+                value={signupNickname}
+                onChange={(e) => setSignupNickname(e.target.value)}
+                maxLength={20}
+                autoComplete="username"
+              />
               <p className="auth-help">한글 또는 영문·숫자만 가능. 특수문자와 공백은 사용할 수 없습니다.</p>
             </div>
-            <div className="auth-field"><label>비밀번호</label><input className="modal-nick-input" type="password" placeholder="6자 이상" value={signupPassword} onChange={(e) => setSignupPassword(e.target.value)} maxLength={100} autoComplete="new-password" /></div>
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0 12px' }}>
-              <div className="auth-field"><label>동맹명</label><input className="modal-nick-input" type="text" placeholder="예: KOR" value={allianceName} onChange={(e) => setAllianceName(e.target.value)} maxLength={100} /></div>
-              <div className="auth-field"><label>언어</label><select className="modal-nick-input" value={language} onChange={(e) => setLanguage(e.target.value)}>{LANGUAGES.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}</select></div>
+            <div className="auth-field">
+              <label htmlFor="signup-pw">비밀번호</label>
+              <input
+                id="signup-pw"
+                className="input"
+                type="password"
+                placeholder="6자 이상"
+                value={signupPassword}
+                onChange={(e) => setSignupPassword(e.target.value)}
+                maxLength={100}
+                autoComplete="new-password"
+              />
             </div>
-            <div className="auth-field"><label className="auth-server-question">🗺 서버 번호가 어디입니까?</label><input className="modal-nick-input" type="text" placeholder="숫자 입력" value={serverCode} onChange={(e) => setServerCode(e.target.value)} maxLength={10} inputMode="numeric" autoComplete="off" /></div>
-            <p className="auth-help" style={{ margin:'0 0 8px' }}>계급은 관리자가 가입 후 별도로 부여합니다.</p>
-            {error && <p className="auth-error">{error}</p>}
-            <button type="submit" className="btn btn-primary" disabled={loading} style={{ marginTop:'8px', display:'flex', alignItems:'center', justifyContent:'center' }}>
+            <div className="input-grid-2">
+              <div className="auth-field">
+                <label htmlFor="signup-alliance">동맹명</label>
+                <input
+                  id="signup-alliance"
+                  className="input"
+                  type="text"
+                  placeholder="예: KOR"
+                  value={allianceName}
+                  onChange={(e) => setAllianceName(e.target.value)}
+                  maxLength={100}
+                />
+              </div>
+              <div className="auth-field">
+                <label htmlFor="signup-lang">언어</label>
+                <select
+                  id="signup-lang"
+                  className="input"
+                  value={language}
+                  onChange={(e) => setLanguage(e.target.value)}
+                >
+                  {LANGUAGES.map((l) => (
+                    <option key={l.value} value={l.value}>{l.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="auth-field">
+              <label htmlFor="signup-server" className="auth-server-question">🗺 서버 번호가 어디입니까?</label>
+              <input
+                id="signup-server"
+                className="input"
+                type="text"
+                placeholder="숫자 입력"
+                value={serverCode}
+                onChange={(e) => setServerCode(e.target.value)}
+                maxLength={10}
+                inputMode="numeric"
+                autoComplete="off"
+              />
+            </div>
+            <p className="auth-help" style={{ margin: '0 0 8px' }}>
+              계급은 관리자가 가입 후 별도로 부여합니다.
+            </p>
+            {error && <div className="auth-error">⚠ {error}</div>}
+            <button type="submit" className="btn btn-primary auth-submit" disabled={loading}>
               {loading && <span className="btn-spinner" aria-hidden="true" />}
               {loading ? '잠시만요…' : '가입하기'}
             </button>
-            <p className="auth-switch">이미 계정이 있으신가요? <a href="#" onClick={(e) => { e.preventDefault(); setMode('login'); setError(''); }}>로그인</a></p>
+            <p className="auth-switch">
+              이미 계정이 있으신가요?{' '}
+              <a
+                href="#"
+                onClick={(e) => { e.preventDefault(); setMode('login'); setError(''); }}
+              >
+                로그인
+              </a>
+            </p>
           </form>
         )}
 
         {import.meta.env.DEV && (
-          <details className="modal-dev-section">
-            <summary className="modal-dev-summary">🔧 DEV 빠른 로그인</summary>
-            <div style={{ display:'flex', flexDirection:'column', gap:'6px', marginTop:'10px' }}>
+          <div className="auth-dev">
+            <div className="auth-dev-title">⚡ DEV 빠른 로그인</div>
+            <div className="dev-grid">
               {DEV_ACCOUNTS.map((acc) => (
-                <button key={acc.nickname} className="dev-login-btn" onClick={() => devLogin(acc)} disabled={loading} style={{ display:'flex', alignItems:'center' }}>
-                  {loading && <span className="btn-spinner" style={{ borderTopColor: 'var(--accent)', borderColor: 'var(--border)' }} aria-hidden="true" />}
-                  {acc.label}
+                <button
+                  key={acc.nickname}
+                  type="button"
+                  className="dev-btn"
+                  onClick={() => devLogin(acc)}
+                  disabled={loading}
+                  title={acc.label}
+                >
+                  <div className="dev-btn-name">{acc.nickname}</div>
+                  <div className="dev-btn-meta">
+                    {acc.allianceName} · {ROLE_BADGE[acc.role] || acc.role.slice(0, 3).toUpperCase()}
+                  </div>
                 </button>
               ))}
             </div>
-          </details>
+          </div>
         )}
       </div>
     </div>

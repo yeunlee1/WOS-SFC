@@ -162,12 +162,15 @@ export default function PersonalPanel() {
   // active 중 출발까지 표시
   const showStatus = active && marchSeconds !== null && marchSeconds >= 1 && marchSeconds <= 180;
 
-  // 로딩 중 스켈레톤
+  // 로딩 중 스피너 — frost 톤 ring spinner + 텍스트
   if (loading) {
     return (
       <section className="personal-panel">
         <h3>개인 현황판</h3>
-        <p className="march-status">불러오는 중...</p>
+        <div className="panel-loading" role="status" aria-live="polite">
+          <span className="spinner-ring" aria-hidden="true" />
+          <span className="panel-loading-text">불러오는 중</span>
+        </div>
       </section>
     );
   }

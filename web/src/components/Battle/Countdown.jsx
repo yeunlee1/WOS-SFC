@@ -12,74 +12,7 @@ import {
 import { RESCHEDULE_THRESHOLD_MS } from '../../clockSync';
 import CountdownDots from './CountdownDots';
 
-// ── SVG 원형 프로그레스 링 ──────────────────────
-const RADIUS = 120;
-const STROKE = 10;
-const CIRC   = 2 * Math.PI * RADIUS;
-
-function RingProgress({ progress, secs, total }) {
-  const offset = CIRC * (1 - progress);
-
-  const size   = RADIUS * 2 + STROKE * 2 + 8;
-  const center = size / 2;
-
-  const numClass = secs === null  ? 'countdown-number'
-                 : secs <= 10   ? 'countdown-number countdown-danger'
-                 : secs <= 30   ? 'countdown-number countdown-warning'
-                 :                'countdown-number';
-
-  // idle 상태는 CSS 변수 --cd-ring-idle 사용 (테마별 오버라이드)
-  const ringStroke = secs === null   ? 'var(--cd-ring-idle, #e9d5ff)'
-                   : secs <= 10     ? 'url(#cd-grad-danger)'
-                   : secs <= 30     ? 'url(#cd-grad-warning)'
-                   :                  'url(#cd-grad-normal)';
-
-  const display = secs === null ? '--' : String(secs);
-
-  return (
-    <div className="cd-ring-wrap" style={{ position: 'relative', width: size, height: size }}>
-      <svg width={size} height={size} style={{ display: 'block' }}>
-        <defs>
-          {/* normal 그라데이션은 테마 CSS 변수로 — Spring(핑크/퍼플), Anthropic(코랄/겨자), Dark(인디고/바이올렛) */}
-          <linearGradient id="cd-grad-normal" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%"   style={{ stopColor: 'var(--cd-grad-1, #ec4899)' }} />
-            <stop offset="100%" style={{ stopColor: 'var(--cd-grad-2, #a855f7)' }} />
-          </linearGradient>
-          <linearGradient id="cd-grad-warning" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#fbbf24" />
-            <stop offset="100%" stopColor="#f97316" />
-          </linearGradient>
-          <linearGradient id="cd-grad-danger" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#f87171" />
-            <stop offset="100%" stopColor="#dc2626" />
-          </linearGradient>
-        </defs>
-        <circle cx={center} cy={center} r={RADIUS}
-          fill="none" stroke="var(--cd-ring-bg, #f3e8ff)" strokeWidth={STROKE} />
-        <circle cx={center} cy={center} r={RADIUS}
-          fill="none"
-          stroke={ringStroke}
-          strokeWidth={STROKE}
-          strokeLinecap="round"
-          strokeDasharray={CIRC}
-          strokeDashoffset={offset}
-          transform={`rotate(-90 ${center} ${center})`}
-          style={{ transition: 'stroke-dashoffset .25s linear, stroke .3s ease' }}
-        />
-      </svg>
-      <div style={{
-        position: 'absolute', inset: 0,
-        display: 'flex', flexDirection: 'column',
-        alignItems: 'center', justifyContent: 'center', gap: 2,
-      }}>
-        <span className={numClass}>{display}</span>
-        {secs !== null && total > 0 && (
-          <span className="cd-total">/ {total}s</span>
-        )}
-      </div>
-    </div>
-  );
-}
+// 다이얼(.cd-dial) / 아크 백드롭(.cd-arc-bg)는 사용자 요청으로 제거 — 메가 숫자만 깔끔하게.
 
 // ── 프리셋 시간 목록 ────────────────────────────
 const PRESETS = [
@@ -300,70 +233,135 @@ export default function Countdown() {
     getSocket()?.emit('countdown:stop');
   }
 
-  const statusLabel = isActive
-    ? (secs === 0 ? '🎯 전투 시작!' : '📡 공유 중')
-    : '⏸ 대기 중';
+  // ── 전역 키보드 단축키 (SPACE / R) ────────────────
+  useEffect(() => {
+    if (!canControl) return;
+    function handleGlobalKey(e) {
+      const t = e.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      if (e.code === 'Space') {
+        e.preventDefault();
+        if (active) handleStop();
+        else handleStart();
+      } else if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        handleStop();
+      }
+    }
+    window.addEventListener('keydown', handleGlobalKey);
+    return () => window.removeEventListener('keydown', handleGlobalKey);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canControl, active, inputSec]);
+
+  // ── mega number 클래스 ─────────────────────────
+  let megaCls = 'cd-mega';
+  if (secs !== null && isActive && secs <= 5)  megaCls += ' danger';
+  else if (secs !== null && isActive && secs <= 10) megaCls += ' warn';
+
+  // ── 상태 태그 ─────────────────────────────────
+  const statusActive = isActive && secs !== 0;
+  const statusDanger = isActive && secs !== null && secs <= 5 && secs !== 0;
+  let statusText;
+  if (!isActive)        statusText = '대기';
+  else if (secs === 0)  statusText = '종료';
+  else                  statusText = '진행중';
+
+  const heroTagCls = 'cd-hero-tag'
+    + (statusActive ? ' active' : '')
+    + (statusDanger ? ' danger' : '');
+
+  // ── 표시 숫자 ─────────────────────────────────
+  // 대기 상태에서 '--' 두 글자가 거대 폰트(clamp 120~280px)로 렌더되면 가로 알약처럼 보이는 회귀 발생.
+  // 따라서 비활성 시: 입력된 inputSec(숫자) → countdown.totalSeconds → 0 우선순위로 단일 숫자 표시.
+  const previewNum = (() => {
+    if (secs !== null) return secs;
+    const parsed = parseInt(inputSec, 10);
+    if (parsed >= 1 && parsed <= 180) return parsed;
+    if (totalSeconds && totalSeconds > 0) return totalSeconds;
+    return 0;
+  })();
+  const displayNum = previewNum;
 
   return (
     <section className="cd-section">
-      <div className={`cd-status-badge ${isActive ? (secs === 0 ? 'finished' : 'active') : ''}`}>
-        {statusLabel}
-      </div>
-
-      <RingProgress progress={progress} secs={secs} total={total} />
-
-      {canControl && (
-        <div className="cd-controls">
-          <div className="cd-presets">
-            {PRESETS.map((p) => (
-              <button
-                key={p.value}
-                className={`cd-preset-btn ${!isActive && parseInt(inputSec) === p.value ? 'selected' : ''}`}
-                onClick={() => {
-                  setInputSec(String(p.value));
-                  if (!isActive) handleStart(p.value);
-                }}
-                disabled={isActive || blockedByOther}
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="cd-input-row">
-            <input
-              className="input cd-input"
-              type="number"
-              min="1"
-              max="180"
-              placeholder="직접 입력 (1~180초)"
-              value={inputSec}
-              onChange={(e) => setInputSec(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && !isActive && !blockedByOther && handleStart()}
-              disabled={isActive || blockedByOther}
-            />
-            {!isActive ? (
-              <button
-                className="btn btn-primary cd-btn-start"
-                onClick={() => handleStart()}
-                disabled={!inputSec || parseInt(inputSec) < 1 || parseInt(inputSec) > 180 || blockedByOther}
-              >
-                ▶ 시작
-              </button>
-            ) : (
-              <button className="btn btn-danger cd-btn-stop" onClick={handleStop}>
-                ■ 중지
-              </button>
-            )}
-          </div>
+      <div className="cd-hero">
+        {/* 상단 헤더: 상태 태그 + 총 시간 */}
+        <div className="cd-hero-head">
+          <span className={heroTagCls}>
+            {statusText.toUpperCase()}
+          </span>
+          <span>T · {total}초</span>
         </div>
-      )}
 
-      {errorMsg && <p className="cd-error-msg" style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: '0.5rem', textAlign: 'center' }}>{errorMsg}</p>}
+        {/* 메가 숫자 — 다이얼/아크 제거하고 숫자만 깔끔하게 */}
+        <div className={megaCls} role="timer" aria-live="polite" aria-atomic="true">{displayNum}</div>
 
-      {!canControl && !isActive && (
-        <p className="cd-viewer-msg">SFC가 수비 카운트를 시작하면 여기에 표시됩니다</p>
-      )}
+        {/* 컨트롤: 프리셋 + 입력 + 시작/중지 */}
+        {canControl && (
+          <div className="cd-controls">
+            <div className="cd-presets">
+              {PRESETS.map((p) => (
+                <button
+                  key={p.value}
+                  className={`cd-preset-btn ${!isActive && parseInt(inputSec) === p.value ? 'selected' : ''}`}
+                  onClick={() => {
+                    setInputSec(String(p.value));
+                    if (!isActive) handleStart(p.value);
+                  }}
+                  disabled={isActive || blockedByOther}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="cd-input-row">
+              <input
+                className="input cd-input"
+                type="number"
+                min="1"
+                max="180"
+                placeholder="직접 입력 (1~180초)"
+                value={inputSec}
+                onChange={(e) => setInputSec(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && !isActive && !blockedByOther && handleStart()}
+                disabled={isActive || blockedByOther}
+              />
+              {!isActive ? (
+                <button
+                  className="btn btn-primary cd-btn-start"
+                  onClick={() => handleStart()}
+                  disabled={!inputSec || parseInt(inputSec) < 1 || parseInt(inputSec) > 180 || blockedByOther}
+                >
+                  ▶ 시작
+                </button>
+              ) : (
+                <button className="btn btn-danger cd-btn-stop" onClick={handleStop}>
+                  ■ 중지
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {errorMsg && (
+          <p className="cd-error-msg" style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: '0.5rem', textAlign: 'center' }}>
+            {errorMsg}
+          </p>
+        )}
+
+        {!canControl && !isActive && (
+          <p className="cd-viewer-msg">SFC가 수비 카운트를 시작하면 여기에 표시됩니다</p>
+        )}
+
+        {/* 키보드 힌트 */}
+        {canControl && (
+          <div className="cd-key-hint">
+            <span><kbd>SPACE</kbd> 시작/정지</span>
+            <span><kbd>R</kbd> 초기화</span>
+          </div>
+        )}
+      </div>
 
       <div className="battle-viz-mobile">
         <CountdownDots />

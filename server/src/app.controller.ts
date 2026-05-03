@@ -11,7 +11,7 @@ export class AppController {
   @Get('time')
   @Header('Cache-Control', 'no-store')
   @UseGuards(ThrottlerGuard)
-  @Throttle({ default: { limit: 30, ttl: 60000 } })
+  @Throttle({ default: { limit: 90, ttl: 60000 } })
   getTime(): { utc: number; t1: number; t2: number } {
     const t1 = Date.now();
     const t2 = Date.now();

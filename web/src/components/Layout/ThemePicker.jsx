@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useStore } from '../../store';
 
-// 테마 메타: 레이블 + 대표 컬러 (미리보기 점 2개로 표시)
+// 테마 메타: 레이블 + 대표 컬러 (미리보기 점 2개로 표시).
+// frost(메인) + spring(후속 리뉴얼 예정). anthropic/dark는 폐기됨.
 const THEME_META = [
-  { id: 'spring',    label: '🌸 Spring',    dot1: '#f9a8d4', dot2: '#d946a8' },
-  { id: 'anthropic', label: '🕯️ Anthropic', dot1: '#faf9f5', dot2: '#d97757' },
-  { id: 'dark',      label: '🌙 Dark',      dot1: '#1c1d22', dot2: '#818cf8' },
+  { id: 'frost',  label: '🧊 Frost',  dot1: '#a8e6ff', dot2: '#3a78ff' },
+  { id: 'spring', label: '🌸 Spring', dot1: '#f9a8d4', dot2: '#d946a8' },
 ];
 
 /**

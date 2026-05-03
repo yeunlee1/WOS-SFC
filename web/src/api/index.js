@@ -152,7 +152,19 @@ export function connectSocket() {
   if (_socket?.connected) return _socket;
   const url = import.meta.env.VITE_API_URL || '/';
   // httpOnly 쿠키가 자동으로 포함됨 (withCredentials: true)
-  _socket = io(url, { withCredentials: true, path: '/socket.io' });
+  _socket = io(url, {
+    withCredentials: true,
+    path: '/socket.io',
+    reconnection: true,
+    reconnectionDelay: 1000,
+    reconnectionDelayMax: 5000,
+    reconnectionAttempts: Infinity,
+  });
+  if (import.meta.env.DEV) {
+    _socket.on('connect_error', (err) => {
+      console.warn('[socket] connect_error:', err.message);
+    });
+  }
   return _socket;
 }
 

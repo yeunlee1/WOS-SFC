@@ -36,14 +36,16 @@ function _initPersonalOffsetMs() {
   }
 }
 
-// 테마 초기값: localStorage 우선, 없으면 'spring' (기본 벚꽃)
-export const THEMES = ['spring', 'anthropic', 'dark'];
+// 테마 초기값: localStorage 우선, 없으면 'frost' (기본 — FROST PROTOCOL).
+// frost가 메인, spring은 후속 리뉴얼 예정 (Phase 8). anthropic/dark 테마는 폐기됨.
+// 기존 사용자 localStorage에 'anthropic'/'dark' 저장돼있으면 frost로 마이그레이션.
+export const THEMES = ['frost', 'spring'];
 function _initTheme() {
   try {
     const t = localStorage.getItem('wos-theme');
-    return THEMES.includes(t) ? t : 'spring';
+    return THEMES.includes(t) ? t : 'frost';
   } catch {
-    return 'spring';
+    return 'frost';
   }
 }
 
@@ -78,7 +80,7 @@ export const useStore = create((set) => ({
   // TTS 음소거 플래그 (볼륨과 독립 — 스피커 아이콘 토글용)
   ttsMuted: _initTtsMuted(),
 
-  // 테마: 'spring' | 'anthropic' | 'dark' — body.theme-* 클래스로 적용
+  // 테마: 'frost' | 'spring' | 'anthropic' | 'dark' — body.theme-* 클래스로 적용
   theme: _initTheme(),
 
   // Actions
@@ -149,7 +151,7 @@ export const useStore = create((set) => ({
     set({ ttsMuted: muted });
   },
   setTheme: (t) => {
-    const theme = THEMES.includes(t) ? t : 'spring';
+    const theme = THEMES.includes(t) ? t : 'frost';
     try { localStorage.setItem('wos-theme', theme); } catch { /* 무시 */ }
     set({ theme });
   },
