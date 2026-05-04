@@ -1,16 +1,11 @@
 # PR 트리거 자동 검증 — npm workspace(루트)에서 install 후 web/server 각자 빌드·테스트.
 # Branch protection의 required status check 대상.
+# path filter 없음: docs-only PR도 항상 CI 돌려야 required check 통과 가능 (없으면 영구 BLOCKED).
 name: test
 
 on:
   pull_request:
     branches: [master]
-    paths:
-      - 'web/**'
-      - 'server/**'
-      - 'package.json'
-      - 'package-lock.json'
-      - '.github/workflows/test.yml'
   push:
     branches: [master]
 
