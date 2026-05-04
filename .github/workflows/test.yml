@@ -1,0 +1,51 @@
+# PR 트리거 자동 검증 — npm workspace(루트)에서 install 후 web/server 각자 빌드·테스트.
+# Branch protection의 required status check 대상.
+name: test
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - 'web/**'
+      - 'server/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/test.yml'
+  push:
+    branches: [master]
+
+jobs:
+  web:
+    name: Web (Vitest + build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install workspaces (root)
+        run: npm ci
+      - name: Test (Vitest)
+        working-directory: web
+        run: npm test -- --run
+      - name: Build
+        working-directory: web
+        run: npm run build
+
+  server:
+    name: Server (NestJS build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install workspaces (root)
+        run: npm ci
+      - name: Build
+        working-directory: server
+        run: npm run build
