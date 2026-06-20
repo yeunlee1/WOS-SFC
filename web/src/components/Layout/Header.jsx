@@ -13,6 +13,7 @@ function _rttIcon(rtt) {
 
 const TAB_KEYS = [
   { id: 'battle',    key: 'tabBattle' },
+  { id: 'operation', key: 'tabOperation' },
   { id: 'community', key: 'tabCommunity' },
   { id: 'chat',      key: 'tabChat' },
   { id: 'admin',     key: 'tabAdmin' },

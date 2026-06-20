@@ -42,7 +42,7 @@ describe('CommandPalette — 명령 카탈로그 + role 분기', () => {
     expect(container.querySelector('[role="dialog"]')).toBeNull();
   });
 
-  it('open=true → 5개 섹션 + 12개 기본 명령 렌더 (member role)', () => {
+  it('open=true → 5개 섹션 + 13개 기본 명령 렌더 (member role)', () => {
     renderWithProviders(
       <CommandPalette open={true} onClose={() => {}} onTabChange={() => {}} onToggleChatDock={() => {}} />,
     );
@@ -52,15 +52,15 @@ describe('CommandPalette — 명령 카탈로그 + role 분기', () => {
     expect(screen.getByText('LANGUAGE')).toBeInTheDocument();
     expect(screen.getByText('THEME')).toBeInTheDocument();
     expect(screen.getByText('SESSION')).toBeInTheDocument();
-    // 명령 개수: tab 3 (admin 제외) + actions 2 + lang 4 + theme 2 (frost/spring) + session 1 = 12
+    // 명령 개수: tab 4 (admin 제외) + actions 2 + lang 4 + theme 2 (frost/spring) + session 1 = 13
     // Phase 3.5에서 anthropic/dark 테마 폐기 → theme 카테고리 4 → 2.
     const items = document.querySelectorAll('.cmdk-item');
-    expect(items.length).toBe(12);
+    expect(items.length).toBe(13);
     // admin 명령 미노출 (영어 환경 — Admin 텍스트 검색)
     expect(screen.queryByText(/Admin/i)).toBeNull();
   });
 
-  it('role=developer → admin 명령 추가 (총 13개)', () => {
+  it('role=developer → admin 명령 추가 (총 14개)', () => {
     useStore.setState({
       user: { nickname: 'devtester', role: 'developer', allianceName: 'KOR' },
     });
@@ -69,9 +69,9 @@ describe('CommandPalette — 명령 카탈로그 + role 분기', () => {
     );
     // admin 옵션은 영어 환경 라벨 'Go to: 🛡️ Admin' (i18n t('tabAdmin') = '🛡️ Admin')
     expect(screen.getByText(/Admin/)).toBeInTheDocument();
-    // 12 (member 기본) + 1 (admin 명령) = 13
+    // 13 (member 기본) + 1 (admin 명령) = 14
     const items = document.querySelectorAll('.cmdk-item');
-    expect(items.length).toBe(13);
+    expect(items.length).toBe(14);
   });
 
   it('검색 결과 0개 → cmdk-empty 메시지 표시', () => {

@@ -10,7 +10,7 @@ export const OPERATION_BOARD_TOOLS = [
   { id: 'erase', label: '지우개' },
 ];
 
-export const OPERATION_MARKERS = ['fire', 'warn', 'target', 'shield', 'arrow', 'star'];
+export const OPERATION_MARKERS = ['🔥', '⚠️', '🎯', '🛡️', '➡️', '⭐'];
 
 const ADMIN_ROLES = ['admin', 'developer'];
 const MAX_ELEMENTS = 500;
@@ -94,7 +94,7 @@ export function createOperationElement(type, payload = {}) {
     element.fontSize = finiteNumber(payload.fontSize ?? 18, 18);
   }
   if (elementType === 'marker') {
-    element.marker = boundedString(payload.marker || 'target', MAX_STRING_LENGTH);
+    element.marker = boundedString(payload.marker || OPERATION_MARKERS[2], MAX_STRING_LENGTH);
     element.text = boundedString(payload.text || '', MAX_TEXT_LENGTH);
   }
   if (payload.filled !== undefined) {

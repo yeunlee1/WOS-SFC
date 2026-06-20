@@ -47,6 +47,7 @@ export default function IconRail({
 
   const tabs = [
     { id: 'battle',    icon: '⚔', tooltip: t('tabBattle') },
+    { id: 'operation', icon: '✦', tooltip: t('tabOperation') },
     { id: 'community', icon: '◫', tooltip: t('tabCommunity') },
     { id: 'chat',      icon: '✉', tooltip: t('tabChat') },
   ];
