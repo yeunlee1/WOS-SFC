@@ -282,6 +282,29 @@ describe('OperationBoardsGateway', () => {
     );
   });
 
+  it('rejects management events from members even when they have draw permission', () => {
+    gateway.handleJoin(adminSocket, {});
+    gateway.handleJoin(memberSocket, {});
+    gateway.handlePermissionUpdate(adminSocket, {
+      participantId: memberSocket.id,
+      canDraw: true,
+    });
+    server.emit.mockClear();
+
+    expect(gateway.handleClear(memberSocket)).toEqual({ ok: false });
+    expect(
+      gateway.handleBackgroundUpdate(memberSocket, {
+        type: 'image',
+        imageUrl: '/uploads/operation-boards/map.webp',
+      }),
+    ).toEqual({ ok: false });
+    expect(server.emit).not.toHaveBeenCalledWith('operation:clear');
+    expect(server.emit).not.toHaveBeenCalledWith(
+      'operation:background:update',
+      expect.anything(),
+    );
+  });
+
   it('reflects chat-open changes in operation-board presence', () => {
     gateway.handleJoin(memberSocket, { chatOpen: false });
     server.emit.mockClear();

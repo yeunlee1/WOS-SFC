@@ -193,7 +193,7 @@ export class OperationBoardsGateway
 
   @SubscribeMessage('operation:clear')
   handleClear(@ConnectedSocket() client: Socket): OperationAck {
-    if (!this.canClientDraw(client)) return { ok: false };
+    if (!this.canClientManage(client)) return { ok: false };
 
     this.elements = [];
     this.server.emit('operation:clear');
@@ -205,7 +205,7 @@ export class OperationBoardsGateway
     @ConnectedSocket() client: Socket,
     @MessageBody() body: unknown,
   ): OperationAck {
-    if (!this.canClientDraw(client)) return { ok: false };
+    if (!this.canClientManage(client)) return { ok: false };
 
     const background = this.normalizeBackground(body);
     if (!background) return { ok: false };
@@ -264,6 +264,11 @@ export class OperationBoardsGateway
   private canClientDraw(client: Socket): boolean {
     const participant = this.participants.get(client.id);
     return participant ? this.canDraw(participant) : false;
+  }
+
+  private canClientManage(client: Socket): boolean {
+    const participant = this.participants.get(client.id);
+    return participant ? this.isPrivilegedRole(participant.role) : false;
   }
 
   private normalizeElement(element: unknown): OperationElement | null {
