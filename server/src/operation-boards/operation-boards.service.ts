@@ -36,6 +36,31 @@ function assertElementsBounded(elements: unknown[]): void {
   }
 }
 
+function normalizeTitle(title: string): string {
+  const trimmed = title.trim();
+  if (!trimmed) {
+    throw new BadRequestException('작전판 제목을 입력해주세요.');
+  }
+  return trimmed;
+}
+
+function normalizeBackgroundImageUrl(
+  dto: SaveOperationBoardDto,
+): string | null {
+  if (dto.backgroundType === 'grid') {
+    return null;
+  }
+
+  if (
+    typeof dto.backgroundImageUrl !== 'string' ||
+    dto.backgroundImageUrl.trim().length === 0
+  ) {
+    throw new BadRequestException('이미지 배경 URL을 입력해주세요.');
+  }
+
+  return dto.backgroundImageUrl.trim();
+}
+
 @Injectable()
 export class OperationBoardsService {
   constructor(
@@ -65,10 +90,9 @@ export class OperationBoardsService {
 
     const now = new Date();
     const row = this.repo.create({
-      title: dto.title.trim(),
+      title: normalizeTitle(dto.title),
       backgroundType: dto.backgroundType,
-      backgroundImageUrl:
-        dto.backgroundType === 'image' ? dto.backgroundImageUrl : null,
+      backgroundImageUrl: normalizeBackgroundImageUrl(dto),
       elementsJson: dto.elements,
       createdByUserId: user.id,
       createdByNick: user.nickname,
@@ -89,7 +113,7 @@ export class OperationBoardsService {
       throw new NotFoundException('작전판 저장본을 찾을 수 없습니다.');
     }
 
-    row.title = dto.title.trim();
+    row.title = normalizeTitle(dto.title);
     row.updatedByUserId = user.id;
     row.updatedByNick = user.nickname;
     row.updatedAt = new Date();

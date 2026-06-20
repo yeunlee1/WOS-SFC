@@ -6,6 +6,9 @@ import {
 } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { validateSync } from 'class-validator';
+import { RenameOperationBoardDto } from './dto/rename-operation-board.dto';
+import { SaveOperationBoardDto } from './dto/save-operation-board.dto';
 import { OperationBoard } from './operation-board.entity';
 import { OperationBoardsService } from './operation-boards.service';
 
@@ -98,6 +101,61 @@ describe('OperationBoardsService', () => {
 
     expect(saved.backgroundImageUrl).toBe('/uploads/operation-boards/map.webp');
     expect(saved.updatedByUserId).toBe(3);
+  });
+
+  it('rejects blank snapshot titles after trimming', async () => {
+    const { service } = await setup();
+
+    await expect(
+      service.saveSnapshot(
+        { id: 1, nickname: 'adminKo', role: 'admin' },
+        {
+          title: '   ',
+          backgroundType: 'grid',
+          backgroundImageUrl: null,
+          elements: [],
+        },
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejects blank rename titles after trimming', async () => {
+    const { service } = await setup();
+    const saved = await service.saveSnapshot(
+      { id: 1, nickname: 'devKo', role: 'developer' },
+      {
+        title: '초안',
+        backgroundType: 'grid',
+        backgroundImageUrl: null,
+        elements: [],
+      },
+    );
+
+    await expect(
+      service.rename(
+        saved.id,
+        { id: 1, nickname: 'devKo', role: 'developer' },
+        { title: '   ' },
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejects image snapshots without a non-empty background image URL', async () => {
+    const { service } = await setup();
+
+    for (const backgroundImageUrl of [null, undefined, '   ']) {
+      await expect(
+        service.saveSnapshot(
+          { id: 1, nickname: 'devKo', role: 'developer' },
+          {
+            title: '이미지 작전',
+            backgroundType: 'image',
+            backgroundImageUrl,
+            elements: [],
+          },
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    }
   });
 
   it('rejects save, rename, and delete attempts from member users', async () => {
@@ -199,5 +257,28 @@ describe('OperationBoardsService', () => {
     await expect(
       service.remove(999, { id: 1, nickname: 'devKo', role: 'developer' }),
     ).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+describe('OperationBoard DTO validation', () => {
+  it('rejects empty save titles', () => {
+    const dto = new SaveOperationBoardDto();
+    dto.title = '';
+    dto.backgroundType = 'grid';
+    dto.backgroundImageUrl = null;
+    dto.elements = [];
+
+    const errors = validateSync(dto);
+
+    expect(errors.some((error) => error.property === 'title')).toBe(true);
+  });
+
+  it('rejects empty rename titles', () => {
+    const dto = new RenameOperationBoardDto();
+    dto.title = '';
+
+    const errors = validateSync(dto);
+
+    expect(errors.some((error) => error.property === 'title')).toBe(true);
   });
 });

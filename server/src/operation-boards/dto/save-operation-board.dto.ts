@@ -3,6 +3,7 @@ import {
   ArrayMaxSize,
   IsArray,
   IsIn,
+  IsNotEmpty,
   IsOptional,
   IsString,
   MaxLength,
@@ -10,6 +11,7 @@ import {
 
 export class SaveOperationBoardDto {
   @IsString()
+  @IsNotEmpty()
   @MaxLength(80)
   title: string;
 
