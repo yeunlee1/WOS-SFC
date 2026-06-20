@@ -292,7 +292,8 @@ export class OperationBoardsGateway
       if (key === 'id' || key === 'type') continue;
 
       if (typeof value === 'number') {
-        if (Number.isFinite(value)) sanitized[key] = value;
+        if (!Number.isFinite(value)) return null;
+        sanitized[key] = value;
         continue;
       }
 
@@ -305,7 +306,10 @@ export class OperationBoardsGateway
 
       if (typeof value === 'boolean') {
         sanitized[key] = value;
+        continue;
       }
+
+      return null;
     }
 
     return sanitized;

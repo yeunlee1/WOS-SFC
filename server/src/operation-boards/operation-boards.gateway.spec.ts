@@ -301,7 +301,7 @@ describe('OperationBoardsGateway', () => {
     ]);
   });
 
-  it('rejects oversized or invalid elements and broadcasts sanitized shallow elements', () => {
+  it('rejects oversized, invalid, or nested elements and broadcasts sanitized shallow elements', () => {
     gateway.handleJoin(adminSocket, {});
     server.emit.mockClear();
 
@@ -314,9 +314,8 @@ describe('OperationBoardsGateway', () => {
         text: '집결',
         color: '#ffcc00',
         label: 'main',
-        points: [{ x: 1, y: 2 }],
-        meta: { nested: true },
-        opacity: Number.POSITIVE_INFINITY,
+        opacity: 0.7,
+        locked: false,
       }),
     ).toEqual({ ok: true });
     expect(server.emit).toHaveBeenCalledWith('operation:element:add', {
@@ -327,10 +326,26 @@ describe('OperationBoardsGateway', () => {
       text: '집결',
       color: '#ffcc00',
       label: 'main',
+      opacity: 0.7,
+      locked: false,
     });
 
     server.emit.mockClear();
 
+    expect(
+      gateway.handleElementAdd(adminSocket, {
+        id: 'e-points',
+        type: 'path',
+        points: [{ x: 1, y: 2 }],
+      }),
+    ).toEqual({ ok: false });
+    expect(
+      gateway.handleElementAdd(adminSocket, {
+        id: 'e-meta',
+        type: 'marker',
+        meta: { nested: true },
+      }),
+    ).toEqual({ ok: false });
     expect(
       gateway.handleElementAdd(adminSocket, {
         id: 'e-oversized',
