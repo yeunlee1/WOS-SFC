@@ -16,11 +16,17 @@ describe('AppController (e2e)', () => {
     await app.init();
   });
 
-  it('/ (GET)', () => {
+  it('/time (GET)', () => {
     return request(app.getHttpServer())
-      .get('/')
+      .get('/time')
       .expect(200)
-      .expect('Hello World!');
+      .expect('Cache-Control', 'no-store')
+      .expect((response) => {
+        const body = response.body as Record<string, unknown>;
+        expect(typeof body.utc).toBe('number');
+        expect(typeof body.t1).toBe('number');
+        expect(typeof body.t2).toBe('number');
+      });
   });
 
   afterEach(async () => {
