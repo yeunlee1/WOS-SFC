@@ -4,7 +4,7 @@ import react from '@vitejs/plugin-react';
 const API_PATHS = [
   '/auth', '/notices', '/alliance-notices', '/rallies', '/members', '/boards',
   '/uploads', '/translations', '/users', '/translate', '/tts-audio', '/time', '/admin',
-  '/me', '/rally-groups',
+  '/me', '/rally-groups', '/operation-boards',
 ];
 
 // 백엔드 주소 — 워크트리 분리 작업 시 다른 포트로 분기 가능 (예: VITE_API_TARGET=http://localhost:3002)

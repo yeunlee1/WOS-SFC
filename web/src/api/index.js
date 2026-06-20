@@ -102,7 +102,56 @@ export const api = {
   startRallyGroup:           (id)                                   => apiFetch(`/rally-groups/${id}/start`, { method: 'POST' }),
   stopRallyGroup:            (id)                                   => apiFetch(`/rally-groups/${id}/stop`, { method: 'POST' }),
 
+  // 작전판 저장본
+  listOperationBoards: () => apiFetch('/operation-boards'),
+  getOperationBoard: (id) => apiFetch(`/operation-boards/${id}`),
+  saveOperationBoard: (data) => apiFetch('/operation-boards', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+  renameOperationBoard: (id, data) => apiFetch(`/operation-boards/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  }),
+  deleteOperationBoard: (id) => apiFetch(`/operation-boards/${id}`, {
+    method: 'DELETE',
+  }),
+
   // 이미지 업로드 (FormData — Content-Type 헤더 제거 필요, 401 refresh 포함)
+  uploadOperationBoardBackground: async (file) => {
+    async function doUpload() {
+      const form = new FormData();
+      form.append('file', file);
+      return fetch('/operation-boards/background', {
+        method: 'POST',
+        credentials: 'include',
+        body: form,
+      });
+    }
+
+    let res = await doUpload();
+
+    if (res.status === 401) {
+      const refreshRes = await fetch('/auth/refresh', { method: 'POST', credentials: 'include' });
+      if (refreshRes.ok) {
+        res = await doUpload();
+      } else {
+        window.dispatchEvent(new Event('auth:expired'));
+        throw new Error('세션이 만료되었습니다. 다시 로그인해주세요.');
+      }
+    }
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      let errMsg = `HTTP ${res.status}`;
+      try { errMsg = JSON.parse(errText).message || errMsg; } catch { /* 무시 */ }
+      throw new Error(errMsg);
+    }
+    const text = await res.text();
+    if (!text) return null;
+    try { return JSON.parse(text); } catch { return null; }
+  },
+
   uploadBoardImage: async (file) => {
     // apiFetch는 Content-Type: application/json을 강제하므로 직접 fetch 사용하되
     // 401 시 refresh 후 재시도 로직은 동일하게 구현
