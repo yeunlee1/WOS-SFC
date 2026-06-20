@@ -7,6 +7,7 @@ export default function OperationBoardSidePanel({
   open,
   chatOpen,
   participants,
+  savedListRefreshKey,
   onPermission,
   onToggleOpen,
   onToggleChat,
@@ -20,7 +21,7 @@ export default function OperationBoardSidePanel({
       {open && (
         <>
           <OperationBoardParticipants participants={participants} onPermission={onPermission} />
-          <OperationBoardSavedList onLoad={onLoadSaved} />
+          <OperationBoardSavedList onLoad={onLoadSaved} refreshKey={savedListRefreshKey} />
           <button type="button" className="operation-chat-toggle" onClick={onToggleChat}>
             {chatOpen ? '채팅 닫기' : '채팅 열기'}
           </button>

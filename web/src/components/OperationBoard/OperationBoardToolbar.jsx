@@ -89,10 +89,10 @@ export default function OperationBoardToolbar({
       <button type="button" onClick={() => fileRef.current?.click()} disabled={!canManage}>
         배경
       </button>
-      <button type="button" onClick={onResetBackground} disabled={!canDraw}>
+      <button type="button" onClick={onResetBackground} disabled={!canManage}>
         격자
       </button>
-      <button type="button" onClick={onClear} disabled={!canDraw}>
+      <button type="button" onClick={onClear} disabled={!canManage}>
         지우기
       </button>
       <button type="button" className="operation-save-btn" onClick={onSave} disabled={!canManage} aria-label="저장">

@@ -1,6 +1,11 @@
 // 작전판 SVG 드로잉 캔버스를 제공한다.
 import { useMemo, useRef, useState } from 'react';
-import { createOperationElement, OPERATION_MARKERS } from './operationBoardTypes';
+import {
+  compactOperationPath,
+  createOperationElement,
+  OPERATION_MARKERS,
+  sanitizeOperationElement,
+} from './operationBoardTypes';
 
 const BOARD_WIDTH = 1000;
 const BOARD_HEIGHT = 620;
@@ -187,14 +192,15 @@ export default function OperationBoardCanvas({
     setDraft((current) => {
       if (!current) return current;
       if (current.type === 'path') {
-        return { ...current, d: `${current.d} L ${point.x} ${point.y}` };
+        return { ...current, d: compactOperationPath(`${current.d} L ${point.x} ${point.y}`) };
       }
       return { ...current, x2: point.x, y2: point.y };
     });
   }
 
   function finishDraft() {
-    if (isMeaningfulDraft(draft)) onAddElement(draft);
+    const sanitized = sanitizeOperationElement(draft);
+    if (isMeaningfulDraft(sanitized)) onAddElement(sanitized);
     setDraft(null);
   }
 

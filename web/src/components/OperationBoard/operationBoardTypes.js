@@ -44,6 +44,7 @@ const NUMERIC_KEYS = [
 
 const STRING_KEYS = ['id', 'type', 'color', 'text', 'marker', 'd'];
 const BOOLEAN_KEYS = ['filled'];
+const MAX_PATH_LENGTH = 512;
 
 function makeOperationId() {
   const randomPart =
@@ -87,7 +88,7 @@ export function createOperationElement(type, payload = {}) {
   element.y2 = finiteNumber(payload.y2 ?? payload.y ?? element.y2);
 
   if (elementType === 'path') {
-    element.d = boundedString(payload.d || '', MAX_STRING_LENGTH);
+    element.d = compactOperationPath(payload.d || '');
   }
   if (elementType === 'text') {
     element.text = boundedString(payload.text, MAX_TEXT_LENGTH);
@@ -126,6 +127,10 @@ export function sanitizeOperationElement(element) {
   for (const key of STRING_KEYS) {
     if (key === 'id' || key === 'type') continue;
     if (element[key] === undefined) continue;
+    if (key === 'd') {
+      sanitized[key] = compactOperationPath(element[key]);
+      continue;
+    }
     const maxLength =
       key === 'text'
         ? MAX_TEXT_LENGTH
@@ -148,6 +153,23 @@ export function sanitizeOperationElements(elements) {
     .slice(-MAX_ELEMENTS)
     .map(sanitizeOperationElement)
     .filter(Boolean);
+}
+
+export function compactOperationPath(path) {
+  const tokens = String(path || '').match(/[ML]\s+-?\d+(?:\.\d+)?\s+-?\d+(?:\.\d+)?/g) || [];
+  if (tokens.length === 0) return '';
+  let step = 1;
+  let sampled = tokens;
+  while (sampled.join(' ').length > MAX_PATH_LENGTH && step < tokens.length) {
+    step += 1;
+    sampled = tokens.filter((_, index) => index === 0 || index === tokens.length - 1 || index % step === 0);
+  }
+  let result = sampled.join(' ');
+  while (result.length > MAX_PATH_LENGTH && sampled.length > 2) {
+    sampled.splice(sampled.length - 2, 1);
+    result = sampled.join(' ');
+  }
+  return result.slice(0, MAX_PATH_LENGTH);
 }
 
 export function canUseOperationTools(user, canDraw) {

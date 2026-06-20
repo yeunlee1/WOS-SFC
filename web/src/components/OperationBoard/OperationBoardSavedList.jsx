@@ -4,7 +4,7 @@ import { api } from '../../api';
 import { useStore } from '../../store';
 import { canManageOperationBoard } from './operationBoardTypes';
 
-export default function OperationBoardSavedList({ onLoad }) {
+export default function OperationBoardSavedList({ onLoad, refreshKey = 0 }) {
   const user = useStore((s) => s.user);
   const canManage = canManageOperationBoard(user);
   const [boards, setBoards] = useState([]);
@@ -15,7 +15,7 @@ export default function OperationBoardSavedList({ onLoad }) {
 
   useEffect(() => {
     refresh().catch(() => setBoards([]));
-  }, []);
+  }, [refreshKey]);
 
   async function rename(board) {
     const title = window.prompt('새 이름', board.title);
@@ -39,7 +39,7 @@ export default function OperationBoardSavedList({ onLoad }) {
         )}
         {boards.map((board) => (
           <div key={board.id} className="operation-saved-row">
-            <button type="button" onClick={() => onLoad(board)}>
+            <button type="button" onClick={() => onLoad(board)} disabled={!canManage}>
               {board.title}
             </button>
             {canManage && (

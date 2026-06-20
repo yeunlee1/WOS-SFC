@@ -11,6 +11,7 @@ export function useOperationBoardSocket(chatOpen = false) {
   const [canDraw, setCanDraw] = useState(false);
   const [connected, setConnected] = useState(false);
   const chatOpenRef = useRef(chatOpen);
+  const socketIdRef = useRef(null);
 
   useEffect(() => {
     chatOpenRef.current = chatOpen;
@@ -21,6 +22,7 @@ export function useOperationBoardSocket(chatOpen = false) {
     setConnected(socket.connected);
 
     function joinOperationBoard() {
+      socketIdRef.current = socket.id || null;
       socket.emit('operation:join', { chatOpen: chatOpenRef.current });
     }
     function handleConnect() {
@@ -37,7 +39,10 @@ export function useOperationBoardSocket(chatOpen = false) {
       setCanDraw(!!state.canDraw);
     }
     function handlePresence(next) {
-      setParticipants(Array.isArray(next) ? next : []);
+      const list = Array.isArray(next) ? next : [];
+      setParticipants(list);
+      const ownParticipant = list.find((participant) => participant.participantId === socketIdRef.current);
+      if (ownParticipant) setCanDraw(!!ownParticipant.canDraw);
     }
     function handleAdd(element) {
       setElements((prev) => [...prev, element].slice(-500));

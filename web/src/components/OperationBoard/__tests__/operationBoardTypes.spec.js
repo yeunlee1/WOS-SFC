@@ -6,6 +6,7 @@ import {
   sanitizeOperationElements,
   canManageOperationBoard,
   canUseOperationTools,
+  compactOperationPath,
 } from '../operationBoardTypes';
 
 describe('operationBoardTypes', () => {
@@ -71,5 +72,13 @@ describe('operationBoardTypes', () => {
     expect(canUseOperationTools({ role: 'admin' }, false)).toBe(true);
     expect(canManageOperationBoard({ role: 'developer' })).toBe(true);
     expect(canManageOperationBoard({ role: 'member' })).toBe(false);
+  });
+
+  it('keeps pen path strings inside backend live payload limits', () => {
+    const longPath = Array.from({ length: 160 }, (_, index) => `L ${index} ${index}`).join(' ');
+    const compacted = compactOperationPath(`M 0 0 ${longPath}`);
+
+    expect(compacted.length).toBeLessThanOrEqual(512);
+    expect(compacted.startsWith('M 0 0')).toBe(true);
   });
 });

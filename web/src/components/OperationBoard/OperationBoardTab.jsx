@@ -22,6 +22,7 @@ export default function OperationBoardTab() {
   const [sideOpen, setSideOpen] = useState(true);
   const [chatOpen, setChatOpen] = useState(false);
   const [status, setStatus] = useState('');
+  const [savedListRefreshKey, setSavedListRefreshKey] = useState(0);
   const socketState = useOperationBoardSocket(chatOpen);
 
   const canDraw = canUseOperationTools(user, socketState.canDraw);
@@ -30,11 +31,10 @@ export default function OperationBoardTab() {
   function handleToggleChat() {
     const next = !chatOpen;
     setChatOpen(next);
-    socketState.emitChatOpen(next);
   }
 
   function handleLoadSaved(board) {
-    if (!canDraw) return;
+    if (!canManage) return;
     socketState.emitClear();
     socketState.emitBackground({
       type: board.backgroundType || 'grid',
@@ -68,6 +68,7 @@ export default function OperationBoardTab() {
         elements: sanitizeOperationElements(socketState.elements),
       });
       setStatus('저장됨');
+      setSavedListRefreshKey((value) => value + 1);
     } catch (err) {
       setStatus(err.message || '저장 실패');
     }
@@ -121,6 +122,7 @@ export default function OperationBoardTab() {
         open={sideOpen}
         chatOpen={chatOpen}
         participants={socketState.participants}
+        savedListRefreshKey={savedListRefreshKey}
         onPermission={socketState.emitPermission}
         onToggleOpen={() => setSideOpen((value) => !value)}
         onToggleChat={handleToggleChat}

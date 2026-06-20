@@ -74,6 +74,10 @@ describe('OperationBoardTab', () => {
 
     expect(screen.getByText('그리기 가능')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '펜' })).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: '저장' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '배경' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '격자' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '지우기' })).toBeDisabled();
   });
 
   it('always enables operation tools for admin and developer users', () => {
