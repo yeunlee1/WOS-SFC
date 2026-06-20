@@ -143,7 +143,9 @@ describe('OperationBoardsService', () => {
   it('rejects image snapshots without a non-empty background image URL', async () => {
     const { service } = await setup();
 
-    for (const backgroundImageUrl of [null, undefined, '   ']) {
+    for (const backgroundImageUrl of [null, '   '] satisfies Array<
+      string | null
+    >) {
       await expect(
         service.saveSnapshot(
           { id: 1, nickname: 'devKo', role: 'developer' },
@@ -156,6 +158,20 @@ describe('OperationBoardsService', () => {
         ),
       ).rejects.toBeInstanceOf(BadRequestException);
     }
+
+    const malformedDto = {
+      title: '이미지 작전',
+      backgroundType: 'image',
+      backgroundImageUrl: undefined,
+      elements: [],
+    } as unknown as SaveOperationBoardDto;
+
+    await expect(
+      service.saveSnapshot(
+        { id: 1, nickname: 'devKo', role: 'developer' },
+        malformedDto,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('rejects save, rename, and delete attempts from member users', async () => {
