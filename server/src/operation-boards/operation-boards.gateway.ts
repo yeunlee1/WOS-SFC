@@ -20,6 +20,7 @@ type OperationUser = {
 };
 
 type OperationParticipant = OperationUser & {
+  participantId: string;
   canDraw: boolean;
   chatOpen: boolean;
 };
@@ -34,6 +35,22 @@ type OperationElement = Record<string, unknown> & {
 };
 
 const MAX_ELEMENTS = 500;
+const ELEMENT_JSON_BYTE_LIMIT = 20 * 1024;
+const ELEMENT_ID_MAX_LENGTH = 80;
+const ELEMENT_TEXT_MAX_LENGTH = 300;
+const ELEMENT_COLOR_MAX_LENGTH = 32;
+const ELEMENT_STRING_MAX_LENGTH = 512;
+const BACKGROUND_IMAGE_URL_MAX_LENGTH = 255;
+const BACKGROUND_IMAGE_URL_PREFIX = '/uploads/operation-boards/';
+const ALLOWED_ELEMENT_TYPES = new Set([
+  'path',
+  'line',
+  'arrow',
+  'rect',
+  'ellipse',
+  'text',
+  'marker',
+]);
 
 // production 환경에서 WEB_ORIGIN 미설정 시 CORS origin fallback을 막는다.
 if (process.env.NODE_ENV === 'production' && !process.env.WEB_ORIGIN) {
@@ -84,6 +101,7 @@ export class OperationBoardsGateway
 
     const participant: OperationParticipant = {
       ...user,
+      participantId: client.id,
       canDraw: this.isPrivilegedRole(user.role),
       chatOpen: body?.chatOpen === true,
     };
@@ -102,21 +120,26 @@ export class OperationBoardsGateway
   @SubscribeMessage('operation:permission:update')
   handlePermissionUpdate(
     @ConnectedSocket() client: Socket,
-    @MessageBody() body: { nickname?: unknown; canDraw?: unknown },
+    @MessageBody() body: { participantId?: unknown; canDraw?: unknown },
   ): OperationAck {
     const actor = this.participants.get(client.id);
     if (!actor || !this.isPrivilegedRole(actor.role)) return { ok: false };
-    if (typeof body?.nickname !== 'string') return { ok: false };
+    if (typeof body?.participantId !== 'string') return { ok: false };
     if (typeof body.canDraw !== 'boolean') return { ok: false };
 
-    let changed = false;
-    for (const participant of this.participants.values()) {
-      if (participant.nickname !== body.nickname) continue;
-      participant.canDraw =
-        this.isPrivilegedRole(participant.role) || body.canDraw;
-      changed = true;
-    }
-    if (changed) this.broadcastPresence();
+    const participant = this.participants.get(body.participantId);
+    if (!participant) return { ok: false };
+
+    participant.canDraw =
+      this.isPrivilegedRole(participant.role) || body.canDraw;
+    this.broadcastPresence();
+    return { ok: true };
+  }
+
+  @SubscribeMessage('operation:leave')
+  handleLeave(@ConnectedSocket() client: Socket): OperationAck {
+    const wasParticipant = this.participants.delete(client.id);
+    if (wasParticipant) this.broadcastPresence();
     return { ok: true };
   }
 
@@ -247,10 +270,45 @@ export class OperationBoardsGateway
     if (!element || typeof element !== 'object' || Array.isArray(element)) {
       return null;
     }
+    if (!this.isWithinJsonByteLimit(element, ELEMENT_JSON_BYTE_LIMIT)) {
+      return null;
+    }
 
-    const id = (element as { id?: unknown }).id;
-    if (typeof id !== 'string' || id.trim() === '') return null;
-    return element as OperationElement;
+    const source = element as Record<string, unknown>;
+    const id = this.normalizeRequiredString(
+      source.id,
+      ELEMENT_ID_MAX_LENGTH,
+    );
+    if (!id) return null;
+
+    const type = this.normalizeRequiredString(
+      source.type,
+      ELEMENT_STRING_MAX_LENGTH,
+    );
+    if (!type || !ALLOWED_ELEMENT_TYPES.has(type)) return null;
+
+    const sanitized: OperationElement = { id, type };
+    for (const [key, value] of Object.entries(source)) {
+      if (key === 'id' || key === 'type') continue;
+
+      if (typeof value === 'number') {
+        if (Number.isFinite(value)) sanitized[key] = value;
+        continue;
+      }
+
+      if (typeof value === 'string') {
+        const maxLength = this.getElementStringMaxLength(key);
+        if (value.length > maxLength) return null;
+        sanitized[key] = value;
+        continue;
+      }
+
+      if (typeof value === 'boolean') {
+        sanitized[key] = value;
+      }
+    }
+
+    return sanitized;
   }
 
   private normalizeBackground(body: unknown): OperationBackground | null {
@@ -259,12 +317,48 @@ export class OperationBoardsGateway
     const payload = body as { type?: unknown; imageUrl?: unknown };
     if (payload.type === 'grid') return { type: 'grid', imageUrl: null };
     if (payload.type === 'image') {
+      if (!this.isValidBackgroundImageUrl(payload.imageUrl)) return null;
       return {
         type: 'image',
-        imageUrl:
-          typeof payload.imageUrl === 'string' ? payload.imageUrl : null,
+        imageUrl: payload.imageUrl,
       };
     }
     return null;
+  }
+
+  private isWithinJsonByteLimit(value: unknown, maxBytes: number): boolean {
+    try {
+      const json = JSON.stringify(value);
+      return (
+        typeof json === 'string' &&
+        Buffer.byteLength(json, 'utf8') <= maxBytes
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  private normalizeRequiredString(
+    value: unknown,
+    maxLength: number,
+  ): string | null {
+    if (typeof value !== 'string') return null;
+    const trimmed = value.trim();
+    if (trimmed === '' || trimmed.length > maxLength) return null;
+    return trimmed;
+  }
+
+  private getElementStringMaxLength(key: string): number {
+    if (key === 'text') return ELEMENT_TEXT_MAX_LENGTH;
+    if (key === 'color') return ELEMENT_COLOR_MAX_LENGTH;
+    return ELEMENT_STRING_MAX_LENGTH;
+  }
+
+  private isValidBackgroundImageUrl(value: unknown): value is string {
+    return (
+      typeof value === 'string' &&
+      value.length <= BACKGROUND_IMAGE_URL_MAX_LENGTH &&
+      value.startsWith(BACKGROUND_IMAGE_URL_PREFIX)
+    );
   }
 }

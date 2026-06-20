@@ -88,6 +88,7 @@ describe('OperationBoardsGateway', () => {
       background: { type: 'grid', imageUrl: null },
       participants: [
         {
+          participantId: 's-admin',
           nickname: 'adminKo',
           alliance: 'KOR',
           role: 'admin',
@@ -99,6 +100,7 @@ describe('OperationBoardsGateway', () => {
     });
     expect(server.emit).toHaveBeenCalledWith('operation:presence', [
       {
+        participantId: 's-admin',
         nickname: 'adminKo',
         alliance: 'KOR',
         role: 'admin',
@@ -129,7 +131,7 @@ describe('OperationBoardsGateway', () => {
     );
 
     const permissionAck = gateway.handlePermissionUpdate(adminSocket, {
-      nickname: 'memberKo',
+      participantId: memberSocket.id,
       canDraw: true,
     });
 
@@ -176,11 +178,98 @@ describe('OperationBoardsGateway', () => {
     );
   });
 
+  it('grants draw permission only to the matching participantId for duplicate nicknames', () => {
+    const secondMemberSocket = makeSocket('s-member-2', 'member');
+    gateway.handleJoin(adminSocket, {});
+    gateway.handleJoin(memberSocket, {});
+    gateway.handleJoin(secondMemberSocket, {});
+    server.emit.mockClear();
+
+    const permissionAck = gateway.handlePermissionUpdate(adminSocket, {
+      participantId: memberSocket.id,
+      canDraw: true,
+    });
+
+    expect(permissionAck).toEqual({ ok: true });
+    expect(
+      gateway.handleElementAdd(memberSocket, { id: 'e1', type: 'marker' }),
+    ).toEqual({ ok: true });
+    expect(
+      gateway.handleElementAdd(secondMemberSocket, {
+        id: 'e2',
+        type: 'marker',
+      }),
+    ).toEqual({ ok: false });
+    expect(server.emit).toHaveBeenCalledWith(
+      'operation:presence',
+      expect.arrayContaining([
+        expect.objectContaining({
+          participantId: 's-member',
+          nickname: 'memberKo',
+          canDraw: true,
+        }),
+        expect.objectContaining({
+          participantId: 's-member-2',
+          nickname: 'memberKo',
+          canDraw: false,
+        }),
+      ]),
+    );
+    expect(server.emit).toHaveBeenCalledWith('operation:element:add', {
+      id: 'e1',
+      type: 'marker',
+    });
+    expect(server.emit).not.toHaveBeenCalledWith('operation:element:add', {
+      id: 'e2',
+      type: 'marker',
+    });
+  });
+
+  it('removes joined presence and temporary draw permission on operation:leave', () => {
+    gateway.handleJoin(adminSocket, {});
+    gateway.handleJoin(memberSocket, {});
+    gateway.handlePermissionUpdate(adminSocket, {
+      participantId: memberSocket.id,
+      canDraw: true,
+    });
+    expect(
+      gateway.handleElementAdd(memberSocket, { id: 'e1', type: 'marker' }),
+    ).toEqual({ ok: true });
+    server.emit.mockClear();
+
+    const gatewayWithLeave = gateway as unknown as {
+      handleLeave?: (client: Socket) => { ok: boolean };
+    };
+    expect(gatewayWithLeave.handleLeave).toBeDefined();
+    expect(gatewayWithLeave.handleLeave?.(memberSocket)).toEqual({ ok: true });
+    expect(server.emit).toHaveBeenCalledWith(
+      'operation:presence',
+      expect.not.arrayContaining([
+        expect.objectContaining({ participantId: 's-member' }),
+      ]),
+    );
+
+    server.emit.mockClear();
+    gateway.handleJoin(memberSocket, {});
+
+    expect(memberSocket.emit).toHaveBeenLastCalledWith(
+      'operation:state',
+      expect.objectContaining({ canDraw: false }),
+    );
+    expect(
+      gateway.handleElementAdd(memberSocket, { id: 'e2', type: 'marker' }),
+    ).toEqual({ ok: false });
+    expect(server.emit).not.toHaveBeenCalledWith(
+      'operation:element:add',
+      expect.anything(),
+    );
+  });
+
   it('allows only admin or developer participants to change draw permission', () => {
     gateway.handleJoin(memberSocket, {});
 
     const ack = gateway.handlePermissionUpdate(memberSocket, {
-      nickname: 'memberKo',
+      participantId: memberSocket.id,
       canDraw: true,
     });
 
@@ -202,6 +291,7 @@ describe('OperationBoardsGateway', () => {
     expect(ack).toEqual({ ok: true });
     expect(server.emit).toHaveBeenCalledWith('operation:presence', [
       {
+        participantId: 's-member',
         nickname: 'memberKo',
         alliance: 'NSL',
         role: 'member',
@@ -209,6 +299,61 @@ describe('OperationBoardsGateway', () => {
         chatOpen: true,
       },
     ]);
+  });
+
+  it('rejects oversized or invalid elements and broadcasts sanitized shallow elements', () => {
+    gateway.handleJoin(adminSocket, {});
+    server.emit.mockClear();
+
+    expect(
+      gateway.handleElementAdd(adminSocket, {
+        id: 'e-safe',
+        type: 'text',
+        x: 10,
+        y: 20,
+        text: '집결',
+        color: '#ffcc00',
+        label: 'main',
+        points: [{ x: 1, y: 2 }],
+        meta: { nested: true },
+        opacity: Number.POSITIVE_INFINITY,
+      }),
+    ).toEqual({ ok: true });
+    expect(server.emit).toHaveBeenCalledWith('operation:element:add', {
+      id: 'e-safe',
+      type: 'text',
+      x: 10,
+      y: 20,
+      text: '집결',
+      color: '#ffcc00',
+      label: 'main',
+    });
+
+    server.emit.mockClear();
+
+    expect(
+      gateway.handleElementAdd(adminSocket, {
+        id: 'e-oversized',
+        type: 'text',
+        note: 'x'.repeat(21 * 1024),
+      }),
+    ).toEqual({ ok: false });
+    expect(
+      gateway.handleElementAdd(adminSocket, {
+        id: 'e-unknown',
+        type: 'freehand',
+      }),
+    ).toEqual({ ok: false });
+    expect(
+      gateway.handleElementAdd(adminSocket, {
+        id: 'x'.repeat(81),
+        type: 'marker',
+      }),
+    ).toEqual({ ok: false });
+    expect(server.emit).not.toHaveBeenCalledWith(
+      'operation:element:add',
+      expect.anything(),
+    );
   });
 
   it('broadcasts accepted drawing mutations and keeps at most 500 live elements', () => {
@@ -278,5 +423,33 @@ describe('OperationBoardsGateway', () => {
       type: 'grid',
       imageUrl: null,
     });
+  });
+
+  it('rejects invalid or oversized operation-board background image URLs', () => {
+    gateway.handleJoin(adminSocket, {});
+    server.emit.mockClear();
+
+    expect(
+      gateway.handleBackgroundUpdate(adminSocket, {
+        type: 'image',
+        imageUrl: 'https://example.test/map.webp',
+      }),
+    ).toEqual({ ok: false });
+    expect(
+      gateway.handleBackgroundUpdate(adminSocket, {
+        type: 'image',
+        imageUrl: '/uploads/not-operation-boards/map.webp',
+      }),
+    ).toEqual({ ok: false });
+    expect(
+      gateway.handleBackgroundUpdate(adminSocket, {
+        type: 'image',
+        imageUrl: `/uploads/operation-boards/${'x'.repeat(260)}`,
+      }),
+    ).toEqual({ ok: false });
+    expect(server.emit).not.toHaveBeenCalledWith(
+      'operation:background:update',
+      expect.anything(),
+    );
   });
 });
