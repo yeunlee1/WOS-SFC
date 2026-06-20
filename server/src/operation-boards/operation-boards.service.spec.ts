@@ -298,3 +298,36 @@ describe('OperationBoard DTO validation', () => {
     expect(errors.some((error) => error.property === 'title')).toBe(true);
   });
 });
+
+describe('operation board background upload options', () => {
+  it('keeps background uploads image-only, single-file, and bounded', () => {
+    const mod = require('./operation-board-upload.options') as {
+      OPERATION_BOARD_BACKGROUND_LIMITS: Record<string, number>;
+      OPERATION_BOARD_BACKGROUND_ALLOWED_MIME_TYPES: string[];
+      OPERATION_BOARD_BACKGROUND_EXTENSION_BY_MIME_TYPE: Record<
+        string,
+        string
+      >;
+    };
+
+    expect(mod.OPERATION_BOARD_BACKGROUND_LIMITS).toEqual({
+      fileSize: 8 * 1024 * 1024,
+      files: 1,
+      fields: 0,
+      parts: 1,
+      fieldNameSize: 100,
+    });
+    expect(mod.OPERATION_BOARD_BACKGROUND_ALLOWED_MIME_TYPES).toEqual([
+      'image/jpeg',
+      'image/png',
+      'image/webp',
+    ]);
+    expect(
+      mod.OPERATION_BOARD_BACKGROUND_EXTENSION_BY_MIME_TYPE,
+    ).toMatchObject({
+      'image/jpeg': '.jpg',
+      'image/png': '.png',
+      'image/webp': '.webp',
+    });
+  });
+});
