@@ -15,6 +15,7 @@ import { Translation } from './translations/translation.entity';
 import { AllianceNotice } from './alliance-notices/alliance-notice.entity';
 import { RallyGroup } from './rally-groups/rally-group.entity';
 import { RallyGroupMember } from './rally-groups/rally-group-member.entity';
+import { OperationBoard } from './operation-boards/operation-board.entity';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { ChatModule } from './chat/chat.module';
@@ -30,6 +31,7 @@ import { AdminModule } from './admin/admin.module';
 import { AllianceNoticesModule } from './alliance-notices/alliance-notices.module';
 import { MeModule } from './me/me.module';
 import { RallyGroupsModule } from './rally-groups/rally-groups.module';
+import { OperationBoardsModule } from './operation-boards/operation-boards.module';
 
 @Module({
   imports: [
@@ -49,7 +51,7 @@ import { RallyGroupsModule } from './rally-groups/rally-groups.module';
           username: configService.get<string>('DATABASE_USER'),
           password: configService.get<string>('DATABASE_PASSWORD'),
           database: configService.get<string>('DATABASE_NAME'),
-          entities: [User, Message, Notice, Rally, Member, BoardPost, Translation, AllianceNotice, RallyGroup, RallyGroupMember],
+          entities: [User, Message, Notice, Rally, Member, BoardPost, Translation, AllianceNotice, RallyGroup, RallyGroupMember, OperationBoard],
           synchronize: !isProduction && allowSync,
         };
       },
@@ -60,6 +62,7 @@ import { RallyGroupsModule } from './rally-groups/rally-groups.module';
                 '/boards/*path', '/translations/*path', '/users/*path',
                 '/translate/*path', '/tts-audio/*path', '/admin/*path',
                 '/alliance-notices/*path', '/me/*path', '/rally-groups/*path',
+                '/operation-boards/*path',
                 '/time', '/socket.io/*path',
                 '/uploads/*path'],
       serveStaticOptions: { fallthrough: false },
@@ -84,6 +87,7 @@ import { RallyGroupsModule } from './rally-groups/rally-groups.module';
     AllianceNoticesModule,
     MeModule,
     RallyGroupsModule,
+    OperationBoardsModule,
   ],
   controllers: [AppController],
 })

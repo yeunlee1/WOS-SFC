@@ -1,19 +1,21 @@
 // server/src/boards/boards.controller.ts
 import {
-  Controller, Post, Delete, Param, Body,
-  UseGuards, ParseIntPipe, UseInterceptors, UploadedFile,
+  Controller,
+  Post,
+  Delete,
+  Param,
+  Body,
+  UseGuards,
+  ParseIntPipe,
+  UseInterceptors,
+  UploadedFile,
   BadRequestException,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
-import { extname, join } from 'path';
-import { existsSync, mkdirSync } from 'fs';
-import { v4 as uuidv4 } from 'uuid';
 import { BoardsService } from './boards.service';
 import { CreateBoardPostDto } from './dto/create-board-post.dto';
-
-const UPLOAD_DIR = join(process.cwd(), '..', 'uploads', 'boards');
+import { BOARD_UPLOAD_OPTIONS } from './board-upload.options';
 
 @Controller('boards')
 @UseGuards(AuthGuard('jwt'))
@@ -26,26 +28,7 @@ export class BoardsController {
   }
 
   @Post('upload')
-  @UseInterceptors(FileInterceptor('file', {
-    storage: diskStorage({
-      destination: (req, file, cb) => {
-        if (!existsSync(UPLOAD_DIR)) mkdirSync(UPLOAD_DIR, { recursive: true });
-        cb(null, UPLOAD_DIR);
-      },
-      filename: (req, file, cb) => {
-        const ext = extname(file.originalname).toLowerCase();
-        cb(null, `${Date.now()}-${uuidv4()}${ext}`);
-      },
-    }),
-    fileFilter: (req, file, cb) => {
-      const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-      if (!allowed.includes(file.mimetype)) {
-        return cb(new BadRequestException('이미지 파일만 업로드 가능합니다'), false);
-      }
-      cb(null, true);
-    },
-    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
-  }))
+  @UseInterceptors(FileInterceptor('file', BOARD_UPLOAD_OPTIONS))
   uploadImage(@UploadedFile() file: Express.Multer.File) {
     if (!file) throw new BadRequestException('파일이 없습니다');
     return { url: `/uploads/boards/${file.filename}` };

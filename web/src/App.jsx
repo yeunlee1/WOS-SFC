@@ -17,6 +17,7 @@ import IconRail from './components/Layout/IconRail';
 import UserPopover from './components/Layout/UserPopover';
 import CommandPalette from './components/Layout/CommandPalette';
 import BattleTab from './components/Battle/BattleTab';
+import OperationBoardTab from './components/OperationBoard/OperationBoardTab';
 import CommunityTab from './components/Community/CommunityTab';
 import ChatTab from './components/Chat/ChatTab';
 import ChatDock from './components/Chat/ChatDock';
@@ -198,6 +199,7 @@ export default function App() {
           />
           <main className="tab-content">
             {activeTab === 'battle'    && <BattleTab />}
+            {activeTab === 'operation' && <OperationBoardTab />}
             {activeTab === 'community' && <CommunityTab />}
             {activeTab === 'chat'      && <ChatTab />}
             {activeTab === 'admin' && user?.role === 'developer' && <AdminTab />}

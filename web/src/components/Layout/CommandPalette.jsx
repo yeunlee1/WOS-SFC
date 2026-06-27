@@ -6,6 +6,7 @@ import { stopAllTts } from '../Battle/tts';
 
 const TAB_DEFS = [
   { id: 'battle',    icon: '⚔', i18nKey: 'tabBattle' },
+  { id: 'operation', icon: '✦', i18nKey: 'tabOperation' },
   { id: 'community', icon: '◫', i18nKey: 'tabCommunity' },
   { id: 'chat',      icon: '✉', i18nKey: 'tabChat' },
 ];
