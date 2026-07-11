@@ -1,11 +1,24 @@
-import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  OnModuleInit,
+  Logger,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash } from 'crypto';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as fsPromises from 'fs/promises';
 import axios from 'axios';
-import { LANGS, GOOGLE_VOICES, PHRASES, TTS_PREGEN_MAX, SPEAKING_RATE, getTtsText } from './tts.constants';
+import {
+  LANGS,
+  GOOGLE_VOICES,
+  PHRASES,
+  TTS_KEYS,
+  TTS_PREGEN_MAX,
+  SPEAKING_RATE,
+  getTtsText,
+} from './tts.constants';
 
 // ── 동시 Google TTS 호출 수 제한 ─────────────────────────────────────────
 class Semaphore {
@@ -39,15 +52,19 @@ export class TtsService implements OnModuleInit {
   private readonly logger = new Logger(TtsService.name);
   private readonly apiKey: string;
   private readonly cacheDir: string;
+  private readonly allowedFilePaths: ReadonlyMap<string, string>;
   // Google TTS 무료 티어도 초당 요청 제한 있음 — 동시 3개로 제한
   private readonly semaphore = new Semaphore(3);
   // 동일 파일 중복 생성 방지 — 같은 키에 대한 요청을 하나의 Promise로 합침
-  private readonly pendingFiles = new Map<string, Promise<string>>();
+  private readonly pendingFiles = new Map<string, Promise<void>>();
 
   constructor(private config: ConfigService) {
     this.apiKey  = this.config.get<string>('GOOGLE_TTS_API_KEY') || '';
-    this.cacheDir = this.config.get<string>('TTS_CACHE_DIR')
-      || path.join(process.cwd(), 'tts-cache');
+    this.cacheDir = path.resolve(
+      this.config.get<string>('TTS_CACHE_DIR') ||
+        path.join(process.cwd(), 'tts-cache'),
+    );
+    this.allowedFilePaths = this.buildAllowedFilePaths();
     if (!fs.existsSync(this.cacheDir)) fs.mkdirSync(this.cacheDir, { recursive: true });
   }
 
@@ -74,9 +91,43 @@ export class TtsService implements OnModuleInit {
     this.preGenerateAll().catch(e => this.logger.error('preGenerateAll 실패', e));
   }
 
-  // 파일 경로 규칙: {cacheDir}/{lang}-{key}.mp3
+  private buildAllowedFilePaths(): ReadonlyMap<string, string> {
+    const allowed = new Map<string, string>();
+    for (const lang of LANGS) {
+      for (const key of TTS_KEYS) {
+        const filePath = this.resolveCacheFilePath(`${lang}-${key}.mp3`);
+        allowed.set(this.fileLookupKey(lang, key), filePath);
+      }
+    }
+    return allowed;
+  }
+
+  private resolveCacheFilePath(fileName: string): string {
+    const filePath = path.resolve(this.cacheDir, fileName);
+    const relative = path.relative(this.cacheDir, filePath);
+    if (
+      relative === '' ||
+      relative === '..' ||
+      relative.startsWith(`..${path.sep}`) ||
+      path.isAbsolute(relative) ||
+      relative.includes(path.sep)
+    ) {
+      throw new Error('TTS 캐시 경로가 안전한 루트를 벗어났습니다');
+    }
+    return filePath;
+  }
+
+  private fileLookupKey(lang: string, key: string): string {
+    return `${lang}\0${key}`;
+  }
+
+  // HTTP 입력에서 만든 문자열이 아니라 내부 allowlist가 보유한 경로만 반환한다.
   private filePath(lang: string, key: string): string {
-    return path.join(this.cacheDir, `${lang}-${key}.mp3`);
+    const filePath = this.allowedFilePaths.get(this.fileLookupKey(lang, key));
+    if (!filePath) {
+      throw new BadRequestException('허용되지 않은 TTS 파일입니다');
+    }
+    return filePath;
   }
 
   // ── 캐시 메타 자동 무효화 ────────────────────────────────────────────────
@@ -141,12 +192,12 @@ export class TtsService implements OnModuleInit {
   //   디스크 쓰기 중 중단된 파일이 그대로 유지되어 영구적으로 해당 숫자가
   //   "재생은 되지만 소리가 안 나는" 상태가 된다. exists + size >= MIN 두 조건으로
   //   한 번 걸러낸 뒤 못 통과하면 재생성.
-  async ensureFile(lang: string, key: string, text: string): Promise<string> {
+  async ensureFile(lang: string, key: string, text: string): Promise<void> {
     const fp = this.filePath(lang, key);
-    const healthy = await fsPromises.stat(fp)
+    const healthy = await fsPromises.lstat(fp)
       .then((st) => st.isFile() && st.size >= TtsService.MIN_MP3_BYTES)
       .catch(() => false);
-    if (healthy) return fp;
+    if (healthy) return;
     // 손상 파일이 있으면 삭제 (재생성 경로로 진입) — race-safe: ENOENT 무시
     await fsPromises.unlink(fp).catch(() => {});
 
@@ -163,6 +214,24 @@ export class TtsService implements OnModuleInit {
     return promise;
   }
 
+  async prepareAudio(
+    lang: string,
+    key: string,
+    text: string,
+  ): Promise<fs.Stats> {
+    await this.ensureFile(lang, key, text);
+    const fp = this.filePath(lang, key);
+    const stat = await fsPromises.lstat(fp);
+    if (!stat.isFile()) {
+      throw new Error('TTS 캐시 파일이 일반 파일이 아닙니다');
+    }
+    return stat;
+  }
+
+  createAudioStream(lang: string, key: string): fs.ReadStream {
+    return fs.createReadStream(this.filePath(lang, key));
+  }
+
   // Google TTS가 간혹 거의 빈 MP3(무음)를 반환하는 것을 감지하기 위한 최소 바이트.
   // 관찰값: 손상 파일 ≤900 bytes / 정상 파일 ≥1600 bytes.
   // 짧은 한국어 1음절(예: "오", "팔") 정상 발화도 최소 2KB 이상이므로 1000 bytes 미만은 손상으로 간주.
@@ -175,8 +244,8 @@ export class TtsService implements OnModuleInit {
 
   // 실제 파일 생성 — 무음 응답 시 재시도(exponential backoff).
   // 모든 시도 실패 시 throw → ensureFile이 에러 전파, 캐시에 손상 파일 저장되지 않음.
-  private async generateFile(lang: string, key: string, fp: string, text: string): Promise<string> {
-    const tmpFp = `${fp}.tmp`;
+  private async generateFile(lang: string, key: string, fp: string, text: string): Promise<void> {
+    const tmpFp = this.resolveCacheFilePath(`${path.basename(fp)}.tmp`);
     let lastError: Error | null = null;
 
     for (let attempt = 1; attempt <= TtsService.MAX_TTS_RETRIES; attempt++) {
@@ -197,7 +266,7 @@ export class TtsService implements OnModuleInit {
         }
         await fsPromises.writeFile(tmpFp, buf);
         await fsPromises.rename(tmpFp, fp);
-        return fp;
+        return;
       } catch (e) {
         lastError = e as Error;
         await fsPromises.unlink(tmpFp).catch(() => {});
@@ -212,10 +281,6 @@ export class TtsService implements OnModuleInit {
 
   fileExists(lang: string, key: string): boolean {
     return fs.existsSync(this.filePath(lang, key));
-  }
-
-  getFilePath(lang: string, key: string): string {
-    return this.filePath(lang, key);
   }
 
   // Google Cloud TTS REST API 호출
