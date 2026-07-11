@@ -1,6 +1,6 @@
-# PR 트리거 자동 검증 — npm workspace(루트)에서 install 후 web/server 각자 빌드·테스트.
+# PR 트리거 자동 검증. npm workspace(루트)에서 install 후 web/server 각자 빌드·테스트.
 # Branch protection의 required status check 대상.
-# path filter 없음: docs-only PR도 항상 CI 돌려야 required check 통과 가능 (없으면 영구 BLOCKED).
+# path filter 없음. docs-only PR도 항상 CI를 실행해야 required check 통과 가능 (없으면 영구 BLOCKED).
 name: test
 
 on:
@@ -8,6 +8,9 @@ on:
     branches: [master]
   push:
     branches: [master]
+
+permissions:
+  contents: read
 
 jobs:
   web:
@@ -18,8 +21,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: "20"
+          cache: "npm"
       - name: Install workspaces (root)
         run: npm ci
       - name: Test (Vitest)
@@ -37,10 +40,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: "20"
+          cache: "npm"
       - name: Install workspaces (root)
         run: npm ci
+      - name: Test (Jest)
+        working-directory: server
+        run: npm test -- --runInBand
       - name: Build
         working-directory: server
         run: npm run build
