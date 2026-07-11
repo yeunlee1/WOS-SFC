@@ -54,21 +54,42 @@ export const TTS_NUM_MAX = 180;  // 최대 허용 상한 (3분 = 180초)
 // 1~180 × 4개 언어 + 문구 ≈ 약 2,200자 (무료 티어 1,000,000자 이내)
 export const TTS_PREGEN_MAX = 180;
 
+// 요청값을 그대로 경로에 전달하지 않도록 내부에서 만든 canonical 값만 반환한다.
+export const TTS_KEYS = Object.freeze([
+  ...Object.keys(PHRASES),
+  ...Array.from(
+    { length: TTS_NUM_MAX - TTS_NUM_MIN + 1 },
+    (_, index) => String(index + TTS_NUM_MIN),
+  ),
+]);
+
+const TTS_LANG_BY_INPUT = new Map<string, TtsLang>(
+  LANGS.map((lang) => [lang, lang]),
+);
+const TTS_KEY_BY_INPUT = new Map<string, string>(
+  TTS_KEYS.map((key) => [key, key]),
+);
+
+export function parseTtsLang(value: string): TtsLang | null {
+  return TTS_LANG_BY_INPUT.get(value) ?? null;
+}
+
+export function parseTtsKey(value: string): string | null {
+  return TTS_KEY_BY_INPUT.get(value) ?? null;
+}
+
 /**
  * 허용된 TTS 키인지 검증 — 화이트리스트 초과 요청으로 API 비용 폭탄 방지
- * 유효한 키: PHRASES 키(start/stop/finish) 또는 1~600 사이의 정수
+ * 유효한 키: PHRASES의 own key 또는 canonical 표기인 1~180 사이의 정수
  */
 export function isValidTtsKey(key: string): boolean {
-  if (PHRASES[key]) return true;
-  if (/^\d+$/.test(key)) {
-    const n = parseInt(key, 10);
-    return n >= TTS_NUM_MIN && n <= TTS_NUM_MAX;
-  }
-  return false;
+  return parseTtsKey(key) !== null;
 }
 
 /** 키에 해당하는 TTS 텍스트 반환 */
 export function getTtsText(lang: string, key: string): string {
-  if (PHRASES[key]) return PHRASES[key][lang] || PHRASES[key]['en'];
+  if (Object.prototype.hasOwnProperty.call(PHRASES, key)) {
+    return PHRASES[key][lang] || PHRASES[key]['en'];
+  }
   return key; // 숫자는 그대로 (서비스에서 SSML로 감쌈)
 }
