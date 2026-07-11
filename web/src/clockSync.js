@@ -29,8 +29,8 @@ const RTT_STDDEV_RESAMPLE_THRESHOLD_MS = 100;
  * personalOffsetMs 변경은 별도 effect에서 임계값 무관 즉시 처리.
  */
 export const RESCHEDULE_THRESHOLD_MS = 1000;
-const SMOOTH_THRESHOLD_MS = 50;     // 이 미만 변동은 noise로 무시
-const JUMP_THRESHOLD_MS = 500;       // 이 이상은 클럭 점프 — 즉시 채택
+const SMOOTH_THRESHOLD_MS = 50; // 이 미만 변동은 noise로 무시
+const JUMP_THRESHOLD_MS = 500; // 이 이상은 클럭 점프 — 즉시 채택
 const SMOOTH_OLD_WEIGHT = 0.3;
 const SMOOTH_NEW_WEIGHT = 0.7;
 // ws ping은 keep-alive 연결 위에서 동작 — REST(HTTP overhead 5~20ms)보다 가벼움.
@@ -44,8 +44,11 @@ let _hasSynced = false;
 let _periodicTimer = null;
 let _driftTimer = null;
 let _lastWallMs = Date.now();
-let _lastPerfMs = (typeof performance !== 'undefined') ? performance.now() : 0;
+let _lastPerfMs = typeof performance !== 'undefined' ? performance.now() : 0;
 let _broadcastChannel = null;
+let _startupPromise = null;
+let _started = false;
+let _lifecycleToken = 0;
 
 /**
  * 디바이스 시각 → 서버 기준 시각으로 변환.
@@ -69,7 +72,10 @@ async function fetchOneSample() {
     const wsResult = await new Promise((resolve) => {
       let settled = false;
       const timeout = setTimeout(() => {
-        if (!settled) { settled = true; resolve(null); }
+        if (!settled) {
+          settled = true;
+          resolve(null);
+        }
       }, WS_PING_TIMEOUT_MS);
       try {
         sock.emit('time:ping', null, (res) => {
@@ -78,8 +84,8 @@ async function fetchOneSample() {
           clearTimeout(timeout);
           const t3 = Date.now();
           if (res && typeof res.t1 === 'number' && typeof res.t2 === 'number') {
-            const rtt = (t3 - t0) - (res.t2 - res.t1);
-            const offset = ((res.t1 - t0) + (res.t2 - t3)) / 2;
+            const rtt = t3 - t0 - (res.t2 - res.t1);
+            const offset = (res.t1 - t0 + (res.t2 - t3)) / 2;
             if (Number.isFinite(rtt) && Number.isFinite(offset)) {
               resolve({ rtt, offset });
               return;
@@ -88,7 +94,11 @@ async function fetchOneSample() {
           resolve(null);
         });
       } catch {
-        if (!settled) { settled = true; clearTimeout(timeout); resolve(null); }
+        if (!settled) {
+          settled = true;
+          clearTimeout(timeout);
+          resolve(null);
+        }
       }
     });
     if (wsResult) return wsResult;
@@ -100,8 +110,8 @@ async function fetchOneSample() {
     const t3 = Date.now();
     let rtt, offset;
     if (typeof res.t1 === 'number' && typeof res.t2 === 'number') {
-      rtt = (t3 - t0) - (res.t2 - res.t1);
-      offset = ((res.t1 - t0) + (res.t2 - t3)) / 2;
+      rtt = t3 - t0 - (res.t2 - res.t1);
+      offset = (res.t1 - t0 + (res.t2 - t3)) / 2;
     } else {
       // 백워드 호환: 단계 1 머지 전 응답 형식
       rtt = t3 - t0;
@@ -153,7 +163,10 @@ export async function syncTime(_isResample = false) {
   }
 
   // RTT 표준편차 100ms+ → 네트워크 불안정 → 1회 추가 재샘플 (무한 재귀 방지: _isResample 플래그)
-  if (!_isResample && calcRttStddev(samples) >= RTT_STDDEV_RESAMPLE_THRESHOLD_MS) {
+  if (
+    !_isResample &&
+    calcRttStddev(samples) >= RTT_STDDEV_RESAMPLE_THRESHOLD_MS
+  ) {
     console.warn(
       '[clockSync] RTT 표준편차 과다 (%dms), 재샘플 실행',
       Math.round(calcRttStddev(samples)),
@@ -178,7 +191,8 @@ export async function syncTime(_isResample = false) {
     finalOffset = prevOffset;
   } else {
     // 50~500ms 범위는 EMA 스무딩 — 카운트다운이 시각적으로 튀지 않도록
-    finalOffset = prevOffset * SMOOTH_OLD_WEIGHT + best.offset * SMOOTH_NEW_WEIGHT;
+    finalOffset =
+      prevOffset * SMOOTH_OLD_WEIGHT + best.offset * SMOOTH_NEW_WEIGHT;
   }
   _hasSynced = true;
 
@@ -188,7 +202,11 @@ export async function syncTime(_isResample = false) {
   // 멀티탭 공유 — 다른 탭들이 자기 fetch 안 하고 이 결과 사용
   if (_broadcastChannel) {
     try {
-      _broadcastChannel.postMessage({ type: 'offset', offset: finalOffset, rtt: best.rtt });
+      _broadcastChannel.postMessage({
+        type: 'offset',
+        offset: finalOffset,
+        rtt: best.rtt,
+      });
     } catch {
       // 채널 닫혔거나 직렬화 실패 — 무시
     }
@@ -196,7 +214,10 @@ export async function syncTime(_isResample = false) {
 
   console.info(
     '[clockSync] offset=%dms rtt=%dms samples=%d delta=%dms',
-    Math.round(finalOffset), best.rtt, samples.length, Math.round(delta),
+    Math.round(finalOffset),
+    best.rtt,
+    samples.length,
+    Math.round(delta),
   );
 
   return { offset: finalOffset, rtt: best.rtt, samples };
@@ -215,11 +236,13 @@ function startDriftCheck() {
   _driftTimer = setInterval(() => {
     const wall = Date.now();
     const perf = performance.now();
-    const drift = (wall - _lastWallMs) - (perf - _lastPerfMs);
+    const drift = wall - _lastWallMs - (perf - _lastPerfMs);
     _lastWallMs = wall;
     _lastPerfMs = perf;
     if (Math.abs(drift) > DRIFT_THRESHOLD_MS) {
-      console.warn(`[clockSync] system clock 점프 감지 (drift=${Math.round(drift)}ms), 재동기화`);
+      console.warn(
+        `[clockSync] system clock 점프 감지 (drift=${Math.round(drift)}ms), 재동기화`,
+      );
       syncTime().catch(() => {});
     }
   }, DRIFT_CHECK_MS);
@@ -252,7 +275,11 @@ export function stopPeriodicSync() {
 /**
  * 부팅 시 1회 호출 — 멀티탭 채널 시작 + 첫 동기화 + 주기적 timer + drift 감지 모두 활성.
  */
-export async function startup() {
+export function startup() {
+  if (_started) return Promise.resolve();
+  if (_startupPromise) return _startupPromise;
+
+  const lifecycleToken = ++_lifecycleToken;
   if (typeof BroadcastChannel !== 'undefined' && !_broadcastChannel) {
     try {
       _broadcastChannel = new BroadcastChannel('wos-clock');
@@ -268,19 +295,34 @@ export async function startup() {
       // BroadcastChannel 미지원 (Safari 구버전 등) — 무시, 단일 탭 모드
     }
   }
-  await syncTime();
-  startPeriodicSync();
-  startDriftCheck();
+  const pending = (async () => {
+    await syncTime();
+    if (lifecycleToken !== _lifecycleToken) return;
+    startPeriodicSync();
+    startDriftCheck();
+    _started = true;
+  })();
+
+  const tracked = pending.finally(() => {
+    if (_startupPromise === tracked) _startupPromise = null;
+  });
+  _startupPromise = tracked;
+  return tracked;
 }
 
 /**
  * 언마운트 시 호출 — 모든 timer 및 채널 정리.
  */
 export function shutdown() {
+  _lifecycleToken += 1;
+  _started = false;
+  _startupPromise = null;
   stopPeriodicSync();
   stopDriftCheck();
   if (_broadcastChannel) {
-    try { _broadcastChannel.close(); } catch {
+    try {
+      _broadcastChannel.close();
+    } catch {
       // 이미 닫힘 — 무시
     }
     _broadcastChannel = null;

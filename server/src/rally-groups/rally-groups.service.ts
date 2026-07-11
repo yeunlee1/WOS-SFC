@@ -460,6 +460,20 @@ export class RallyGroupsService implements OnModuleInit {
 
     await this.groupRepo.update(groupId, { maxMarchSeconds: maxMarch });
 
+    // 시작 후 행군 시간이 바뀌면 기존 BusyLock 타이머도 새 종료 시각으로 갱신한다.
+    // 갱신하지 않으면 행군 시간이 늘어난 경우 이전 타이머가 먼저 만료되어
+    // 실행 중인 그룹을 조기에 idle로 되돌린다.
+    const autoReleaseAt =
+      Number(group.startedAtServerMs) +
+      maxMarch * 1000 +
+      RALLY_AUTO_IDLE_GRACE_SECONDS * 1000;
+    const remainingMs = Math.max(1, autoReleaseAt - Date.now());
+    this.busyLock.reschedule(
+      { type: 'rally', groupId },
+      remainingMs,
+      () => void this.handleAutoIdle(groupId),
+    );
+
     const payload = {
       groupId,
       startedAtServerMs: Number(group.startedAtServerMs),

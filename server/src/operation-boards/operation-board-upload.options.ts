@@ -5,11 +5,10 @@ import { existsSync, mkdirSync } from 'fs';
 import { diskStorage } from 'multer';
 import { join } from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import { UPLOAD_ROOT } from '../storage-paths';
 
 export const OPERATION_BOARD_BACKGROUND_DIR = join(
-  process.cwd(),
-  '..',
-  'uploads',
+  UPLOAD_ROOT,
   'operation-boards',
 );
 
@@ -24,6 +23,16 @@ export const OPERATION_BOARD_BACKGROUND_EXTENSION_BY_MIME_TYPE: Readonly<
 export const OPERATION_BOARD_BACKGROUND_ALLOWED_MIME_TYPES = Object.keys(
   OPERATION_BOARD_BACKGROUND_EXTENSION_BY_MIME_TYPE,
 );
+
+export const OPERATION_BOARD_BACKGROUND_URL_PATTERN =
+  /^\/uploads\/operation-boards\/\d{13}-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(?:jpg|png|webp)$/i;
+
+export function isOperationBoardBackgroundUrl(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    OPERATION_BOARD_BACKGROUND_URL_PATTERN.test(value)
+  );
+}
 
 export const OPERATION_BOARD_BACKGROUND_LIMITS: NonNullable<
   MulterOptions['limits']
@@ -51,7 +60,9 @@ export const OPERATION_BOARD_BACKGROUND_UPLOAD_OPTIONS: MulterOptions = {
     },
   }),
   fileFilter: (req, file, cb) => {
-    if (!OPERATION_BOARD_BACKGROUND_ALLOWED_MIME_TYPES.includes(file.mimetype)) {
+    if (
+      !OPERATION_BOARD_BACKGROUND_ALLOWED_MIME_TYPES.includes(file.mimetype)
+    ) {
       return cb(
         new BadRequestException('이미지 파일만 업로드 가능합니다'),
         false,

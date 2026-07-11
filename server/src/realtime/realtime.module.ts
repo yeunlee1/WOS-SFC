@@ -11,6 +11,7 @@ import { RalliesModule } from '../rallies/rallies.module';
 import { MembersModule } from '../members/members.module';
 import { BoardsModule } from '../boards/boards.module';
 import { AllianceNoticesModule } from '../alliance-notices/alliance-notices.module';
+import { UsersModule } from '../users/users.module';
 
 @Module({
   imports: [
@@ -18,7 +19,7 @@ import { AllianceNoticesModule } from '../alliance-notices/alliance-notices.modu
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (cs: ConfigService) => ({
-        secret: cs.get<string>('JWT_SECRET'),
+        secret: cs.getOrThrow<string>('JWT_SECRET'),
       }),
     }),
     forwardRef(() => NoticesModule),
@@ -26,6 +27,7 @@ import { AllianceNoticesModule } from '../alliance-notices/alliance-notices.modu
     forwardRef(() => MembersModule),
     forwardRef(() => BoardsModule),
     forwardRef(() => AllianceNoticesModule),
+    forwardRef(() => UsersModule),
   ],
   providers: [
     RealtimeGateway,
@@ -33,6 +35,6 @@ import { AllianceNoticesModule } from '../alliance-notices/alliance-notices.modu
     WsRateLimitService,
     BusyLockService,
   ],
-  exports: [RealtimeGateway, BusyLockService],
+  exports: [RealtimeGateway, BusyLockService, WsRateLimitService],
 })
 export class RealtimeModule {}

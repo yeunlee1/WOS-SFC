@@ -13,27 +13,9 @@ const LANGUAGES = [
   { value: 'other', label: '기타' },
 ];
 
-const DEV_ACCOUNTS = [
-  { label: '🛡️ 개발자 (한국)', nickname: 'devDevKo',    password: 'devpass123', role: 'developer', language: 'ko', allianceName: 'KOR' },
-  { label: '👑 관리자 (한국)', nickname: 'devAdminKo',  password: 'devpass123', role: 'admin',  language: 'ko', allianceName: 'KOR' },
-  { label: '🇨🇳 관리자 (중국)', nickname: 'devAdminZh',  password: 'devpass123', role: 'admin',  language: 'zh', allianceName: 'KOR' },
-  { label: '🇺🇸 관리자 (영어)', nickname: 'devAdminEn',  password: 'devpass123', role: 'admin',  language: 'en', allianceName: 'KOR' },
-  { label: '🇯🇵 관리자 (일본)', nickname: 'devAdminJa',  password: 'devpass123', role: 'admin',  language: 'ja', allianceName: 'KOR' },
-  { label: '🙋 멤버 (한국)',   nickname: 'devMemberKo', password: 'devpass123', role: 'member', language: 'ko', allianceName: 'KOR' },
-  { label: '🙋 멤버 (중국)',   nickname: 'devMemberZh', password: 'devpass123', role: 'member', language: 'zh', allianceName: 'KOR' },
-  { label: '🙋 멤버 (영어)',   nickname: 'devMemberEn', password: 'devpass123', role: 'member', language: 'en', allianceName: 'KOR' },
-  { label: '🙋 멤버 (일본)',   nickname: 'devMemberJa', password: 'devpass123', role: 'member', language: 'ja', allianceName: 'KOR' },
-];
-
 // 닉네임 정책: 한글/영문/숫자만, 2~20자. 특수문자·공백 금지.
 // 닉네임 정규식 — server/web 양쪽이 동일해야 함. 한쪽만 바꾸면 silent divergence 발생.
 const NICKNAME_REGEX = /^[A-Za-z0-9가-힣]{2,20}$/;
-
-const ROLE_BADGE = {
-  developer: 'DEV',
-  admin: 'ADM',
-  member: 'MEM',
-};
 
 export default function AuthModal() {
   const [mode, setMode] = useState('login');
@@ -47,7 +29,7 @@ export default function AuthModal() {
   const [language, setLanguage] = useState('ko');
   const [serverCode, setServerCode] = useState('');
 
-  const { setUser, setTimeOffset } = useStore();
+  const setUser = useStore((state) => state.setUser);
   const { t, changeLang } = useI18n();
 
   async function initUser(user) {
@@ -56,54 +38,61 @@ export default function AuthModal() {
     // 로그인 직후 사용자 제스처가 살아있는 동안 AudioContext 언락 + 모든 그룹 음성 사전 디코드.
     // fire-and-forget — 로그인 응답 + 화면 전환은 차단하지 않음. 첫 카운트다운 시작 시점에
     // bufferCache에 모든 captain/rally_start/prep/numeric이 디코드되어 있어 첫 시작 누락 방지.
-    warmupRallyAudio({ lang: user.language || 'ko' }).catch(() => { /* noop */ });
-    try {
-      const localBefore = Date.now();
-      const res = await api.getTime();
-      setTimeOffset(res.utc - Math.round((localBefore + Date.now()) / 2));
-    } catch { /* offset 0 유지 */ }
+    warmupRallyAudio({ lang: user.language || 'ko' }).catch(() => {
+      /* noop */
+    });
   }
 
   async function handleLogin(e) {
     e.preventDefault();
-    if (!nickname || !password) { setError('닉네임과 비밀번호를 입력하세요'); return; }
-    setLoading(true); setError('');
+    if (!nickname || !password) {
+      setError('닉네임과 비밀번호를 입력하세요');
+      return;
+    }
+    setLoading(true);
+    setError('');
     try {
       const res = await api.login({ nickname, password });
       await initUser(res.user);
-    } catch (err) { setError(err.message); }
-    finally { setLoading(false); }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function handleSignup(e) {
     e.preventDefault();
-    if (!signupNickname || !signupPassword || !allianceName || !serverCode) { setError('모든 항목을 입력하세요'); return; }
-    if (!NICKNAME_REGEX.test(signupNickname)) {
-      setError('닉네임은 한글 또는 영문/숫자만 사용할 수 있습니다 (2~20자, 특수문자·공백 불가)');
+    if (!signupNickname || !signupPassword || !allianceName || !serverCode) {
+      setError('모든 항목을 입력하세요');
       return;
     }
-    if (signupPassword.length < 6) { setError('비밀번호는 6자 이상이어야 합니다'); return; }
-    setLoading(true); setError('');
+    if (!NICKNAME_REGEX.test(signupNickname)) {
+      setError(
+        '닉네임은 한글 또는 영문/숫자만 사용할 수 있습니다 (2~20자, 특수문자·공백 불가)',
+      );
+      return;
+    }
+    if (signupPassword.length < 6) {
+      setError('비밀번호는 6자 이상이어야 합니다');
+      return;
+    }
+    setLoading(true);
+    setError('');
     try {
-      const res = await api.signup({ nickname: signupNickname, password: signupPassword, allianceName, language, serverCode });
+      const res = await api.signup({
+        nickname: signupNickname,
+        password: signupPassword,
+        allianceName,
+        language,
+        serverCode,
+      });
       await initUser(res.user);
-    } catch (err) { setError(err.message); }
-    finally { setLoading(false); }
-  }
-
-  async function devLogin(account) {
-    setLoading(true); setError('');
-    try {
-      let res;
-      try { res = await api.login({ nickname: account.nickname, password: account.password }); }
-      catch {
-        await api.signup({ nickname: account.nickname, password: account.password, allianceName: account.allianceName, language: account.language, serverCode: '2677' }).catch(() => {});
-        res = await api.login({ nickname: account.nickname, password: account.password });
-      }
-      await api.setUserRole(account.nickname, account.role).catch(() => {});
-      await initUser({ ...res.user, role: account.role, language: account.language });
-    } catch (err) { setError(err.message); }
-    finally { setLoading(false); }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -114,9 +103,17 @@ export default function AuthModal() {
             <svg width="30" height="30" viewBox="0 0 24 24" fill="none">
               <path
                 d="M12 2 L12 22 M2 12 L22 12 M5 5 L19 19 M19 5 L5 19"
-                stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
               />
-              <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.5" />
+              <circle
+                cx="12"
+                cy="12"
+                r="3"
+                stroke="currentColor"
+                strokeWidth="1.5"
+              />
             </svg>
           </div>
           <h2>{t('authBrand')}</h2>
@@ -127,7 +124,10 @@ export default function AuthModal() {
           <button
             type="button"
             className={'auth-tab' + (mode === 'login' ? ' active' : '')}
-            onClick={() => { setMode('login'); setError(''); }}
+            onClick={() => {
+              setMode('login');
+              setError('');
+            }}
             role="tab"
             aria-selected={mode === 'login'}
           >
@@ -136,7 +136,10 @@ export default function AuthModal() {
           <button
             type="button"
             className={'auth-tab' + (mode === 'signup' ? ' active' : '')}
-            onClick={() => { setMode('signup'); setError(''); }}
+            onClick={() => {
+              setMode('signup');
+              setError('');
+            }}
             role="tab"
             aria-selected={mode === 'signup'}
           >
@@ -173,7 +176,11 @@ export default function AuthModal() {
               />
             </div>
             {error && <div className="auth-error">⚠ {error}</div>}
-            <button type="submit" className="btn btn-primary auth-submit" disabled={loading}>
+            <button
+              type="submit"
+              className="btn btn-primary auth-submit"
+              disabled={loading}
+            >
               {loading && <span className="btn-spinner" aria-hidden="true" />}
               {loading ? '잠시만요…' : '로그인'}
             </button>
@@ -181,7 +188,11 @@ export default function AuthModal() {
               계정이 없으신가요?{' '}
               <a
                 href="#"
-                onClick={(e) => { e.preventDefault(); setMode('signup'); setError(''); }}
+                onClick={(e) => {
+                  e.preventDefault();
+                  setMode('signup');
+                  setError('');
+                }}
               >
                 가입
               </a>
@@ -201,7 +212,10 @@ export default function AuthModal() {
                 maxLength={20}
                 autoComplete="username"
               />
-              <p className="auth-help">한글 또는 영문·숫자만 가능. 특수문자와 공백은 사용할 수 없습니다.</p>
+              <p className="auth-help">
+                한글 또는 영문·숫자만 가능. 특수문자와 공백은 사용할 수
+                없습니다.
+              </p>
             </div>
             <div className="auth-field">
               <label htmlFor="signup-pw">비밀번호</label>
@@ -238,22 +252,25 @@ export default function AuthModal() {
                   onChange={(e) => setLanguage(e.target.value)}
                 >
                   {LANGUAGES.map((l) => (
-                    <option key={l.value} value={l.value}>{l.label}</option>
+                    <option key={l.value} value={l.value}>
+                      {l.label}
+                    </option>
                   ))}
                 </select>
               </div>
             </div>
             <div className="auth-field">
-              <label htmlFor="signup-server" className="auth-server-question">🗺 서버 번호가 어디입니까?</label>
+              <label htmlFor="signup-server" className="auth-server-question">
+                🔐 가입 코드를 입력하세요
+              </label>
               <input
                 id="signup-server"
                 className="input"
                 type="text"
-                placeholder="숫자 입력"
+                placeholder="초대 코드 입력"
                 value={serverCode}
                 onChange={(e) => setServerCode(e.target.value)}
-                maxLength={10}
-                inputMode="numeric"
+                maxLength={20}
                 autoComplete="off"
               />
             </div>
@@ -261,7 +278,11 @@ export default function AuthModal() {
               계급은 관리자가 가입 후 별도로 부여합니다.
             </p>
             {error && <div className="auth-error">⚠ {error}</div>}
-            <button type="submit" className="btn btn-primary auth-submit" disabled={loading}>
+            <button
+              type="submit"
+              className="btn btn-primary auth-submit"
+              disabled={loading}
+            >
               {loading && <span className="btn-spinner" aria-hidden="true" />}
               {loading ? '잠시만요…' : '가입하기'}
             </button>
@@ -269,35 +290,16 @@ export default function AuthModal() {
               이미 계정이 있으신가요?{' '}
               <a
                 href="#"
-                onClick={(e) => { e.preventDefault(); setMode('login'); setError(''); }}
+                onClick={(e) => {
+                  e.preventDefault();
+                  setMode('login');
+                  setError('');
+                }}
               >
                 로그인
               </a>
             </p>
           </form>
-        )}
-
-        {import.meta.env.DEV && (
-          <div className="auth-dev">
-            <div className="auth-dev-title">⚡ DEV 빠른 로그인</div>
-            <div className="dev-grid">
-              {DEV_ACCOUNTS.map((acc) => (
-                <button
-                  key={acc.nickname}
-                  type="button"
-                  className="dev-btn"
-                  onClick={() => devLogin(acc)}
-                  disabled={loading}
-                  title={acc.label}
-                >
-                  <div className="dev-btn-name">{acc.nickname}</div>
-                  <div className="dev-btn-meta">
-                    {acc.allianceName} · {ROLE_BADGE[acc.role] || acc.role.slice(0, 3).toUpperCase()}
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
         )}
       </div>
     </div>

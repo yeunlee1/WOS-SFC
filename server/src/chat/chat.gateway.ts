@@ -11,9 +11,15 @@ import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
 import { ChatService } from './chat.service';
+import { WsRateLimitService } from '../realtime/ws-rate-limit.service';
+import { User } from '../users/users.entity';
+import { SOCKET_CORS_OPTIONS } from '../realtime/socket-cors.options';
 
-// 모든 출처에서 WebSocket 연결 허용
-@WebSocketGateway({ cors: { origin: '*' } })
+const CHAT_MESSAGE_MAX_LENGTH = 500;
+const CHAT_MESSAGE_RATE_LIMIT = 30;
+const CHAT_MESSAGE_RATE_WINDOW_MS = 60_000;
+
+@WebSocketGateway({ cors: SOCKET_CORS_OPTIONS })
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
@@ -25,6 +31,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly jwtService: JwtService,
     private readonly usersService: UsersService,
     private readonly chatService: ChatService,
+    private readonly rateLimit: WsRateLimitService,
   ) {}
 
   // 클라이언트 연결 시: JWT 검증 → 유저 확인 → 히스토리 전송
@@ -40,15 +47,20 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const token = decodeURIComponent(match[1]);
 
       // JWT 페이로드 검증
-      const payload = this.jwtService.verify(token);
-      const user = await this.usersService.findByNickname(payload.nickname);
+      const payload = this.jwtService.verify<{ sub?: number }>(token);
+      if (!Number.isInteger(payload.sub)) {
+        client.disconnect();
+        return;
+      }
+      const user = await this.usersService.findById(payload.sub!);
+      if (!client.connected) return;
       if (!user) {
         client.disconnect();
         return;
       }
 
       // 유저 정보를 소켓 객체에 저장
-      (client as any).user = user;
+      (client.data as { user?: User }).user = user;
       this.connectedUsers.set(client.id, { nickname: user.nickname, language: user.language });
 
       // 최근 7일치 메시지 히스토리 전송
@@ -93,12 +105,30 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage('chat:message')
   async handleMessage(
     @ConnectedSocket() client: Socket,
-    @MessageBody() content: string,
+    @MessageBody() content: unknown,
   ) {
-    const user = (client as any).user;
-    if (!user || !content?.trim()) return;
+    const user = (client.data as { user?: User }).user;
+    if (!user || typeof content !== 'string') {
+      return { ok: false, reason: 'invalid' as const };
+    }
+    const normalized = content.trim();
+    if (!normalized || normalized.length > CHAT_MESSAGE_MAX_LENGTH) {
+      return { ok: false, reason: 'invalid' as const };
+    }
+    if (
+      !this.rateLimit.check(
+        // 재연결·다중 탭도 같은 한도를 공유하도록 소켓 ID가 아닌 불변 사용자 ID를 사용한다.
+        // disconnect 때 삭제하지 않으므로 버킷 수는 연결 수가 아니라 메시지를 보낸 계정 수에만 비례한다.
+        `chat-user:${user.id}`,
+        'chat:message',
+        CHAT_MESSAGE_RATE_LIMIT,
+        CHAT_MESSAGE_RATE_WINDOW_MS,
+      )
+    ) {
+      return { ok: false, reason: 'rate_limit' as const };
+    }
 
-    const msg = await this.chatService.saveMessage(user, content.trim());
+    const msg = await this.chatService.saveMessage(user, normalized);
     this.server.emit('chat:message', {
       id: msg.id,
       nickname: user.nickname,
@@ -107,5 +137,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       content: msg.content,
       createdAt: msg.createdAt,
     });
+    return { ok: true };
   }
 }

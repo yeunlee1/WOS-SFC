@@ -480,6 +480,36 @@ describe('RallyGroupsService — BusyLock 통합', () => {
     });
   });
 
+  describe('recomputeIfRunning — BusyLock 타이머 갱신', () => {
+    it('행군 시간이 늘어나면 새 종료 시각으로 자동 해제 타이머를 연장', async () => {
+      const startedAtServerMs = Date.now() + 7000;
+      const running = {
+        ...fakeGroup('running'),
+        startedAtServerMs,
+        members: [
+          {
+            ...fakeGroup('running').members[0],
+            user: { id: 1, marchSeconds: 180, nickname: 'a' },
+          },
+        ],
+      };
+      groupRepo.findOne.mockResolvedValue(running);
+      busyLock.tryAcquire({ type: 'rally', groupId: 'g1' }, 22_000);
+      const reschedule = jest.spyOn(busyLock, 'reschedule');
+
+      await service.recomputeIfRunning('g1');
+
+      expect(reschedule).toHaveBeenCalledWith(
+        { type: 'rally', groupId: 'g1' },
+        expect.any(Number),
+        expect.any(Function),
+      );
+      const delay = reschedule.mock.calls[0][1];
+      expect(delay).toBeGreaterThan(190_000);
+      expect(delay).toBeLessThanOrEqual(192_000);
+    });
+  });
+
   describe('onModuleInit (서버 재시작 복구)', () => {
     it('running 상태인 그룹이 있으면 일괄 idle로 reset', async () => {
       groupRepo.find.mockResolvedValue([

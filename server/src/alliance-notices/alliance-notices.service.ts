@@ -1,9 +1,17 @@
-import { Injectable, ForbiddenException, NotFoundException, Inject, forwardRef } from '@nestjs/common';
+import {
+  Injectable,
+  ForbiddenException,
+  NotFoundException,
+  Inject,
+  forwardRef,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AllianceNotice } from './alliance-notice.entity';
 import { CreateAllianceNoticeDto } from './dto/create-alliance-notice.dto';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
+import { User } from '../users/users.entity';
+import { hasOriginalNicknameOwnership } from '../users/nickname-ownership';
 
 @Injectable()
 export class AllianceNoticesService {
@@ -35,12 +43,22 @@ export class AllianceNoticesService {
     return saved;
   }
 
-  async remove(id: number, user: any): Promise<void> {
+  async remove(
+    id: number,
+    user: Pick<User, 'nickname' | 'role' | 'allianceName' | 'createdAt'>,
+  ): Promise<void> {
     const notice = await this.repo.findOneBy({ id });
     if (!notice) throw new NotFoundException();
-    const isOwn = notice.authorNick === user.nickname;
+    const isSameAlliance = notice.alliance === user.allianceName;
+    const isOwn = hasOriginalNicknameOwnership(
+      user,
+      notice.authorNick,
+      notice.createdAt,
+    );
     const isManager = user.role === 'admin' || user.role === 'developer';
-    if (!isOwn && !isManager) throw new ForbiddenException();
+    if (!isSameAlliance || (!isOwn && !isManager)) {
+      throw new ForbiddenException();
+    }
     await this.repo.delete(id);
     await this.gateway.broadcastAllianceNotice(notice.alliance);
   }

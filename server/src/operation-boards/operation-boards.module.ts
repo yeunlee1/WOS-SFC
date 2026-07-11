@@ -7,20 +7,31 @@ import { OperationBoard } from './operation-board.entity';
 import { OperationBoardsGateway } from './operation-boards.gateway';
 import { OperationBoardsController } from './operation-boards.controller';
 import { OperationBoardsService } from './operation-boards.service';
+import { UsersModule } from '../users/users.module';
+import { BoardsModule } from '../boards/boards.module';
+import { RealtimeModule } from '../realtime/realtime.module';
+import { OperationBoardBackgroundUploadGuard } from './operation-board-background-upload.guard';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([OperationBoard]),
+    UsersModule,
+    BoardsModule,
+    RealtimeModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (cs: ConfigService) => ({
-        secret: cs.get<string>('JWT_SECRET'),
+        secret: cs.getOrThrow<string>('JWT_SECRET'),
       }),
     }),
   ],
   controllers: [OperationBoardsController],
-  providers: [OperationBoardsService, OperationBoardsGateway],
+  providers: [
+    OperationBoardsService,
+    OperationBoardsGateway,
+    OperationBoardBackgroundUploadGuard,
+  ],
   exports: [OperationBoardsService],
 })
 export class OperationBoardsModule {}

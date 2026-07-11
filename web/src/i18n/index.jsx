@@ -1,4 +1,10 @@
-import { createContext, useContext, useState, useCallback } from 'react';
+import {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useEffect,
+} from 'react';
 
 // ─── 지원 언어 목록 ───
 export const SUPPORTED_LANGS = [
@@ -11,7 +17,7 @@ export const SUPPORTED_LANGS = [
 // ─── UI 텍스트 맵 ───
 const UI_TEXTS = {
   ko: {
-    modalTitle: '서버 코드를 입력하세요',
+    modalTitle: '가입 코드를 입력하세요',
     modalAllianceLabel: '연맹 선택',
     modalNicknameLabel: '닉네임',
     modalNicknamePlaceholder: '게임 닉네임',
@@ -67,7 +73,8 @@ const UI_TEXTS = {
     kakao: '🟡 카카오톡',
     game: '🎮 게임 내',
     delete: '삭제',
-    translateHint: (lang) => `→ ${SUPPORTED_LANGS.find(l => l.code === lang)?.label || lang} 로 번역`,
+    translateHint: (lang) =>
+      `→ ${SUPPORTED_LANGS.find((l) => l.code === lang)?.label || lang} 로 번역`,
     backToList: '목록',
     noticeWriteTitle: '새 공지 작성',
     chatPlaceholder: '메시지를 입력하세요...',
@@ -107,7 +114,7 @@ const UI_TEXTS = {
     authBrandSubtitle: 'FROST PROTOCOL · 얼어붙은 전장',
   },
   en: {
-    modalTitle: 'Enter server code',
+    modalTitle: 'Enter invite code',
     modalAllianceLabel: 'Select Alliance',
     modalNicknameLabel: 'Nickname',
     modalNicknamePlaceholder: 'Game nickname',
@@ -163,7 +170,8 @@ const UI_TEXTS = {
     kakao: '🟡 KakaoTalk',
     game: '🎮 In-game',
     delete: 'Del',
-    translateHint: (lang) => `→ ${SUPPORTED_LANGS.find(l => l.code === lang)?.label || lang}`,
+    translateHint: (lang) =>
+      `→ ${SUPPORTED_LANGS.find((l) => l.code === lang)?.label || lang}`,
     backToList: 'Back',
     noticeWriteTitle: 'New Notice',
     chatPlaceholder: 'Type a message...',
@@ -200,7 +208,7 @@ const UI_TEXTS = {
     authBrandSubtitle: 'FROST PROTOCOL · FROZEN BATTLEFIELD',
   },
   ja: {
-    modalTitle: 'サーバーコードを入力してください',
+    modalTitle: '招待コードを入力してください',
     modalAllianceLabel: '同盟を選択',
     modalNicknameLabel: 'ニックネーム',
     modalNicknamePlaceholder: 'ゲームニックネーム',
@@ -256,7 +264,8 @@ const UI_TEXTS = {
     kakao: '🟡 カカオトーク',
     game: '🎮 ゲーム内',
     delete: '削除',
-    translateHint: (lang) => `→ ${SUPPORTED_LANGS.find(l => l.code === lang)?.label || lang} に翻訳`,
+    translateHint: (lang) =>
+      `→ ${SUPPORTED_LANGS.find((l) => l.code === lang)?.label || lang} に翻訳`,
     backToList: '一覧',
     noticeWriteTitle: '新規お知らせ',
     chatPlaceholder: 'メッセージを入力...',
@@ -293,7 +302,7 @@ const UI_TEXTS = {
     authBrandSubtitle: 'FROST PROTOCOL · 凍りついた戦場',
   },
   zh: {
-    modalTitle: '请输入服务器代码',
+    modalTitle: '请输入邀请码',
     modalAllianceLabel: '选择联盟',
     modalNicknameLabel: '昵称',
     modalNicknamePlaceholder: '游戏昵称',
@@ -349,7 +358,8 @@ const UI_TEXTS = {
     kakao: '🟡 KakaoTalk',
     game: '🎮 游戏内',
     delete: '删除',
-    translateHint: (lang) => `→ 翻译为 ${SUPPORTED_LANGS.find(l => l.code === lang)?.label || lang}`,
+    translateHint: (lang) =>
+      `→ 翻译为 ${SUPPORTED_LANGS.find((l) => l.code === lang)?.label || lang}`,
     backToList: '返回',
     noticeWriteTitle: '新建公告',
     chatPlaceholder: '输入消息...',
@@ -392,12 +402,16 @@ const TRANS_CACHE_KEY = 'wos-trans-cache';
 const MAX_CACHE = 500;
 
 function _getCache() {
-  try { return JSON.parse(localStorage.getItem(TRANS_CACHE_KEY) || '{}'); }
-  catch { return {}; }
+  try {
+    return JSON.parse(localStorage.getItem(TRANS_CACHE_KEY) || '{}');
+  } catch {
+    return {};
+  }
 }
 
 function _makeCacheKey(text, lang) {
-  return `${lang}:${text.trim().substring(0, 80)}:${text.length}`;
+  // 본문 전체를 JSON tuple로 넣어 같은 prefix·길이의 다른 메시지가 충돌하지 않게 한다.
+  return JSON.stringify(['v2', lang, text]);
 }
 
 export function getCachedTranslation(text, lang) {
@@ -409,7 +423,9 @@ export function cacheTranslation(text, lang, translated) {
   const entries = Object.keys(cache);
   if (entries.length >= MAX_CACHE) {
     const trimmed = {};
-    entries.slice(-MAX_CACHE + 1).forEach((k) => { trimmed[k] = cache[k]; });
+    entries.slice(-MAX_CACHE + 1).forEach((k) => {
+      trimmed[k] = cache[k];
+    });
     trimmed[_makeCacheKey(text, lang)] = translated;
     localStorage.setItem(TRANS_CACHE_KEY, JSON.stringify(trimmed));
   } else {
@@ -423,19 +439,27 @@ const I18nContext = createContext(null);
 
 export function I18nProvider({ children }) {
   const [lang, setLangState] = useState(
-    () => localStorage.getItem('wos-lang') || 'ko'
+    () => localStorage.getItem('wos-lang') || 'ko',
   );
 
-  const t = useCallback((key) => {
-    const texts = UI_TEXTS[lang] || UI_TEXTS.ko;
-    const val = texts[key] !== undefined ? texts[key] : (UI_TEXTS.ko[key] ?? key);
-    return val;
-  }, [lang]);
+  const t = useCallback(
+    (key) => {
+      const texts = UI_TEXTS[lang] || UI_TEXTS.ko;
+      const val =
+        texts[key] !== undefined ? texts[key] : (UI_TEXTS.ko[key] ?? key);
+      return val;
+    },
+    [lang],
+  );
 
   const changeLang = useCallback((code) => {
     localStorage.setItem('wos-lang', code);
     setLangState(code);
   }, []);
+
+  useEffect(() => {
+    document.documentElement.lang = UI_TEXTS[lang] ? lang : 'ko';
+  }, [lang]);
 
   return (
     <I18nContext.Provider value={{ lang, t, changeLang, SUPPORTED_LANGS }}>

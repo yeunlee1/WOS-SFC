@@ -1,12 +1,15 @@
 import { useState, useEffect, useRef, memo } from 'react';
 import { useStore } from '../../store';
 import { useI18n } from '../../i18n';
-import { getSocket, translateChatMessage } from '../../api';
+import { getSocket } from '../../api';
 
 // 5-동맹 pill 색상
 const ALLIANCE_COLORS = {
-  KOR: '#3b82f6', NSL: '#22c55e', JKY: '#a855f7',
-  GPX: '#f97316', UFO: '#ec4899',
+  KOR: '#3b82f6',
+  NSL: '#22c55e',
+  JKY: '#a855f7',
+  GPX: '#f97316',
+  UFO: '#ec4899',
 };
 
 function getAllianceColor(alliance) {
@@ -17,9 +20,7 @@ function getAllianceColor(alliance) {
 // Props:
 //   onClose: () => void  — 닫기 버튼 핸들러
 export default function ChatDock({ onClose }) {
-  const { t } = useI18n();
-  const user = useStore((s) => s.user);
-  const myLang = user?.language;
+  const { t, lang } = useI18n();
 
   // onlineUsers store에서 직접 읽기 (중복 소켓 집계)
   const onlineUsersRaw = useStore((s) => s.onlineUsers);
@@ -27,72 +28,25 @@ export default function ChatDock({ onClose }) {
     new Map(onlineUsersRaw.map((u) => [u.nickname ?? u, u])).values(),
   );
 
-  const [messages, setMessages] = useState([]);
+  const messages = useStore((s) => s.chatMessages);
   const [input, setInput] = useState('');
-  // 자동번역 토글 — ChatTab과 동일한 localStorage 키 공유
-  const [autoTranslate, setAutoTranslate] = useState(() => {
-    try { return localStorage.getItem('wos-chat-auto-translate') !== '0'; }
-    catch { return true; }
-  });
+  const autoTranslate = useStore((s) => s.chatAutoTranslate);
+  const setAutoTranslate = useStore((s) => s.setChatAutoTranslate);
 
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
-  const myLangRef = useRef(myLang);
-
-  useEffect(() => {
-    myLangRef.current = myLang;
-  }, [myLang]);
 
   // 자동 스크롤 — 하단에 있을 때만
   useEffect(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
-    const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 60;
+    const isAtBottom =
+      container.scrollHeight - container.scrollTop - container.clientHeight <
+      60;
     if (isAtBottom) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages]);
-
-  // autoTranslate localStorage 동기화
-  useEffect(() => {
-    try { localStorage.setItem('wos-chat-auto-translate', autoTranslate ? '1' : '0'); }
-    catch { /* 무시 */ }
-  }, [autoTranslate]);
-
-  // 소켓 이벤트 구독 — 마운트 시 1회
-  useEffect(() => {
-    let cancelled = false;
-
-    const socket = getSocket();
-    if (!socket) return;
-
-    async function handleHistory(msgs) {
-      const translated = await Promise.all(
-        msgs.map((msg) => translateChatMessage(msg, myLangRef.current))
-      );
-      if (!cancelled) setMessages(translated);
-    }
-
-    async function handleMessage(msg) {
-      const translated = await translateChatMessage(msg, myLangRef.current);
-      if (!cancelled) setMessages((prev) => [...prev, translated]);
-    }
-
-    function handleSystem(text) {
-      if (!cancelled) setMessages((prev) => [...prev, { _type: 'system', text, _id: Date.now() }]);
-    }
-
-    socket.on('chat:history', handleHistory);
-    socket.on('chat:message', handleMessage);
-    socket.on('chat:system', handleSystem);
-
-    return () => {
-      cancelled = true;
-      socket.off('chat:history', handleHistory);
-      socket.off('chat:message', handleMessage);
-      socket.off('chat:system', handleSystem);
-    };
-  }, []); // deps: [] — myLang 변경 시 재구독 없음
 
   // 메시지 전송
   function sendMessage() {
@@ -115,7 +69,9 @@ export default function ChatDock({ onClose }) {
     <aside className="chat-dock">
       {/* 도크 헤더 */}
       <div className="chat-dock-head">
-        <span className="chat-dock-title">// {t('chatDockTitle') || 'CHAT'}</span>
+        <span className="chat-dock-title">
+          // {t('chatDockTitle') || 'CHAT'}
+        </span>
         <span className="chat-online-pill">{onlineUsers.length}</span>
         <button
           className="chat-dock-close"
@@ -157,9 +113,10 @@ export default function ChatDock({ onClose }) {
           }
           return (
             <DockMessage
-              key={msg._id ?? idx}
+              key={msg.id ?? msg._id ?? idx}
               msg={msg}
               autoTranslate={autoTranslate}
+              translationLanguage={lang}
             />
           );
         })}
@@ -189,7 +146,13 @@ export default function ChatDock({ onClose }) {
           onKeyDown={handleKeyDown}
           placeholder={t('chatPlaceholder')}
         />
-        <button className="btn-primary" onClick={sendMessage}>▶</button>
+        <button
+          className="btn-primary"
+          onClick={sendMessage}
+          aria-label={t('chatSend')}
+        >
+          ▶
+        </button>
       </div>
     </aside>
   );
@@ -198,7 +161,11 @@ export default function ChatDock({ onClose }) {
 // ── 도크 개별 메시지 컴포넌트 ──
 const localeMap = { ko: 'ko-KR', en: 'en-US', ja: 'ja-JP', zh: 'zh-CN' };
 
-const DockMessage = memo(function DockMessage({ msg, autoTranslate }) {
+const DockMessage = memo(function DockMessage({
+  msg,
+  autoTranslate,
+  translationLanguage,
+}) {
   const { t, lang } = useI18n();
   const [showOriginal, setShowOriginal] = useState(false);
 
@@ -212,7 +179,9 @@ const DockMessage = memo(function DockMessage({ msg, autoTranslate }) {
     : '';
 
   const hasTranslation =
-    msg.translatedContent && msg.translatedContent !== msg.content;
+    msg.translatedContent &&
+    msg.translatedLanguage === translationLanguage &&
+    msg.translatedContent !== msg.content;
 
   const displayContent =
     autoTranslate && hasTranslation && !showOriginal

@@ -10,6 +10,7 @@ import { Repository } from 'typeorm';
 import { RenameOperationBoardDto } from './dto/rename-operation-board.dto';
 import { SaveOperationBoardDto } from './dto/save-operation-board.dto';
 import { OperationBoard } from './operation-board.entity';
+import { isOperationBoardBackgroundUrl } from './operation-board-upload.options';
 
 type ActingUser = { id: number; nickname: string; role: string };
 
@@ -51,14 +52,14 @@ function normalizeBackgroundImageUrl(
     return null;
   }
 
-  if (
-    typeof dto.backgroundImageUrl !== 'string' ||
-    dto.backgroundImageUrl.trim().length === 0
-  ) {
-    throw new BadRequestException('이미지 배경 URL을 입력해주세요.');
+  const imageUrl = dto.backgroundImageUrl?.trim();
+  if (!isOperationBoardBackgroundUrl(imageUrl)) {
+    throw new BadRequestException(
+      '서버에 업로드한 작전판 배경 이미지만 사용할 수 있습니다.',
+    );
   }
 
-  return dto.backgroundImageUrl.trim();
+  return imageUrl;
 }
 
 @Injectable()

@@ -2993,64 +2993,10 @@ input, textarea, select, .input {
 }
 .auth-switch a:hover { text-decoration: underline; }
 
-/* DEV 빠른 로그인 영역 */
-.auth-dev {
-  margin-top: 18px;
-  padding-top: 18px;
-  border-top: 1px dashed var(--border);
-}
-.auth-dev-title {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 10px;
-  letter-spacing: 0.18em;
-  color: var(--text-3);
-  text-transform: uppercase;
-  margin-bottom: 10px;
-  text-align: center;
-}
-.dev-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
-}
-.dev-btn {
-  padding: 9px 8px;
-  background: var(--bg-input);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text-1);
-  font-size: 11px;
-  cursor: pointer;
-  font-family: inherit;
-  text-align: center;
-  transition: background 0.15s, border-color 0.15s, transform 0.1s;
-}
-.dev-btn:hover {
-  background: var(--bg-hover);
-  border-color: var(--accent);
-}
-.dev-btn:active { transform: translateY(1px); }
-.dev-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.dev-btn-name {
-  font-weight: 700;
-  color: var(--text-1);
-  font-size: 12px;
-  letter-spacing: 0.02em;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.dev-btn-meta {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 9px;
-  color: var(--text-3);
-  margin-top: 2px;
-  letter-spacing: 0.08em;
-}
-
 @media (max-width: 480px) {
   .auth-modal { padding: 26px 20px; }
   .auth-modal h2 { font-size: 22px; }
   .input-grid-2 { grid-template-columns: 1fr; }
-  .dev-grid { grid-template-columns: repeat(2, 1fr); }
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -3302,23 +3248,6 @@ body.theme-frost .auth-error {
   color: var(--red);
 }
 body.theme-frost .auth-switch a { color: var(--ice-2); }
-body.theme-frost .auth-dev { border-top: 1px dashed var(--line); }
-body.theme-frost .auth-dev-title {
-  letter-spacing: 0.18em;
-  color: var(--text-3);
-}
-body.theme-frost .dev-btn {
-  background: rgba(7, 16, 30, 0.6);
-  border: 1px solid var(--line);
-  color: var(--text-1);
-}
-body.theme-frost .dev-btn:hover {
-  border-color: var(--ice-2);
-  background: var(--bg-hover);
-}
-body.theme-frost .dev-btn-name { color: var(--ice-0); }
-body.theme-frost .dev-btn-meta { color: var(--text-3); }
-
 /* ─── Command Palette — 그라데이션 배경 + 진한 borders ─── */
 body.theme-frost .cmdk-overlay {
   background: rgba(4, 6, 13, 0.7);
@@ -4855,20 +4784,6 @@ body.theme-spring .auth-tab.active {
 body.theme-spring .auth-field label { color: var(--text-2); }
 body.theme-spring .auth-error { color: var(--red); }
 body.theme-spring .auth-switch a { color: var(--sakura-3); }
-body.theme-spring .auth-dev { border-top: 1px dashed var(--line); }
-body.theme-spring .auth-dev-title { color: var(--text-3); }
-body.theme-spring .dev-btn {
-  background: var(--bg-glass);
-  border: 1px solid var(--line);
-  color: var(--text-2);
-}
-body.theme-spring .dev-btn:hover {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-}
-body.theme-spring .dev-btn-name { color: var(--sakura-0); }
-body.theme-spring .dev-btn-meta { color: var(--text-3); }
-
 /* ─── Command Palette ─── */
 body.theme-spring .cmdk-overlay {
   background: rgba(26,10,20,0.7);

@@ -40,6 +40,10 @@ export class UsersService {
     return this.usersRepo.findOne({ where: { nickname } });
   }
 
+  async findById(id: number): Promise<User | null> {
+    return this.usersRepo.findOne({ where: { id } });
+  }
+
   async setRole(nickname: string, role: UserRole): Promise<User | null> {
     const user = await this.findByNickname(nickname);
     if (!user) return null;

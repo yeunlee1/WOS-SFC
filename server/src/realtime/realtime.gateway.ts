@@ -19,6 +19,8 @@ import { AllianceNoticesService } from '../alliance-notices/alliance-notices.ser
 import { ReadyNegotiationService } from './ready-negotiation.service';
 import { WsRateLimitService } from './ws-rate-limit.service';
 import { BusyLockService, LockHolder } from './busy-lock.service';
+import { UsersService } from '../users/users.service';
+import { SOCKET_CORS_OPTIONS } from './socket-cors.options';
 
 interface OnlineUser {
   nickname: string;
@@ -40,15 +42,7 @@ type CountdownAck =
       holder?: LockHolder | null;
     };
 
-// production 환경에서 WEB_ORIGIN 미설정 시 실수로 모든 origin을 허용하는 fallback이 되지 않도록 에러.
-if (process.env.NODE_ENV === 'production' && !process.env.WEB_ORIGIN) {
-  throw new Error(
-    'WEB_ORIGIN 환경변수가 production에서 필수입니다. CORS 보안을 위해 명시적으로 설정하세요.',
-  );
-}
-const WEB_ORIGIN = process.env.WEB_ORIGIN || 'http://localhost:5173';
-
-@WebSocketGateway({ cors: { origin: WEB_ORIGIN, credentials: true } })
+@WebSocketGateway({ cors: SOCKET_CORS_OPTIONS })
 export class RealtimeGateway
   implements OnGatewayConnection, OnGatewayDisconnect
 {
@@ -59,6 +53,7 @@ export class RealtimeGateway
 
   constructor(
     private jwtService: JwtService,
+    private usersService: UsersService,
     private readyNegotiation: ReadyNegotiationService,
     private rateLimit: WsRateLimitService,
     private busyLock: BusyLockService,
@@ -75,17 +70,20 @@ export class RealtimeGateway
   ) {}
 
   // httpOnly 쿠키에서 access_token 파싱 후 JWT 검증
-  private getUserFromSocket(client: Socket): OnlineUser | null {
+  private async getUserFromSocket(client: Socket): Promise<OnlineUser | null> {
     try {
       const cookieStr = client.handshake.headers.cookie || '';
       const match = cookieStr.match(/(?:^|;\s*)access_token=([^;]+)/);
       if (!match) return null;
       const token = decodeURIComponent(match[1]);
-      const payload = this.jwtService.verify(token);
+      const payload = this.jwtService.verify<{ sub?: number }>(token);
+      if (!Number.isInteger(payload.sub)) return null;
+      const currentUser = await this.usersService.findById(payload.sub!);
+      if (!currentUser) return null;
       return {
-        nickname: payload.nickname,
-        alliance: payload.allianceName || '',
-        role: payload.role || 'member',
+        nickname: currentUser.nickname,
+        alliance: currentUser.allianceName || '',
+        role: currentUser.role,
       };
     } catch {
       return null;
@@ -93,7 +91,8 @@ export class RealtimeGateway
   }
 
   async handleConnection(client: Socket) {
-    const user = this.getUserFromSocket(client);
+    const user = await this.getUserFromSocket(client);
+    if (!client.connected) return;
     if (!user) {
       client.disconnect();
       return;
@@ -150,7 +149,9 @@ export class RealtimeGateway
     @ConnectedSocket() client: Socket,
     @MessageBody() totalSeconds: number,
   ): Promise<CountdownAck | { ok: false }> {
-    const user = this.getUserFromSocket(client);
+    const user =
+      this.onlineMap.get(client.id) ?? (await this.getUserFromSocket(client));
+    if (!client.connected) return { ok: false };
     if (!user || !['admin', 'developer'].includes(user.role)) {
       return { ok: false }; // 권한 거부 — 사유 노출 안 함
     }
@@ -219,8 +220,12 @@ export class RealtimeGateway
   }
 
   @SubscribeMessage('countdown:stop')
-  handleCountdownStop(@ConnectedSocket() client: Socket): { ok: boolean } {
-    const user = this.getUserFromSocket(client);
+  async handleCountdownStop(
+    @ConnectedSocket() client: Socket,
+  ): Promise<{ ok: boolean }> {
+    const user =
+      this.onlineMap.get(client.id) ?? (await this.getUserFromSocket(client));
+    if (!client.connected) return { ok: false };
     if (!user || !['admin', 'developer'].includes(user.role))
       return { ok: false };
 
@@ -283,12 +288,12 @@ export class RealtimeGateway
 
   // 특정 닉네임의 유저 소켓을 강제 종료 (Admin 벤 기능에서 호출)
   kickUser(nickname: string): void {
-    for (const [socketId, user] of this.onlineMap.entries()) {
-      if (user.nickname === nickname) {
-        const socket = this.server.sockets.sockets.get(socketId);
-        socket?.disconnect();
-        break;
-      }
+    const socketIds = Array.from(this.onlineMap.entries())
+      .filter(([, user]) => user.nickname === nickname)
+      .map(([socketId]) => socketId);
+    for (const socketId of socketIds) {
+      const socket = this.server.sockets.sockets.get(socketId);
+      socket?.disconnect();
     }
   }
 

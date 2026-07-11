@@ -24,6 +24,46 @@ function _initTtsMuted() {
   }
 }
 
+// 채팅 자동번역 초기값: localStorage 우선, 없으면 true
+function _initChatAutoTranslate() {
+  try {
+    return localStorage.getItem('wos-chat-auto-translate') !== '0';
+  } catch {
+    return true;
+  }
+}
+
+export function getChatMessageKey(message) {
+  if (message?.id !== undefined && message?.id !== null)
+    return `message:${message.id}`;
+  if (message?._id !== undefined && message?._id !== null)
+    return `system:${message._id}`;
+  return [
+    message?._type || 'message',
+    message?.createdAt || '',
+    message?.nickname || '',
+    message?.content || message?.text || '',
+  ].join(':');
+}
+
+function mergeChatMessages(current, incoming) {
+  const byKey = new Map(
+    current.map((message) => [getChatMessageKey(message), message]),
+  );
+  for (const message of incoming) {
+    const key = getChatMessageKey(message);
+    const previous = byKey.get(key);
+    byKey.set(key, previous ? { ...message, ...previous } : message);
+  }
+  return Array.from(byKey.values())
+    .sort((a, b) => {
+      const aTime = Date.parse(a.createdAt || '') || 0;
+      const bTime = Date.parse(b.createdAt || '') || 0;
+      return aTime - bTime;
+    })
+    .slice(-500);
+}
+
 // personalOffsetMs 초기값: localStorage 우선, 없으면 0. 범위 -1000~+1000ms로 clamp.
 // 사용자가 디바이스별 카운트다운 TTS 발화 시점을 미세 보정하는 값 (단계 4 UI).
 function _initPersonalOffsetMs() {
@@ -61,6 +101,8 @@ export const useStore = create((set) => ({
   rallies: [],
   members: [],
   onlineUsers: [],
+  chatMessages: [],
+  chatAutoTranslate: _initChatAutoTranslate(),
   boards: Object.fromEntries(ALLIANCES.map((a) => [a, []])),
   allianceNotices: { KOR: [], NSL: [], JKY: [], GPX: [], UFO: [] },
   countdown: { active: false, startedAt: 0, totalSeconds: 0 },
@@ -85,74 +127,136 @@ export const useStore = create((set) => ({
 
   // Actions
   setUser: (user) => set({ user }),
-  clearUser: () => set({ user: null }),
+  clearUser: () => set({ user: null, chatMessages: [], onlineUsers: [] }),
   setTimeOffset: (timeOffset) => set({ timeOffset }),
   setTimeSyncRtt: (timeSyncRtt) => set({ timeSyncRtt }),
   setPersonalOffsetMs: (ms) => {
     const n = Number(ms);
-    const clamped = Number.isFinite(n) ? Math.max(-1000, Math.min(1000, Math.round(n))) : 0;
-    try { localStorage.setItem('wos-personal-offset-ms', String(clamped)); } catch { /* 무시 */ }
+    const clamped = Number.isFinite(n)
+      ? Math.max(-1000, Math.min(1000, Math.round(n)))
+      : 0;
+    try {
+      localStorage.setItem('wos-personal-offset-ms', String(clamped));
+    } catch {
+      /* 무시 */
+    }
     set({ personalOffsetMs: clamped });
   },
-  setNotices:    (notices)    => set({ notices }),
-  setRallies:    (rallies)    => set({ rallies }),
-  setMembers:    (members)    => set({ members }),
-  setOnlineUsers:(onlineUsers)=> set({ onlineUsers }),
+  setNotices: (notices) => set({ notices }),
+  setRallies: (rallies) => set({ rallies }),
+  setMembers: (members) => set({ members }),
+  setOnlineUsers: (onlineUsers) => set({ onlineUsers }),
+  setChatHistory: (messages) =>
+    set((state) => ({
+      chatMessages: mergeChatMessages(
+        state.chatMessages,
+        Array.isArray(messages) ? messages : [],
+      ),
+    })),
+  appendChatMessage: (message) =>
+    set((state) => ({
+      chatMessages: mergeChatMessages(state.chatMessages, [message]),
+    })),
+  setChatMessageTranslation: (
+    messageKey,
+    translatedContent,
+    translatedLanguage,
+  ) =>
+    set((state) => ({
+      chatMessages: state.chatMessages.map((message) =>
+        getChatMessageKey(message) === messageKey
+          ? { ...message, translatedContent, translatedLanguage }
+          : message,
+      ),
+    })),
+  setChatAutoTranslate: (enabled) => {
+    const chatAutoTranslate = !!enabled;
+    try {
+      localStorage.setItem(
+        'wos-chat-auto-translate',
+        chatAutoTranslate ? '1' : '0',
+      );
+    } catch {
+      /* 무시 */
+    }
+    set({ chatAutoTranslate });
+  },
   setBoardPosts: (alliance, posts) =>
     set((s) => ({ boards: { ...s.boards, [alliance]: posts } })),
-  setAllianceNotices: (alliance, notices) => set((state) => ({
-    allianceNotices: { ...state.allianceNotices, [alliance]: notices },
-  })),
-  setCountdown:  (countdown)  => set({ countdown }),
+  setAllianceNotices: (alliance, notices) =>
+    set((state) => ({
+      allianceNotices: { ...state.allianceNotices, [alliance]: notices },
+    })),
+  setCountdown: (countdown) => set({ countdown }),
 
   setMyMarchSeconds: (v) => set({ myMarchSeconds: v }),
   setBusyHolder: (holder) => set({ busyHolder: holder }),
 
   setRallyGroups: (rallyGroups) => set({ rallyGroups }),
-  upsertRallyGroup: (group) => set((s) => {
-    const idx = s.rallyGroups.findIndex((g) => g.id === group.id);
-    if (idx < 0) return { rallyGroups: [...s.rallyGroups, group] };
-    const next = s.rallyGroups.slice();
-    next[idx] = group;
-    return { rallyGroups: next };
-  }),
-  removeRallyGroup: (groupId) => set((s) => {
-    const nextCountdowns = { ...s.rallyCountdowns };
-    delete nextCountdowns[groupId];
-    return {
-      rallyGroups: s.rallyGroups.filter((g) => g.id !== groupId),
-      rallyCountdowns: nextCountdowns,
-    };
-  }),
-  setRallyCountdown: (groupId, payload) => set((s) => ({
-    rallyCountdowns: { ...s.rallyCountdowns, [groupId]: payload },
-  })),
-  clearRallyCountdown: (groupId) => set((s) => {
-    const next = { ...s.rallyCountdowns };
-    delete next[groupId];
-    return { rallyCountdowns: next };
-  }),
+  upsertRallyGroup: (group) =>
+    set((s) => {
+      const idx = s.rallyGroups.findIndex((g) => g.id === group.id);
+      if (idx < 0) return { rallyGroups: [...s.rallyGroups, group] };
+      const next = s.rallyGroups.slice();
+      next[idx] = group;
+      return { rallyGroups: next };
+    }),
+  removeRallyGroup: (groupId) =>
+    set((s) => {
+      const nextCountdowns = { ...s.rallyCountdowns };
+      delete nextCountdowns[groupId];
+      return {
+        rallyGroups: s.rallyGroups.filter((g) => g.id !== groupId),
+        rallyCountdowns: nextCountdowns,
+      };
+    }),
+  setRallyCountdown: (groupId, payload) =>
+    set((s) => ({
+      rallyCountdowns: { ...s.rallyCountdowns, [groupId]: payload },
+    })),
+  clearRallyCountdown: (groupId) =>
+    set((s) => {
+      const next = { ...s.rallyCountdowns };
+      delete next[groupId];
+      return { rallyCountdowns: next };
+    }),
   setTtsVolume: (v) => {
     const n = Number(v);
     const clamped = Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : 0.3;
-    try { localStorage.setItem('wos-tts-volume', String(clamped)); } catch { /* 무시 */ }
+    try {
+      localStorage.setItem('wos-tts-volume', String(clamped));
+    } catch {
+      /* 무시 */
+    }
     // 유저가 슬라이더로 볼륨 > 0 을 움직이면 음소거 자동 해제 (자연스러운 UX)
     set((s) => ({
       ttsVolume: clamped,
       ttsMuted: clamped > 0 ? false : s.ttsMuted,
     }));
     if (clamped > 0) {
-      try { localStorage.setItem('wos-tts-muted', '0'); } catch { /* 무시 */ }
+      try {
+        localStorage.setItem('wos-tts-muted', '0');
+      } catch {
+        /* 무시 */
+      }
     }
   },
   setTtsMuted: (v) => {
     const muted = !!v;
-    try { localStorage.setItem('wos-tts-muted', muted ? '1' : '0'); } catch { /* 무시 */ }
+    try {
+      localStorage.setItem('wos-tts-muted', muted ? '1' : '0');
+    } catch {
+      /* 무시 */
+    }
     set({ ttsMuted: muted });
   },
   setTheme: (t) => {
     const theme = THEMES.includes(t) ? t : 'frost';
-    try { localStorage.setItem('wos-theme', theme); } catch { /* 무시 */ }
+    try {
+      localStorage.setItem('wos-theme', theme);
+    } catch {
+      /* 무시 */
+    }
     set({ theme });
   },
 }));

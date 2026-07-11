@@ -3,9 +3,55 @@ import { getCachedTranslation, cacheTranslation } from '../i18n';
 
 // access token 만료 시 자동 refresh 후 재시도 — 실패 시 auth:expired 이벤트 발행
 let refreshPromise = null;
+const API_TIMEOUT_MS = 35_000;
 
-async function apiFetch(path, options = {}) {
-  const res = await fetch(path, {
+async function fetchWithTimeout(path, options = {}) {
+  const controller = new AbortController();
+  const callerSignal = options.signal;
+  const abortFromCaller = () => controller.abort(callerSignal?.reason);
+  if (callerSignal?.aborted) abortFromCaller();
+  else callerSignal?.addEventListener('abort', abortFromCaller, { once: true });
+  const timeout = setTimeout(
+    () => controller.abort(new Error('API timeout')),
+    API_TIMEOUT_MS,
+  );
+
+  try {
+    return await fetch(path, {
+      ...options,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+    callerSignal?.removeEventListener('abort', abortFromCaller);
+  }
+}
+
+function refreshSession() {
+  if (refreshPromise) return refreshPromise;
+
+  let pending;
+  pending = fetchWithTimeout('/auth/refresh', {
+    method: 'POST',
+    credentials: 'include',
+  })
+    .then((response) => {
+      if (!response.ok) throw new Error('Session refresh failed');
+      return response;
+    })
+    .catch((error) => {
+      window.dispatchEvent(new Event('auth:expired'));
+      throw error;
+    })
+    .finally(() => {
+      if (refreshPromise === pending) refreshPromise = null;
+    });
+  refreshPromise = pending;
+  return pending;
+}
+
+async function apiFetch(path, options = {}, allowRefresh = true) {
+  const res = await fetchWithTimeout(path, {
     ...options,
     credentials: 'include', // httpOnly 쿠키 자동 전송
     headers: {
@@ -14,115 +60,187 @@ async function apiFetch(path, options = {}) {
     },
   });
 
-  if (res.status === 401 && path !== '/auth/refresh' && path !== '/auth/login' && path !== '/auth/logout') {
-    if (!refreshPromise) {
-      refreshPromise = fetch('/auth/refresh', { method: 'POST', credentials: 'include' })
-        .finally(() => { refreshPromise = null; });
+  if (
+    res.status === 401 &&
+    path !== '/auth/refresh' &&
+    path !== '/auth/login' &&
+    path !== '/auth/logout'
+  ) {
+    if (!allowRefresh) {
+      window.dispatchEvent(new Event('auth:expired'));
+      throw new Error('세션이 만료되었습니다. 다시 로그인해주세요.');
     }
-    const refreshRes = await refreshPromise;
-    if (refreshRes.ok) {
-      return apiFetch(path, options);
+
+    try {
+      await refreshSession();
+    } catch {
+      throw new Error('세션이 만료되었습니다. 다시 로그인해주세요.');
     }
-    window.dispatchEvent(new Event('auth:expired'));
-    throw new Error('세션이 만료되었습니다. 다시 로그인해주세요.');
+    return apiFetch(path, options, false);
   }
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || `HTTP ${res.status}`);
+    const error = new Error(err.message || `HTTP ${res.status}`);
+    error.status = res.status;
+    const retryAfterSeconds = Number(res.headers?.get?.('retry-after'));
+    const retryAfterMs = Number(err.retryAfterMs);
+    if (Number.isFinite(retryAfterMs) && retryAfterMs > 0) {
+      error.retryAfterMs = retryAfterMs;
+    } else if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0) {
+      error.retryAfterMs = retryAfterSeconds * 1000;
+    }
+    throw error;
   }
   if (res.status === 204) return null;
   const text = await res.text();
   if (!text) return null;
-  try { return JSON.parse(text); } catch { return null; }
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
 }
 
 export const api = {
   // 인증
-  login:   (data) => apiFetch('/auth/login',  { method: 'POST', body: JSON.stringify(data) }),
-  signup:  (data) => apiFetch('/auth/signup', { method: 'POST', body: JSON.stringify(data) }),
-  logout:  ()     => apiFetch('/auth/logout', { method: 'POST' }),
-  getMe:   ()     => apiFetch('/auth/me'),
-  getTime: ()     => apiFetch('/time'),
+  login: (data) =>
+    apiFetch('/auth/login', { method: 'POST', body: JSON.stringify(data) }),
+  signup: (data) =>
+    apiFetch('/auth/signup', { method: 'POST', body: JSON.stringify(data) }),
+  logout: () => apiFetch('/auth/logout', { method: 'POST' }),
+  getMe: () => apiFetch('/auth/me'),
+  getTime: () => apiFetch('/time'),
 
   // 공지
-  addNotice:    (data) => apiFetch('/notices',       { method: 'POST',   body: JSON.stringify(data) }),
-  deleteNotice: (id)   => apiFetch(`/notices/${id}`, { method: 'DELETE' }),
+  addNotice: (data) =>
+    apiFetch('/notices', { method: 'POST', body: JSON.stringify(data) }),
+  deleteNotice: (id) => apiFetch(`/notices/${id}`, { method: 'DELETE' }),
 
   // 집결 타이머
-  addRally:    (data) => apiFetch('/rallies',       { method: 'POST',   body: JSON.stringify(data) }),
-  deleteRally: (id)   => apiFetch(`/rallies/${id}`, { method: 'DELETE' }),
+  addRally: (data) =>
+    apiFetch('/rallies', { method: 'POST', body: JSON.stringify(data) }),
+  deleteRally: (id) => apiFetch(`/rallies/${id}`, { method: 'DELETE' }),
 
   // 집결원
-  addMember:    (data) => apiFetch('/members',       { method: 'POST',   body: JSON.stringify(data) }),
-  deleteMember: (id)   => apiFetch(`/members/${id}`, { method: 'DELETE' }),
+  addMember: (data) =>
+    apiFetch('/members', { method: 'POST', body: JSON.stringify(data) }),
+  deleteMember: (id) => apiFetch(`/members/${id}`, { method: 'DELETE' }),
 
   // 게시판
-  addBoardPost:    (alliance, data) => apiFetch('/boards',       { method: 'POST',   body: JSON.stringify({ ...data, alliance }) }),
-  deleteBoardPost: (id)             => apiFetch(`/boards/${id}`, { method: 'DELETE' }),
-
-  // 번역 캐시 (서버)
-  getTranslation:  (key)                     => apiFetch(`/translations/${encodeURIComponent(key)}`).catch(() => null),
-  setTranslation:  (cacheKey, translated)    => apiFetch('/translations', { method: 'POST', body: JSON.stringify({ cacheKey, translated }) }),
+  addBoardPost: (alliance, data) =>
+    apiFetch('/boards', {
+      method: 'POST',
+      body: JSON.stringify({
+        alliance,
+        content: data.content,
+        lang: data.lang,
+        ...(data.imageUrls ? { imageUrls: data.imageUrls } : {}),
+      }),
+    }),
+  deleteBoardPost: (id) => apiFetch(`/boards/${id}`, { method: 'DELETE' }),
 
   // 번역 실행 (Claude API → 서버)
-  translate: (text, targetLang) => apiFetch('/translate', { method: 'POST', body: JSON.stringify({ text, targetLang }) }),
+  translate: (text, targetLang, options = {}) =>
+    apiFetch('/translate', {
+      method: 'POST',
+      body: JSON.stringify({ text, targetLang }),
+      signal: options.signal,
+    }),
 
   // TTS (Google Cloud TTS → 서버 프록시, /tts-audio/:lang/:key 로 mp3 직접 서빙됨)
-  tts: (text, language = 'ko') => apiFetch('/tts', { method: 'POST', body: JSON.stringify({ text, language }) }),
+  tts: (text, language = 'ko') =>
+    apiFetch('/tts', {
+      method: 'POST',
+      body: JSON.stringify({ text, language }),
+    }),
 
   // 유저 역할
-  setUserRole: (nickname, role) => apiFetch(`/users/${encodeURIComponent(nickname)}/role`, { method: 'PATCH', body: JSON.stringify({ role }) }),
+  setUserRole: (nickname, role) =>
+    apiFetch(`/users/${encodeURIComponent(nickname)}/role`, {
+      method: 'PATCH',
+      body: JSON.stringify({ role }),
+    }),
 
   // 개인 전투 설정
-  getBattleSettings:  ()     => apiFetch('/me/battle-settings'),
-  saveBattleSettings: (data) => apiFetch('/me/battle-settings', {
-    method: 'PUT',
-    body: JSON.stringify(data),
-  }),
+  getBattleSettings: () => apiFetch('/me/battle-settings'),
+  saveBattleSettings: (data) =>
+    apiFetch('/me/battle-settings', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
 
   // Admin Panel (developer 전용)
   adminGetUsers: () => apiFetch('/admin/users'),
-  adminSetRole: (id, role) => apiFetch(`/admin/users/${id}/role`, { method: 'PATCH', body: JSON.stringify({ role }) }),
-  adminSetLeader: (id, isLeader) => apiFetch(`/admin/users/${id}/leader`, { method: 'PATCH', body: JSON.stringify({ isLeader }) }),
+  adminSetRole: (id, role) =>
+    apiFetch(`/admin/users/${id}/role`, {
+      method: 'PATCH',
+      body: JSON.stringify({ role }),
+    }),
+  adminSetLeader: (id, isLeader) =>
+    apiFetch(`/admin/users/${id}/leader`, {
+      method: 'PATCH',
+      body: JSON.stringify({ isLeader }),
+    }),
   adminBanUser: (id) => apiFetch(`/admin/users/${id}`, { method: 'DELETE' }),
 
   // 연맹 공지
-  addAllianceNotice:    (data) => apiFetch('/alliance-notices', { method: 'POST', body: JSON.stringify(data) }),
-  deleteAllianceNotice: (id)   => apiFetch(`/alliance-notices/${id}`, { method: 'DELETE' }),
+  addAllianceNotice: (data) =>
+    apiFetch('/alliance-notices', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  deleteAllianceNotice: (id) =>
+    apiFetch(`/alliance-notices/${id}`, { method: 'DELETE' }),
 
   // 집결 그룹 (Rally Group Sync)
-  listRallyGroups:           ()                                     => apiFetch('/rally-groups'),
-  listAssignableUsers:       ()                                     => apiFetch('/rally-groups/assignable-users'),
-  createRallyGroup:          (data)                                 => apiFetch('/rally-groups', { method: 'POST', body: JSON.stringify(data) }),
-  deleteRallyGroup:          (id)                                   => apiFetch(`/rally-groups/${id}`, { method: 'DELETE' }),
-  addRallyGroupMember:       (id, userId)                           => apiFetch(`/rally-groups/${id}/members`, { method: 'POST', body: JSON.stringify({ userId }) }),
-  removeRallyGroupMember:    (id, memberId)                         => apiFetch(`/rally-groups/${id}/members/${memberId}`, { method: 'DELETE' }),
-  updateRallyMarchOverride:  (id, memberId, marchSecondsOverride)   => apiFetch(`/rally-groups/${id}/members/${memberId}/march-override`, { method: 'PATCH', body: JSON.stringify({ marchSecondsOverride }) }),
-  startRallyGroup:           (id)                                   => apiFetch(`/rally-groups/${id}/start`, { method: 'POST' }),
-  stopRallyGroup:            (id)                                   => apiFetch(`/rally-groups/${id}/stop`, { method: 'POST' }),
+  listRallyGroups: () => apiFetch('/rally-groups'),
+  listAssignableUsers: () => apiFetch('/rally-groups/assignable-users'),
+  createRallyGroup: (data) =>
+    apiFetch('/rally-groups', { method: 'POST', body: JSON.stringify(data) }),
+  deleteRallyGroup: (id) =>
+    apiFetch(`/rally-groups/${id}`, { method: 'DELETE' }),
+  addRallyGroupMember: (id, userId) =>
+    apiFetch(`/rally-groups/${id}/members`, {
+      method: 'POST',
+      body: JSON.stringify({ userId }),
+    }),
+  removeRallyGroupMember: (id, memberId) =>
+    apiFetch(`/rally-groups/${id}/members/${memberId}`, { method: 'DELETE' }),
+  updateRallyMarchOverride: (id, memberId, marchSecondsOverride) =>
+    apiFetch(`/rally-groups/${id}/members/${memberId}/march-override`, {
+      method: 'PATCH',
+      body: JSON.stringify({ marchSecondsOverride }),
+    }),
+  startRallyGroup: (id) =>
+    apiFetch(`/rally-groups/${id}/start`, { method: 'POST' }),
+  stopRallyGroup: (id) =>
+    apiFetch(`/rally-groups/${id}/stop`, { method: 'POST' }),
 
   // 작전판 저장본
   listOperationBoards: () => apiFetch('/operation-boards'),
   getOperationBoard: (id) => apiFetch(`/operation-boards/${id}`),
-  saveOperationBoard: (data) => apiFetch('/operation-boards', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  }),
-  renameOperationBoard: (id, data) => apiFetch(`/operation-boards/${id}`, {
-    method: 'PATCH',
-    body: JSON.stringify(data),
-  }),
-  deleteOperationBoard: (id) => apiFetch(`/operation-boards/${id}`, {
-    method: 'DELETE',
-  }),
+  saveOperationBoard: (data) =>
+    apiFetch('/operation-boards', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  renameOperationBoard: (id, data) =>
+    apiFetch(`/operation-boards/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  deleteOperationBoard: (id) =>
+    apiFetch(`/operation-boards/${id}`, {
+      method: 'DELETE',
+    }),
 
   // 이미지 업로드 (FormData — Content-Type 헤더 제거 필요, 401 refresh 포함)
   uploadOperationBoardBackground: async (file) => {
     async function doUpload() {
       const form = new FormData();
       form.append('file', file);
-      return fetch('/operation-boards/background', {
+      return fetchWithTimeout('/operation-boards/background', {
         method: 'POST',
         credentials: 'include',
         body: form,
@@ -132,24 +250,31 @@ export const api = {
     let res = await doUpload();
 
     if (res.status === 401) {
-      const refreshRes = await fetch('/auth/refresh', { method: 'POST', credentials: 'include' });
-      if (refreshRes.ok) {
-        res = await doUpload();
-      } else {
-        window.dispatchEvent(new Event('auth:expired'));
+      try {
+        await refreshSession();
+      } catch {
         throw new Error('세션이 만료되었습니다. 다시 로그인해주세요.');
       }
+      res = await doUpload();
     }
 
     if (!res.ok) {
       const errText = await res.text().catch(() => '');
       let errMsg = `HTTP ${res.status}`;
-      try { errMsg = JSON.parse(errText).message || errMsg; } catch { /* 무시 */ }
+      try {
+        errMsg = JSON.parse(errText).message || errMsg;
+      } catch {
+        /* 무시 */
+      }
       throw new Error(errMsg);
     }
     const text = await res.text();
     if (!text) return null;
-    try { return JSON.parse(text); } catch { return null; }
+    try {
+      return JSON.parse(text);
+    } catch {
+      return null;
+    }
   },
 
   uploadBoardImage: async (file) => {
@@ -159,7 +284,7 @@ export const api = {
     async function doUpload() {
       const form = new FormData();
       form.append('file', file);
-      return fetch('/boards/upload', {
+      return fetchWithTimeout('/boards/upload', {
         method: 'POST',
         credentials: 'include',
         body: form,
@@ -171,37 +296,48 @@ export const api = {
 
     // 401이면 refresh 후 재시도
     if (res.status === 401) {
-      const refreshRes = await fetch('/auth/refresh', { method: 'POST', credentials: 'include' });
-      if (refreshRes.ok) {
-        res = await doUpload();
-      } else {
-        window.dispatchEvent(new Event('auth:expired'));
+      try {
+        await refreshSession();
+      } catch {
         throw new Error('세션이 만료되었습니다. 다시 로그인해주세요.');
       }
+      res = await doUpload();
     }
 
     if (!res.ok) {
       const errText = await res.text().catch(() => '');
       let errMsg = `HTTP ${res.status}`;
-      try { errMsg = JSON.parse(errText).message || errMsg; } catch { /* 무시 */ }
+      try {
+        errMsg = JSON.parse(errText).message || errMsg;
+      } catch {
+        /* 무시 */
+      }
       throw new Error(errMsg);
     }
     const text = await res.text();
     if (!text) return null;
-    try { return JSON.parse(text); } catch { return null; }
+    try {
+      return JSON.parse(text);
+    } catch {
+      return null;
+    }
   },
 };
 
 // ── Socket 싱글톤 ──
 let _socket = null;
 
-export function getSocket() { return _socket; }
+export function getSocket() {
+  return _socket;
+}
 
 export function connectSocket() {
-  if (_socket?.connected) return _socket;
+  // 연결 중이거나 재연결 중인 인스턴스도 같은 singleton을 재사용한다.
+  // connected만 검사하면 같은 render commit의 여러 hook이 각각 새 연결을 만든다.
+  if (_socket) return _socket;
   const url = import.meta.env.VITE_API_URL || '/';
   // httpOnly 쿠키가 자동으로 포함됨 (withCredentials: true)
-  _socket = io(url, {
+  const socket = io(url, {
     withCredentials: true,
     path: '/socket.io',
     reconnection: true,
@@ -209,12 +345,22 @@ export function connectSocket() {
     reconnectionDelayMax: 5000,
     reconnectionAttempts: Infinity,
   });
+  _socket = socket;
+
+  socket.on('disconnect', (reason) => {
+    // 서버가 권한 변경 등으로 연결을 끊으면 Socket.IO는 자동 재연결하지 않는다.
+    // 수동 로그아웃과 일시적인 네트워크 단절은 각각 기존 흐름을 유지한다.
+    if (reason !== 'io server disconnect' || _socket !== socket) return;
+    _socket = null;
+    window.dispatchEvent(new Event('auth:expired'));
+  });
+
   if (import.meta.env.DEV) {
-    _socket.on('connect_error', (err) => {
+    socket.on('connect_error', (err) => {
       console.warn('[socket] connect_error:', err.message);
     });
   }
-  return _socket;
+  return socket;
 }
 
 export function disconnectSocket() {
@@ -223,29 +369,34 @@ export function disconnectSocket() {
 }
 
 // ── 채팅 자동번역 ──
-export async function translateChatMessage(msg, myLang) {
-  if (!myLang || myLang === 'other' || !msg.language || msg.language === myLang) {
+export async function translateChatMessage(msg, myLang, options = {}) {
+  if (
+    !myLang ||
+    myLang === 'other' ||
+    !msg.language ||
+    msg.language === myLang
+  ) {
     return msg;
   }
 
   const localCached = getCachedTranslation(msg.content, myLang);
-  if (localCached) return { ...msg, translatedContent: localCached };
+  if (localCached) {
+    return {
+      ...msg,
+      translatedContent: localCached,
+      translatedLanguage: myLang,
+    };
+  }
 
-  try {
-    const cacheKey = `chat:${msg.content.slice(0, 80)}:${msg.language}:${myLang}`;
-    const serverCached = await api.getTranslation(cacheKey);
-    if (serverCached?.translated) {
-      cacheTranslation(msg.content, myLang, serverCached.translated);
-      return { ...msg, translatedContent: serverCached.translated };
-    }
-
-    const res = await api.translate(msg.content, myLang);
-    if (res?.translated) {
-      cacheTranslation(msg.content, myLang, res.translated);
-      api.setTranslation(cacheKey, res.translated).catch(() => {});
-      return { ...msg, translatedContent: res.translated };
-    }
-  } catch { /* 실패 시 원문 반환 */ }
+  const res = await api.translate(msg.content, myLang, options);
+  if (res?.translated) {
+    cacheTranslation(msg.content, myLang, res.translated);
+    return {
+      ...msg,
+      translatedContent: res.translated,
+      translatedLanguage: myLang,
+    };
+  }
 
   return msg;
 }
@@ -282,8 +433,13 @@ export function playBeep(frequency = 880, duration = 200) {
     oscillator.frequency.value = frequency;
     oscillator.type = 'sine';
     gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration / 1000);
+    gainNode.gain.exponentialRampToValueAtTime(
+      0.001,
+      ctx.currentTime + duration / 1000,
+    );
     oscillator.start(ctx.currentTime);
     oscillator.stop(ctx.currentTime + duration / 1000);
-  } catch { /* AudioContext 미지원 시 무시 */ }
+  } catch {
+    /* AudioContext 미지원 시 무시 */
+  }
 }

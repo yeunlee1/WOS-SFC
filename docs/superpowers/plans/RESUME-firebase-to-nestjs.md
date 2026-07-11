@@ -51,7 +51,7 @@
 - `preload.js`: contextBridge 업데이트 (firebase → api 채널명)
 
 ### Task 11-14: 렌더러 JS 업데이트
-- `auth.js`: `connectAlliance('2677')` → `connectAlliance()` + `socketConnect()` 추가
+- `auth.js`: `connectAlliance('[GAME_SERVER_ID]')` → `connectAlliance()` + `socketConnect()` 추가
 - `noticeboard.js`: `firebaseId` → `id` 전체 교체
 - `rally-timer.js`: `firebaseId` → `id` 전체 교체
 - `community.js`: `firebaseId` → `id` + `deleteBoardPost(alliance, id)` → `deleteBoardPost(id)`

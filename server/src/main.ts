@@ -13,13 +13,18 @@ async function bootstrap() {
   app.use(express.json({ limit: '50kb' }));
   app.use(express.urlencoded({ extended: true, limit: '50kb' }));
 
-  app.useGlobalPipes(new ValidationPipe({
-    whitelist: true,
-    forbidNonWhitelisted: true,
-    transform: true,
-    disableErrorMessages: process.env.NODE_ENV === 'production',
-  }));
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+      disableErrorMessages: process.env.NODE_ENV === 'production',
+    }),
+  );
 
+  if (process.env.NODE_ENV === 'production' && !process.env.WEB_ORIGIN) {
+    throw new Error('WEB_ORIGIN 환경변수가 production에서 필수입니다');
+  }
   const allowedOrigin = process.env.WEB_ORIGIN || 'http://localhost:5173';
   app.enableCors({ origin: allowedOrigin, credentials: true });
 

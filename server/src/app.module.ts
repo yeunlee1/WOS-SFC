@@ -32,6 +32,7 @@ import { AllianceNoticesModule } from './alliance-notices/alliance-notices.modul
 import { MeModule } from './me/me.module';
 import { RallyGroupsModule } from './rally-groups/rally-groups.module';
 import { OperationBoardsModule } from './operation-boards/operation-boards.module';
+import { UPLOAD_ROOT } from './storage-paths';
 
 @Module({
   imports: [
@@ -42,7 +43,8 @@ import { OperationBoardsModule } from './operation-boards/operation-boards.modul
       useFactory: (configService: ConfigService) => {
         // entity 자동 마이그레이션은 기본 OFF. dev에서 켜려면 .env에 TYPEORM_SYNC=true 명시.
         // production(NODE_ENV=production)에서는 TYPEORM_SYNC 값과 무관하게 항상 false — 데이터 손실 방지.
-        const isProduction = configService.get<string>('NODE_ENV') === 'production';
+        const isProduction =
+          configService.get<string>('NODE_ENV') === 'production';
         const allowSync = configService.get<string>('TYPEORM_SYNC') === 'true';
         return {
           type: 'mysql',
@@ -51,24 +53,48 @@ import { OperationBoardsModule } from './operation-boards/operation-boards.modul
           username: configService.get<string>('DATABASE_USER'),
           password: configService.get<string>('DATABASE_PASSWORD'),
           database: configService.get<string>('DATABASE_NAME'),
-          entities: [User, Message, Notice, Rally, Member, BoardPost, Translation, AllianceNotice, RallyGroup, RallyGroupMember, OperationBoard],
+          entities: [
+            User,
+            Message,
+            Notice,
+            Rally,
+            Member,
+            BoardPost,
+            Translation,
+            AllianceNotice,
+            RallyGroup,
+            RallyGroupMember,
+            OperationBoard,
+          ],
           synchronize: !isProduction && allowSync,
         };
       },
     }),
     ServeStaticModule.forRoot({
-      rootPath: join(__dirname, '..', '..', '..', 'web', 'dist'),
-      exclude: ['/auth/*path', '/notices/*path', '/rallies/*path', '/members/*path',
-                '/boards/*path', '/translations/*path', '/users/*path',
-                '/translate/*path', '/tts-audio/*path', '/admin/*path',
-                '/alliance-notices/*path', '/me/*path', '/rally-groups/*path',
-                '/operation-boards/*path',
-                '/time', '/socket.io/*path',
-                '/uploads/*path'],
+      rootPath: join(__dirname, '..', '..', 'web', 'dist'),
+      exclude: [
+        '/auth/*path',
+        '/notices/*path',
+        '/rallies/*path',
+        '/members/*path',
+        '/boards/*path',
+        '/translations/*path',
+        '/users/*path',
+        '/translate/*path',
+        '/tts-audio/*path',
+        '/admin/*path',
+        '/alliance-notices/*path',
+        '/me/*path',
+        '/rally-groups/*path',
+        '/operation-boards/*path',
+        '/time',
+        '/socket.io/*path',
+        '/uploads/*path',
+      ],
       serveStaticOptions: { fallthrough: false },
     }),
     ServeStaticModule.forRoot({
-      rootPath: join(__dirname, '..', '..', 'uploads'),
+      rootPath: UPLOAD_ROOT,
       serveRoot: '/uploads',
       serveStaticOptions: { index: false },
     }),

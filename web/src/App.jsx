@@ -4,7 +4,7 @@ import { useSocket } from './hooks/useSocket';
 import { useReadyProbe } from './hooks/useReadyProbe';
 import { useResizable } from './hooks/useResizable';
 import { useI18n } from './i18n';
-import { api, getSocket } from './api';
+import { api, getSocket, disconnectSocket } from './api';
 import { syncTime, startup, shutdown } from './clockSync';
 import AuthModal from './components/Auth/AuthModal';
 import { warmupRallyAudio } from './components/Battle/rallyGroupPlayer';
@@ -33,11 +33,11 @@ function _initChatDockOpen() {
 }
 
 export default function App() {
-  const user      = useStore((s) => s.user);
-  const setUser   = useStore((s) => s.setUser);
+  const user = useStore((s) => s.user);
+  const setUser = useStore((s) => s.setUser);
   const clearUser = useStore((s) => s.clearUser);
-  const theme     = useStore((s) => s.theme);
-  const { changeLang } = useI18n();
+  const theme = useStore((s) => s.theme);
+  const { lang, changeLang } = useI18n();
   const [activeTab, setActiveTab] = useState('battle');
   const [hydrating, setHydrating] = useState(true);
   const [isOnlineOpen, setIsOnlineOpen] = useState(_initChatDockOpen);
@@ -47,7 +47,7 @@ export default function App() {
   const { size: sidebarWidth, handleMouseDown: startSidebarResize } =
     useResizable('wos-sidebar-width', 200, { min: 150, max: 450 });
 
-  useSocket(user);
+  useSocket(user, lang);
   useReadyProbe(user);
 
   // 테마 클래스를 <body>에 적용 — CSS 변수 cascade 기반 전역 전환.
@@ -62,7 +62,9 @@ export default function App() {
   useEffect(() => {
     try {
       localStorage.setItem('wos-chat-dock-open', isOnlineOpen ? '1' : '0');
-    } catch { /* 무시 */ }
+    } catch {
+      /* 무시 */
+    }
   }, [isOnlineOpen]);
 
   // 새로고침 splash 제거 — index.html에 인라인된 #app-splash가 React mount 전에 즉시 보임.
@@ -71,7 +73,9 @@ export default function App() {
     const splash = document.getElementById('app-splash');
     if (!splash) return;
     splash.classList.add('app-splash--leaving');
-    const t = setTimeout(() => { splash.remove(); }, 360);
+    const t = setTimeout(() => {
+      splash.remove();
+    }, 360);
     return () => clearTimeout(t);
   }, []);
 
@@ -86,11 +90,9 @@ export default function App() {
         // fetch + decodeAudioData는 suspended에서도 동작하므로 bufferCache는 채워진다.
         // 이후 사용자 첫 클릭에서 global unlock 핸들러가 ctx.resume → 즉시 재생 가능.
         // 새로고침 후 첫 카운트다운 시작 시 누락되던 케이스 방지.
-        warmupRallyAudio({ lang: me.user.language || 'ko' }).catch(() => { /* noop */ });
-        // clockSync 부팅 — 첫 동기화 + 주기적 재동기화 + system clock 점프 감지 + 멀티탭 채널
-        try {
-          await startup();
-        } catch { /* offset 0 유지 */ }
+        warmupRallyAudio({ lang: me.user.language || 'ko' }).catch(() => {
+          /* noop */
+        });
       } catch {
         // 유효한 세션 없음 — 로그인 화면 표시
       } finally {
@@ -101,19 +103,34 @@ export default function App() {
     // 탭 복귀 시 재동기화 — 백그라운드 체류로 인한 drift 보정
     function onVisible() {
       if (document.visibilityState === 'visible') {
-        syncTime().catch(() => {});
+        if (useStore.getState().user) syncTime().catch(() => {});
       }
     }
     document.addEventListener('visibilitychange', onVisible);
 
-    const handleExpiry = () => clearUser();
+    const handleExpiry = () => {
+      disconnectSocket();
+      clearUser();
+    };
     window.addEventListener('auth:expired', handleExpiry);
     return () => {
       window.removeEventListener('auth:expired', handleExpiry);
       document.removeEventListener('visibilitychange', onVisible);
-      shutdown();
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 세션 복원과 새 로그인을 같은 수명주기로 처리한다.
+  // user가 생기면 clockSync 전체 기능을 시작하고 로그아웃·계정 변경 시 즉시 정리한다.
+  useEffect(() => {
+    if (!user) {
+      shutdown();
+      return undefined;
+    }
+    startup().catch(() => {
+      /* offset 0 유지 */
+    });
+    return () => shutdown();
+  }, [user?.id]);
 
   // 소켓 reconnect 시 재동기화 — user 로그인 이후 소켓이 생성된 뒤에 리스너 부착
   // (마운트 시점엔 user가 없어 getSocket()이 null일 수 있으므로 user 변경 감지 effect로 분리)
@@ -121,7 +138,9 @@ export default function App() {
     if (!user) return;
     const sock = getSocket();
     if (!sock) return;
-    const syncOnConnect = () => { syncTime().catch(() => {}); };
+    const syncOnConnect = () => {
+      syncTime().catch(() => {});
+    };
     sock.on('connect', syncOnConnect);
     return () => {
       sock.off('connect', syncOnConnect);
@@ -155,7 +174,9 @@ export default function App() {
   // setTimeout(0)으로 popover 자기 자신 click이 등록 후 발생하는 경합 회피.
   useEffect(() => {
     if (!userPopOpen) return;
-    function handler() { setUserPopOpen(false); }
+    function handler() {
+      setUserPopOpen(false);
+    }
     const id = setTimeout(() => document.addEventListener('click', handler), 0);
     return () => {
       clearTimeout(id);
@@ -166,7 +187,14 @@ export default function App() {
   if (hydrating) return null;
 
   if (!user) {
-    return <><Petals />{theme === 'frost' && <SnowCanvas />}{theme === 'spring' && <BlossomCanvas />}<AuthModal /></>;
+    return (
+      <>
+        <Petals />
+        {theme === 'frost' && <SnowCanvas />}
+        {theme === 'spring' && <BlossomCanvas />}
+        <AuthModal />
+      </>
+    );
   }
 
   // dock(=OnlinePanel) 실제 표시 여부: chat 탭에서는 풀페이지가 이미 채팅이므로 도크 비활성
@@ -177,7 +205,12 @@ export default function App() {
       {theme === 'spring' && <Petals />}
       {theme === 'frost' && <SnowCanvas />}
       {theme === 'spring' && <BlossomCanvas />}
-      <div className={'app-container console' + (dockActuallyOpen ? ' console--with-dock' : '')}>
+      <div
+        className={
+          'app-container console' +
+          (dockActuallyOpen ? ' console--with-dock' : '')
+        }
+      >
         <IconRail
           activeTab={activeTab}
           onTabChange={setActiveTab}
@@ -198,11 +231,13 @@ export default function App() {
             onOpenCmdk={() => setCmdkOpen(true)}
           />
           <main className="tab-content">
-            {activeTab === 'battle'    && <BattleTab />}
+            {activeTab === 'battle' && <BattleTab />}
             {activeTab === 'operation' && <OperationBoardTab />}
             {activeTab === 'community' && <CommunityTab />}
-            {activeTab === 'chat'      && <ChatTab />}
-            {activeTab === 'admin' && user?.role === 'developer' && <AdminTab />}
+            {activeTab === 'chat' && <ChatTab />}
+            {activeTab === 'admin' && user?.role === 'developer' && (
+              <AdminTab />
+            )}
           </main>
         </div>
         {dockActuallyOpen && (
@@ -210,7 +245,10 @@ export default function App() {
         )}
         {/* 모바일: 오버레이 클릭으로 사이드바 닫기 */}
         {isOnlineOpen && activeTab !== 'chat' && (
-          <div className="online-overlay" onClick={() => setIsOnlineOpen(false)} />
+          <div
+            className="online-overlay"
+            onClick={() => setIsOnlineOpen(false)}
+          />
         )}
       </div>
 
@@ -222,9 +260,7 @@ export default function App() {
       />
 
       {/* User Popover — 외부 클릭/Escape로 닫힘 */}
-      {userPopOpen && (
-        <UserPopover onClose={() => setUserPopOpen(false)} />
-      )}
+      {userPopOpen && <UserPopover onClose={() => setUserPopOpen(false)} />}
 
       {/* Command Palette — ⌘K로 호출 */}
       <CommandPalette
