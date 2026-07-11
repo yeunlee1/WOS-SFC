@@ -10,6 +10,9 @@ import {
 } from '@nestjs/websockets';
 import { JwtService } from '@nestjs/jwt';
 import { Server, Socket } from 'socket.io';
+import { UsersService } from '../users/users.service';
+import { SOCKET_CORS_OPTIONS } from '../realtime/socket-cors.options';
+import { isOperationBoardBackgroundUrl } from './operation-board-upload.options';
 
 type OperationAck = { ok: boolean };
 
@@ -40,8 +43,6 @@ const ELEMENT_ID_MAX_LENGTH = 80;
 const ELEMENT_TEXT_MAX_LENGTH = 300;
 const ELEMENT_COLOR_MAX_LENGTH = 32;
 const ELEMENT_STRING_MAX_LENGTH = 512;
-const BACKGROUND_IMAGE_URL_MAX_LENGTH = 255;
-const BACKGROUND_IMAGE_URL_PREFIX = '/uploads/operation-boards/';
 const ALLOWED_ELEMENT_TYPES = new Set([
   'path',
   'line',
@@ -52,15 +53,7 @@ const ALLOWED_ELEMENT_TYPES = new Set([
   'marker',
 ]);
 
-// production 환경에서 WEB_ORIGIN 미설정 시 CORS origin fallback을 막는다.
-if (process.env.NODE_ENV === 'production' && !process.env.WEB_ORIGIN) {
-  throw new Error(
-    'WEB_ORIGIN 환경변수가 production에서 필수입니다. CORS 보안을 위해 명시적으로 설정하세요.',
-  );
-}
-const WEB_ORIGIN = process.env.WEB_ORIGIN || 'http://localhost:5173';
-
-@WebSocketGateway({ cors: { origin: WEB_ORIGIN, credentials: true } })
+@WebSocketGateway({ cors: SOCKET_CORS_OPTIONS })
 export class OperationBoardsGateway
   implements OnGatewayConnection, OnGatewayDisconnect
 {
@@ -71,10 +64,14 @@ export class OperationBoardsGateway
   private elements: OperationElement[] = [];
   private background: OperationBackground = { type: 'grid', imageUrl: null };
 
-  constructor(private readonly jwtService: JwtService) {}
+  constructor(
+    private readonly jwtService: JwtService,
+    private readonly usersService: UsersService,
+  ) {}
 
-  handleConnection(client: Socket): void {
-    const user = this.getUserFromSocket(client);
+  async handleConnection(client: Socket): Promise<void> {
+    const user = await this.getUserFromSocket(client);
+    if (!client.connected) return;
     if (!user) {
       client.disconnect();
       return;
@@ -89,12 +86,13 @@ export class OperationBoardsGateway
   }
 
   @SubscribeMessage('operation:join')
-  handleJoin(
+  async handleJoin(
     @ConnectedSocket() client: Socket,
     @MessageBody() body?: { chatOpen?: boolean },
-  ): OperationAck {
-    const user = this.ensureUser(client);
-    if (!user) {
+  ): Promise<OperationAck> {
+    const user = await this.ensureUser(client);
+    if (!client.connected || !user) {
+      if (!client.connected) return { ok: false };
       client.disconnect();
       return { ok: false };
     }
@@ -215,29 +213,35 @@ export class OperationBoardsGateway
     return { ok: true };
   }
 
-  private getUserFromSocket(client: Socket): OperationUser | null {
+  private async getUserFromSocket(
+    client: Socket,
+  ): Promise<OperationUser | null> {
     try {
       const cookieStr = client.handshake.headers.cookie || '';
       const match = cookieStr.match(/(?:^|;\s*)access_token=([^;]+)/);
       if (!match) return null;
       const token = decodeURIComponent(match[1]);
-      const payload = this.jwtService.verify(token);
-      if (!payload?.nickname) return null;
+      const payload = this.jwtService.verify<{ sub?: number }>(token);
+      if (!Number.isInteger(payload.sub)) return null;
+      const currentUser = await this.usersService.findById(payload.sub!);
+      if (!currentUser) return null;
       return {
-        nickname: payload.nickname,
-        alliance: payload.allianceName || '',
-        role: payload.role || 'member',
+        nickname: currentUser.nickname,
+        alliance: currentUser.allianceName || '',
+        role: currentUser.role,
       };
     } catch {
       return null;
     }
   }
 
-  private ensureUser(client: Socket): OperationUser | null {
+  private async ensureUser(client: Socket): Promise<OperationUser | null> {
+    if (!client.connected) return null;
     const existing = this.connectedUsers.get(client.id);
     if (existing) return existing;
 
-    const user = this.getUserFromSocket(client);
+    const user = await this.getUserFromSocket(client);
+    if (!client.connected) return null;
     if (user) this.connectedUsers.set(client.id, user);
     return user;
   }
@@ -280,10 +284,7 @@ export class OperationBoardsGateway
     }
 
     const source = element as Record<string, unknown>;
-    const id = this.normalizeRequiredString(
-      source.id,
-      ELEMENT_ID_MAX_LENGTH,
-    );
+    const id = this.normalizeRequiredString(source.id, ELEMENT_ID_MAX_LENGTH);
     if (!id) return null;
 
     const type = this.normalizeRequiredString(
@@ -339,8 +340,7 @@ export class OperationBoardsGateway
     try {
       const json = JSON.stringify(value);
       return (
-        typeof json === 'string' &&
-        Buffer.byteLength(json, 'utf8') <= maxBytes
+        typeof json === 'string' && Buffer.byteLength(json, 'utf8') <= maxBytes
       );
     } catch {
       return false;
@@ -364,10 +364,6 @@ export class OperationBoardsGateway
   }
 
   private isValidBackgroundImageUrl(value: unknown): value is string {
-    return (
-      typeof value === 'string' &&
-      value.length <= BACKGROUND_IMAGE_URL_MAX_LENGTH &&
-      value.startsWith(BACKGROUND_IMAGE_URL_PREFIX)
-    );
+    return isOperationBoardBackgroundUrl(value);
   }
 }

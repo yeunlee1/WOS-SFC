@@ -21,11 +21,12 @@ export class ChatService {
   async getRecentMessages(): Promise<Message[]> {
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    return this.messagesRepo.find({
+    const newestFirst = await this.messagesRepo.find({
       where: { createdAt: MoreThan(sevenDaysAgo) },
-      order: { createdAt: 'ASC' },
+      order: { createdAt: 'DESC' },
       take: 200,
     });
+    return newestFirst.reverse();
   }
 
   // 7일 이전 오래된 메시지 삭제

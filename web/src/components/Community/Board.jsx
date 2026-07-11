@@ -4,15 +4,54 @@ import { useI18n } from '../../i18n';
 import { api } from '../../api';
 
 const ALLIANCE_COLORS = {
-  KOR: '#3b82f6', NSL: '#22c55e', JKY: '#a855f7',
-  GPX: '#f97316', UFO: '#06b6d4',
+  KOR: '#3b82f6',
+  NSL: '#22c55e',
+  JKY: '#a855f7',
+  GPX: '#f97316',
+  UFO: '#06b6d4',
 };
 
 const EMOJIS = [
-  '😀','😂','😍','🥰','😭','😡','🤔','💀','👍','👎',
-  '🙏','❤️','🔥','💯','⚔️','🛡️','🏰','🗺️','💪','🎯',
-  '🌟','✨','🎉','🎊','💥','🔔','📢','🚀','💎','👑',
-  '🌈','🌙','⭐','🍀','🎮','🏆','🤝','🌏','🐉','⚡',
+  '😀',
+  '😂',
+  '😍',
+  '🥰',
+  '😭',
+  '😡',
+  '🤔',
+  '💀',
+  '👍',
+  '👎',
+  '🙏',
+  '❤️',
+  '🔥',
+  '💯',
+  '⚔️',
+  '🛡️',
+  '🏰',
+  '🗺️',
+  '💪',
+  '🎯',
+  '🌟',
+  '✨',
+  '🎉',
+  '🎊',
+  '💥',
+  '🔔',
+  '📢',
+  '🚀',
+  '💎',
+  '👑',
+  '🌈',
+  '🌙',
+  '⭐',
+  '🍀',
+  '🎮',
+  '🏆',
+  '🤝',
+  '🌏',
+  '🐉',
+  '⚡',
 ];
 
 // Board — 연맹별 게시판 (props: alliance: string)
@@ -25,22 +64,24 @@ export default function Board({ alliance }) {
 
   // 번역 상태
   const [translations, setTranslations] = useState({});
-  const [translating,  setTranslating]  = useState({});
+  const [translating, setTranslating] = useState({});
 
   // 이미지 모달
   const [modalImg, setModalImg] = useState(null);
 
   // 글쓰기 폼
-  const [content,      setContent]      = useState('');
-  const [imageUrls,    setImageUrls]     = useState([]);
-  const [uploadingImg, setUploadingImg]  = useState(false);
-  const [showEmoji,    setShowEmoji]     = useState(false);
-  const [posting,      setPosting]       = useState(false);
+  const [content, setContent] = useState('');
+  const [imageUrls, setImageUrls] = useState([]);
+  const [uploadingImg, setUploadingImg] = useState(false);
+  const [showEmoji, setShowEmoji] = useState(false);
+  const [posting, setPosting] = useState(false);
   const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
 
   // lang 변경 시 번역 캐시 리셋
-  useEffect(() => { setTranslations({}); }, [lang]);
+  useEffect(() => {
+    setTranslations({});
+  }, [lang]);
 
   // 수동 번역
   async function handleTranslate(postId, postContent) {
@@ -51,8 +92,9 @@ export default function Board({ alliance }) {
       if (res?.translated) {
         setTranslations((prev) => ({ ...prev, [postId]: res.translated }));
       }
-    } catch { /* 실패 시 무시 */ }
-    finally {
+    } catch {
+      /* 실패 시 무시 */
+    } finally {
       setTranslating((prev) => ({ ...prev, [postId]: false }));
     }
   }
@@ -62,7 +104,7 @@ export default function Board({ alliance }) {
     const ta = textareaRef.current;
     if (!ta) return;
     const start = ta.selectionStart;
-    const end   = ta.selectionEnd;
+    const end = ta.selectionEnd;
     const newVal = content.slice(0, start) + emoji + content.slice(end);
     setContent(newVal);
     // 커서 위치 복원
@@ -77,7 +119,10 @@ export default function Board({ alliance }) {
   async function handleImageSelect(e) {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (imageUrls.length >= 3) { alert('이미지는 최대 3장까지 첨부 가능합니다'); return; }
+    if (imageUrls.length >= 3) {
+      alert('이미지는 최대 3장까지 첨부 가능합니다');
+      return;
+    }
     setUploadingImg(true);
     try {
       const res = await api.uploadBoardImage(file);
@@ -100,11 +145,9 @@ export default function Board({ alliance }) {
     setPosting(true);
     try {
       await api.addBoardPost(alliance, {
-        nickname:     user.nickname,
-        userAlliance: user.allianceName,
-        content:      content.trim(),
+        content: content.trim(),
         lang,
-        imageUrls:    imageUrls.length > 0 ? imageUrls : undefined,
+        imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
       });
       setContent('');
       setImageUrls([]);
@@ -140,14 +183,20 @@ export default function Board({ alliance }) {
             placeholder="게시물을 작성하세요 (Ctrl+Enter로 게시)"
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handlePost(); }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handlePost();
+            }}
           />
 
           {/* 이모지 팔레트 */}
           {showEmoji && (
             <div className="emoji-palette">
               {EMOJIS.map((em) => (
-                <button key={em} className="emoji-btn" onClick={() => insertEmoji(em)}>
+                <button
+                  key={em}
+                  className="emoji-btn"
+                  onClick={() => insertEmoji(em)}
+                >
                   {em}
                 </button>
               ))}
@@ -160,8 +209,17 @@ export default function Board({ alliance }) {
           <div className="image-preview-row">
             {imageUrls.map((url) => (
               <div key={url} className="image-preview-item">
-                <img src={url} alt="첨부 이미지" className="image-preview-thumb" />
-                <button className="image-remove-btn" onClick={() => removeImage(url)}>✕</button>
+                <img
+                  src={url}
+                  alt="첨부 이미지"
+                  className="image-preview-thumb"
+                />
+                <button
+                  className="image-remove-btn"
+                  onClick={() => removeImage(url)}
+                >
+                  ✕
+                </button>
               </div>
             ))}
           </div>
@@ -207,23 +265,31 @@ export default function Board({ alliance }) {
           <p className="empty-message">{t('emptyBoard')}</p>
         ) : (
           posts.map((p) => {
-            const postLang      = p.lang || 'ko';
-            const needsTrans    = postLang !== lang;
-            const translated    = translations[p.id];
+            const postLang = p.lang || 'ko';
+            const needsTrans = postLang !== lang;
+            const translated = translations[p.id];
             const isTranslating = translating[p.id];
 
-            const isOwn     = user?.nickname === p.nickname;
-            const isManager = user?.role === 'admin' || user?.role === 'developer';
+            const isOwn = user?.nickname === p.nickname;
+            const isManager =
+              user?.role === 'admin' || user?.role === 'developer';
             const canDelete = isOwn || isManager;
 
             return (
               <div key={p.id} className="board-post-card post-card">
                 <div className="board-post-header post-card-head">
-                  <span className="board-post-alliance" style={{ background: color }}>
+                  <span
+                    className="board-post-alliance"
+                    style={{ background: color }}
+                  >
                     {p.userAlliance || p.alliance}
                   </span>
-                  <span className="board-post-nickname post-author">{p.nickname}</span>
-                  <span className="board-post-date post-meta">{p.createdAt || ''}</span>
+                  <span className="board-post-nickname post-author">
+                    {p.nickname}
+                  </span>
+                  <span className="board-post-date post-meta">
+                    {p.createdAt || ''}
+                  </span>
                   {canDelete && (
                     <button
                       className="btn btn-danger board-delete-btn"
@@ -285,8 +351,16 @@ export default function Board({ alliance }) {
       {/* 이미지 모달 */}
       {modalImg && (
         <div className="image-modal-overlay" onClick={() => setModalImg(null)}>
-          <div className="image-modal-content" onClick={(e) => e.stopPropagation()}>
-            <button className="image-modal-close" onClick={() => setModalImg(null)}>✕</button>
+          <div
+            className="image-modal-content"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              className="image-modal-close"
+              onClick={() => setModalImg(null)}
+            >
+              ✕
+            </button>
             <img src={modalImg} alt="원본 이미지" className="image-modal-img" />
           </div>
         </div>

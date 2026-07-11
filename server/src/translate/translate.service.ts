@@ -22,16 +22,19 @@ export class TranslateService {
 
   async translate(text: string, targetLang: string): Promise<string> {
     const targetName = LANG_NAMES[targetLang] || targetLang;
-    const msg = await this.client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 1024,
-      messages: [
-        {
-          role: 'user',
-          content: `Translate the following text to ${targetName}. Output only the translated text, no explanations:\n\n${text}`,
-        },
-      ],
-    });
+    const msg = await this.client.messages.create(
+      {
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 1024,
+        messages: [
+          {
+            role: 'user',
+            content: `Translate the following text to ${targetName}. Output only the translated text, no explanations:\n\n${text}`,
+          },
+        ],
+      },
+      { timeout: 30_000, maxRetries: 0 },
+    );
     return (msg.content[0] as Anthropic.TextBlock).text;
   }
 }

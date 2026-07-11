@@ -82,5 +82,38 @@ describe('BusyLockService', () => {
       expect(cb).not.toHaveBeenCalled();
       expect(service.getHolder()).toBeNull();
     });
+
+    it('reschedule — 같은 holder의 기존 자동 해제 타이머를 새 시간으로 연장', () => {
+      jest.useFakeTimers();
+      const holder: LockHolder = { type: 'rally', groupId: 'A' };
+      const oldCallback = jest.fn();
+      const newCallback = jest.fn();
+      service.tryAcquire(holder, 1000, oldCallback);
+
+      expect(service.reschedule(holder, 3000, newCallback)).toBe(true);
+      jest.advanceTimersByTime(1000);
+      expect(service.getHolder()).toEqual(holder);
+      expect(oldCallback).not.toHaveBeenCalled();
+
+      jest.advanceTimersByTime(2000);
+      expect(service.getHolder()).toBeNull();
+      expect(newCallback).toHaveBeenCalledTimes(1);
+    });
+
+    it('reschedule — 다른 holder 또는 잘못된 시간은 기존 타이머를 바꾸지 않음', () => {
+      jest.useFakeTimers();
+      const holder: LockHolder = { type: 'rally', groupId: 'A' };
+      const callback = jest.fn();
+      service.tryAcquire(holder, 1000, callback);
+
+      expect(
+        service.reschedule({ type: 'rally', groupId: 'B' }, 3000),
+      ).toBe(false);
+      expect(service.reschedule(holder, 0)).toBe(false);
+
+      jest.advanceTimersByTime(1000);
+      expect(callback).toHaveBeenCalledTimes(1);
+      expect(service.getHolder()).toBeNull();
+    });
   });
 });

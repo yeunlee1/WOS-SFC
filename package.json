@@ -2,6 +2,15 @@
   "name": "wos-sfc-helper",
   "version": "1.0.0",
   "description": "WOS SFC 전투 보조 웹 앱",
+  "scripts": {
+    "build": "npm run build --workspace server && npm run build --workspace web",
+    "test": "npm test --workspace server -- --runInBand && npm test --workspace web -- --run",
+    "test:server": "npm test --workspace server -- --runInBand",
+    "test:web": "npm test --workspace web -- --run"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",

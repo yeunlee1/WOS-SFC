@@ -5,6 +5,6 @@ export class TranslateRequestDto {
   @MaxLength(10000)
   text: string;
 
-  @IsIn(['ko', 'en', 'ja', 'zh'])
+  @IsIn(['ko', 'en', 'ja', 'zh', 'ru'])
   targetLang: string;
 }

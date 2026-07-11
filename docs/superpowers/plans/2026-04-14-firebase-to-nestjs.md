@@ -1427,7 +1427,7 @@ window.electronAPI.connectAlliance().then((result) => {
 window.electronAPI.socketConnect();
 ```
 
-(기존: `window.electronAPI.connectAlliance('2677').then(...)` → 인자 제거 + socketConnect 추가)
+(기존: `window.electronAPI.connectAlliance('[GAME_SERVER_ID]').then(...)` → 인자 제거 + socketConnect 추가)
 
 - [ ] **Step 2: 커밋**
 
@@ -1585,7 +1585,7 @@ git commit -m "chore: 정적 검증 통과 — Firebase→NestJS 통합 완료"
 
 Task 16 완료 후 수동 검증:
 
-1. MySQL 실행 확인: `mysql -u wos_user -p wos_pass wos_db`
+1. MySQL 실행 확인: `mysql -u wos_user -p wos_db` 후 비밀번호를 프롬프트에 입력
 2. NestJS 서버 기동: `cd server && npm run start:dev`
    - Expected: `Server running on port 3001`, 테이블 auto-sync 로그
 3. Electron 앱 기동: `npm start` (워크트리 루트)

@@ -2,8 +2,10 @@
 import { JwtService } from '@nestjs/jwt';
 import type { Server, Socket } from 'socket.io';
 import { OperationBoardsGateway } from './operation-boards.gateway';
+import { UsersService } from '../users/users.service';
 
 type JwtPayload = {
+  sub: number;
   nickname: string;
   allianceName?: string;
   role?: string;
@@ -19,12 +21,14 @@ type SocketMock = Socket & {
 };
 
 const ADMIN_PAYLOAD: JwtPayload = {
+  sub: 1,
   nickname: 'adminKo',
   allianceName: 'KOR',
   role: 'admin',
 };
 
 const MEMBER_PAYLOAD: JwtPayload = {
+  sub: 2,
   nickname: 'memberKo',
   allianceName: 'NSL',
   role: 'member',
@@ -39,6 +43,7 @@ function makeServer(): ServerMock {
 function makeSocket(id: string, token = id): SocketMock {
   return {
     id,
+    connected: true,
     handshake: {
       headers: { cookie: `access_token=${encodeURIComponent(token)}` },
     },
@@ -49,6 +54,7 @@ function makeSocket(id: string, token = id): SocketMock {
 
 describe('OperationBoardsGateway', () => {
   let jwtService: { verify: jest.Mock<JwtPayload, [string]> };
+  let usersService: { findById: jest.Mock };
   let gateway: OperationBoardsGateway;
   let server: ServerMock;
   let adminSocket: SocketMock;
@@ -62,8 +68,26 @@ describe('OperationBoardsGateway', () => {
         throw new Error('invalid token');
       }),
     };
+    usersService = {
+      findById: jest.fn((id: number) =>
+        id === ADMIN_PAYLOAD.sub
+          ? {
+              id,
+              nickname: ADMIN_PAYLOAD.nickname,
+              allianceName: ADMIN_PAYLOAD.allianceName,
+              role: ADMIN_PAYLOAD.role,
+            }
+          : {
+              id,
+              nickname: MEMBER_PAYLOAD.nickname,
+              allianceName: MEMBER_PAYLOAD.allianceName,
+              role: MEMBER_PAYLOAD.role,
+            },
+      ),
+    };
     gateway = new OperationBoardsGateway(
       jwtService as unknown as JwtService,
+      usersService as unknown as UsersService,
     );
     server = makeServer();
     gateway.server = server;
@@ -71,8 +95,8 @@ describe('OperationBoardsGateway', () => {
     memberSocket = makeSocket('s-member', 'member');
   });
 
-  it('authenticates connection cookies but only joined operation-board tabs appear in presence', () => {
-    gateway.handleConnection(adminSocket);
+  it('authenticates connection cookies but only joined operation-board tabs appear in presence', async () => {
+    await gateway.handleConnection(adminSocket);
 
     expect(adminSocket.disconnect).not.toHaveBeenCalled();
     expect(server.emit).not.toHaveBeenCalledWith(
@@ -80,7 +104,7 @@ describe('OperationBoardsGateway', () => {
       expect.anything(),
     );
 
-    const ack = gateway.handleJoin(adminSocket, { chatOpen: true });
+    const ack = await gateway.handleJoin(adminSocket, { chatOpen: true });
 
     expect(ack).toEqual({ ok: true });
     expect(adminSocket.emit).toHaveBeenCalledWith('operation:state', {
@@ -110,17 +134,92 @@ describe('OperationBoardsGateway', () => {
     ]);
   });
 
-  it('disconnects sockets with invalid access_token cookies', () => {
+  it('disconnects sockets with invalid access_token cookies', async () => {
     const socket = makeSocket('s-invalid', 'bad-token');
 
-    gateway.handleConnection(socket);
+    await gateway.handleConnection(socket);
 
     expect(socket.disconnect).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps non-admin draw permission per joined session and drops it on disconnect', () => {
-    gateway.handleJoin(adminSocket, {});
-    gateway.handleJoin(memberSocket, { chatOpen: false });
+  it('DB 조회 중 disconnect되면 유령 연결 사용자를 등록하지 않는다', async () => {
+    const socket = makeSocket('s-race', 'admin');
+    let resolveUser!: (user: {
+      id: number;
+      nickname: string;
+      allianceName: string;
+      role: string;
+    }) => void;
+    usersService.findById.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveUser = resolve;
+      }),
+    );
+
+    const connecting = gateway.handleConnection(socket);
+    (socket as unknown as { connected: boolean }).connected = false;
+    gateway.handleDisconnect(socket);
+    server.emit.mockClear();
+
+    resolveUser({
+      id: 1,
+      nickname: 'adminKo',
+      allianceName: 'KOR',
+      role: 'admin',
+    });
+    await connecting;
+
+    const connectedUsers = (
+      gateway as unknown as {
+        connectedUsers: Map<string, unknown>;
+      }
+    ).connectedUsers;
+    expect(connectedUsers.has(socket.id)).toBe(false);
+    expect(socket.emit).not.toHaveBeenCalled();
+    expect(server.emit).not.toHaveBeenCalled();
+  });
+
+  it('operation:join 인증 조회 중 disconnect되면 사용자와 참가자를 등록하지 않는다', async () => {
+    const socket = makeSocket('s-join-race', 'admin');
+    let resolveUser!: (user: {
+      id: number;
+      nickname: string;
+      allianceName: string;
+      role: string;
+    }) => void;
+    usersService.findById.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveUser = resolve;
+      }),
+    );
+
+    const joining = gateway.handleJoin(socket, { chatOpen: true });
+    (socket as unknown as { connected: boolean }).connected = false;
+    gateway.handleDisconnect(socket);
+    server.emit.mockClear();
+
+    resolveUser({
+      id: 1,
+      nickname: 'adminKo',
+      allianceName: 'KOR',
+      role: 'admin',
+    });
+    await expect(joining).resolves.toEqual({ ok: false });
+
+    const state = gateway as unknown as {
+      connectedUsers: Map<string, unknown>;
+      participants: Map<string, unknown>;
+    };
+    expect(state.connectedUsers.has(socket.id)).toBe(false);
+    expect(state.participants.has(socket.id)).toBe(false);
+    expect(socket.disconnect).not.toHaveBeenCalled();
+    expect(socket.emit).not.toHaveBeenCalled();
+    expect(server.emit).not.toHaveBeenCalled();
+  });
+
+  it('keeps non-admin draw permission per joined session and drops it on disconnect', async () => {
+    await gateway.handleJoin(adminSocket, {});
+    await gateway.handleJoin(memberSocket, { chatOpen: false });
 
     expect(gateway.handleElementAdd(memberSocket, { id: 'e1' })).toEqual({
       ok: false,
@@ -163,7 +262,7 @@ describe('OperationBoardsGateway', () => {
     server.emit.mockClear();
 
     const reconnectedMember = makeSocket('s-member-2', 'member');
-    gateway.handleJoin(reconnectedMember, {});
+    await gateway.handleJoin(reconnectedMember, {});
 
     expect(reconnectedMember.emit).toHaveBeenCalledWith(
       'operation:state',
@@ -178,11 +277,11 @@ describe('OperationBoardsGateway', () => {
     );
   });
 
-  it('grants draw permission only to the matching participantId for duplicate nicknames', () => {
+  it('grants draw permission only to the matching participantId for duplicate nicknames', async () => {
     const secondMemberSocket = makeSocket('s-member-2', 'member');
-    gateway.handleJoin(adminSocket, {});
-    gateway.handleJoin(memberSocket, {});
-    gateway.handleJoin(secondMemberSocket, {});
+    await gateway.handleJoin(adminSocket, {});
+    await gateway.handleJoin(memberSocket, {});
+    await gateway.handleJoin(secondMemberSocket, {});
     server.emit.mockClear();
 
     const permissionAck = gateway.handlePermissionUpdate(adminSocket, {
@@ -225,9 +324,9 @@ describe('OperationBoardsGateway', () => {
     });
   });
 
-  it('removes joined presence and temporary draw permission on operation:leave', () => {
-    gateway.handleJoin(adminSocket, {});
-    gateway.handleJoin(memberSocket, {});
+  it('removes joined presence and temporary draw permission on operation:leave', async () => {
+    await gateway.handleJoin(adminSocket, {});
+    await gateway.handleJoin(memberSocket, {});
     gateway.handlePermissionUpdate(adminSocket, {
       participantId: memberSocket.id,
       canDraw: true,
@@ -250,7 +349,7 @@ describe('OperationBoardsGateway', () => {
     );
 
     server.emit.mockClear();
-    gateway.handleJoin(memberSocket, {});
+    await gateway.handleJoin(memberSocket, {});
 
     expect(memberSocket.emit).toHaveBeenLastCalledWith(
       'operation:state',
@@ -265,8 +364,8 @@ describe('OperationBoardsGateway', () => {
     );
   });
 
-  it('allows only admin or developer participants to change draw permission', () => {
-    gateway.handleJoin(memberSocket, {});
+  it('allows only admin or developer participants to change draw permission', async () => {
+    await gateway.handleJoin(memberSocket, {});
 
     const ack = gateway.handlePermissionUpdate(memberSocket, {
       participantId: memberSocket.id,
@@ -282,9 +381,9 @@ describe('OperationBoardsGateway', () => {
     );
   });
 
-  it('rejects management events from members even when they have draw permission', () => {
-    gateway.handleJoin(adminSocket, {});
-    gateway.handleJoin(memberSocket, {});
+  it('rejects management events from members even when they have draw permission', async () => {
+    await gateway.handleJoin(adminSocket, {});
+    await gateway.handleJoin(memberSocket, {});
     gateway.handlePermissionUpdate(adminSocket, {
       participantId: memberSocket.id,
       canDraw: true,
@@ -295,7 +394,8 @@ describe('OperationBoardsGateway', () => {
     expect(
       gateway.handleBackgroundUpdate(memberSocket, {
         type: 'image',
-        imageUrl: '/uploads/operation-boards/map.webp',
+        imageUrl:
+          '/uploads/operation-boards/1760000000000-123e4567-e89b-12d3-a456-426614174000.webp',
       }),
     ).toEqual({ ok: false });
     expect(server.emit).not.toHaveBeenCalledWith('operation:clear');
@@ -305,8 +405,8 @@ describe('OperationBoardsGateway', () => {
     );
   });
 
-  it('reflects chat-open changes in operation-board presence', () => {
-    gateway.handleJoin(memberSocket, { chatOpen: false });
+  it('reflects chat-open changes in operation-board presence', async () => {
+    await gateway.handleJoin(memberSocket, { chatOpen: false });
     server.emit.mockClear();
 
     const ack = gateway.handleChatOpen(memberSocket, { chatOpen: true });
@@ -324,8 +424,8 @@ describe('OperationBoardsGateway', () => {
     ]);
   });
 
-  it('rejects oversized, invalid, or nested elements and broadcasts sanitized shallow elements', () => {
-    gateway.handleJoin(adminSocket, {});
+  it('rejects oversized, invalid, or nested elements and broadcasts sanitized shallow elements', async () => {
+    await gateway.handleJoin(adminSocket, {});
     server.emit.mockClear();
 
     expect(
@@ -394,8 +494,8 @@ describe('OperationBoardsGateway', () => {
     );
   });
 
-  it('broadcasts accepted drawing mutations and keeps at most 500 live elements', () => {
-    gateway.handleJoin(adminSocket, {});
+  it('broadcasts accepted drawing mutations and keeps at most 500 live elements', async () => {
+    await gateway.handleJoin(adminSocket, {});
 
     for (let index = 0; index < 501; index++) {
       expect(
@@ -407,7 +507,7 @@ describe('OperationBoardsGateway', () => {
     }
 
     const latestStateSocket = makeSocket('s-latest-admin', 'admin');
-    gateway.handleJoin(latestStateSocket, {});
+    await gateway.handleJoin(latestStateSocket, {});
 
     expect(latestStateSocket.emit).toHaveBeenCalledWith(
       'operation:state',
@@ -437,18 +537,20 @@ describe('OperationBoardsGateway', () => {
     expect(server.emit).toHaveBeenCalledWith('operation:clear');
   });
 
-  it('normalizes background updates before broadcasting', () => {
-    gateway.handleJoin(adminSocket, {});
+  it('normalizes background updates before broadcasting', async () => {
+    await gateway.handleJoin(adminSocket, {});
 
     expect(
       gateway.handleBackgroundUpdate(adminSocket, {
         type: 'image',
-        imageUrl: '/uploads/operation-boards/map.webp',
+        imageUrl:
+          '/uploads/operation-boards/1760000000000-123e4567-e89b-12d3-a456-426614174000.webp',
       }),
     ).toEqual({ ok: true });
     expect(server.emit).toHaveBeenCalledWith('operation:background:update', {
       type: 'image',
-      imageUrl: '/uploads/operation-boards/map.webp',
+      imageUrl:
+        '/uploads/operation-boards/1760000000000-123e4567-e89b-12d3-a456-426614174000.webp',
     });
 
     expect(
@@ -463,8 +565,8 @@ describe('OperationBoardsGateway', () => {
     });
   });
 
-  it('rejects invalid or oversized operation-board background image URLs', () => {
-    gateway.handleJoin(adminSocket, {});
+  it('rejects invalid or oversized operation-board background image URLs', async () => {
+    await gateway.handleJoin(adminSocket, {});
     server.emit.mockClear();
 
     expect(

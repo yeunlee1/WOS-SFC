@@ -7,7 +7,7 @@ import {
 
 describe('BOARD_UPLOAD_LIMITS', () => {
   it('limits upload requests to one image-only multipart payload', () => {
-    expect(BOARD_UPLOAD_LIMITS.fileSize).toBe(10 * 1024 * 1024);
+    expect(BOARD_UPLOAD_LIMITS.fileSize).toBe(5 * 1024 * 1024);
     expect(BOARD_UPLOAD_LIMITS.files).toBe(1);
     expect(BOARD_UPLOAD_LIMITS.fields).toBe(0);
     expect(BOARD_UPLOAD_LIMITS.parts).toBe(1);

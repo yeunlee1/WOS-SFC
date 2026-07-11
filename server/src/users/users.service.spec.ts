@@ -63,4 +63,28 @@ describe('UsersService', () => {
     expect(user).not.toBeNull();
     expect(user?.nickname).toBe('tester');
   });
+
+  it.each(['devAdminKo', 'DEVADMINEN', 'devMemberJa'])(
+    '공개된 레거시 개발 계정 %s는 닉네임 대소문자와 무관하게 격리한다',
+    async (nickname) => {
+      mockRepo.findOne.mockResolvedValue({ id: 7, nickname });
+
+      await expect(service.findByNickname(nickname)).resolves.toBeNull();
+      await expect(service.findById(7)).resolves.toBeNull();
+      await expect(service.findByIdWithRefreshToken(7)).resolves.toBeNull();
+    },
+  );
+
+  it('격리된 레거시 개발 닉네임의 재가입도 DB 조회 전에 거부한다', async () => {
+    await expect(
+      service.create({
+        nickname: 'devDevKo',
+        password: 'new-password',
+        allianceName: 'KOR',
+        role: 'member',
+        language: 'ko',
+      }),
+    ).rejects.toThrow(ConflictException);
+    expect(mockRepo.findOne).not.toHaveBeenCalled();
+  });
 });

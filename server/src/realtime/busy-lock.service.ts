@@ -36,6 +36,27 @@ export class BusyLockService {
   }
 
   /**
+   * 현재 holder가 일치할 때 자동 해제 시각을 다시 잡는다.
+   * 실행 중인 집결의 최대 행군 시간이 바뀌어도 이전 타이머가 조기 만료되지 않게 한다.
+   */
+  reschedule(
+    holder: LockHolder,
+    autoReleaseMs: number,
+    onAutoRelease?: () => void,
+  ): boolean {
+    if (!this.holder || !this.matches(this.holder, holder)) return false;
+    if (!Number.isFinite(autoReleaseMs) || autoReleaseMs <= 0) return false;
+
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = setTimeout(() => {
+      this.holder = null;
+      this.timer = null;
+      if (onAutoRelease) onAutoRelease();
+    }, autoReleaseMs);
+    return true;
+  }
+
+  /**
    * 명시적 해제. holder가 일치할 때만 풀림 — 다른 주체의 lock을 실수로 풀지 않도록.
    * 자동 해제 timer가 있으면 cancel.
    */

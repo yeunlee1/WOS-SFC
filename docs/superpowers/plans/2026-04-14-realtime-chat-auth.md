@@ -82,9 +82,9 @@ npm install -D @types/passport-jwt @types/bcrypt
 DATABASE_HOST=localhost
 DATABASE_PORT=5432
 DATABASE_USER=wos_user
-DATABASE_PASSWORD=wos_pass
+DATABASE_PASSWORD=<로컬에서_설정한_강한_비밀번호>
 DATABASE_NAME=wos_db
-JWT_SECRET=wos_jwt_secret_change_in_production
+JWT_SECRET=<충분히_긴_무작위_서명키>
 PORT=3001
 ```
 
@@ -93,7 +93,7 @@ PORT=3001
 ```bash
 # PostgreSQL psql 에서 실행
 psql -U postgres
-CREATE USER wos_user WITH PASSWORD 'wos_pass';
+CREATE USER wos_user WITH PASSWORD '<강한_비밀번호>';
 CREATE DATABASE wos_db OWNER wos_user;
 \q
 ```
@@ -407,7 +407,7 @@ export class SignupDto {
   @IsDateString() birthDate: string;
   @IsString() name: string;
   @IsIn(LANGUAGES) language: Language;
-  @IsString() serverCode: string; // 반드시 '2677'
+  @IsString() serverCode: string; // 실제 값은 환경변수에서만 관리
 }
 ```
 
@@ -434,7 +434,7 @@ import { SignupDto } from './dto/signup.dto';
 import { LoginDto } from './dto/login.dto';
 import * as bcrypt from 'bcrypt';
 
-const SERVER_CODE = '2677';
+const SERVER_CODE = process.env.SERVER_CODE;
 
 @Injectable()
 export class AuthService {
@@ -445,7 +445,7 @@ export class AuthService {
 
   async signup(dto: SignupDto) {
     if (dto.serverCode !== SERVER_CODE) {
-      throw new ForbiddenException('서버 코드가 올바르지 않습니다');
+      throw new ForbiddenException('가입 코드가 올바르지 않습니다');
     }
     const user = await this.usersService.create({
       nickname: dto.nickname,
@@ -510,7 +510,7 @@ import { AuthController } from './auth.controller';
   imports: [
     UsersModule,
     JwtModule.register({
-      secret: process.env.JWT_SECRET || 'wos_jwt_secret',
+      secret: process.env.JWT_SECRET as string, // 시작 전 필수 환경변수 검증
       signOptions: { expiresIn: '7d' },
     }),
   ],
@@ -551,13 +551,13 @@ curl -X POST http://localhost:3001/auth/signup \
   -H "Content-Type: application/json" \
   -d '{"nickname":"tester","password":"pass123","allianceName":"KOR","role":"member","birthDate":"1990-01-01","name":"테스터","language":"ko","serverCode":"wrong"}'
 ```
-Expected: `403 Forbidden` + "서버 코드가 올바르지 않습니다"
+Expected: `403 Forbidden` + "가입 코드가 올바르지 않습니다"
 
 ```bash
 # 회원가입 테스트 — 올바른 서버코드
 curl -X POST http://localhost:3001/auth/signup \
   -H "Content-Type: application/json" \
-  -d '{"nickname":"tester","password":"pass123","allianceName":"KOR","role":"member","birthDate":"1990-01-01","name":"테스터","language":"ko","serverCode":"2677"}'
+  -d '{"nickname":"tester","password":"pass123","allianceName":"KOR","role":"member","birthDate":"1990-01-01","name":"테스터","language":"ko","serverCode":"<SERVER_CODE>"}'
 ```
 Expected: `201` + `{ token: "...", user: { nickname: "tester", ... } }`
 
@@ -599,7 +599,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(private readonly usersService: UsersService) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
-      secretOrKey: process.env.JWT_SECRET || 'wos_jwt_secret',
+      secretOrKey: process.env.JWT_SECRET as string, // 시작 전 필수 환경변수 검증
     });
   }
 
@@ -626,7 +626,7 @@ import { JwtStrategy } from './jwt.strategy';
     UsersModule,
     PassportModule,
     JwtModule.register({
-      secret: process.env.JWT_SECRET || 'wos_jwt_secret',
+      secret: process.env.JWT_SECRET as string, // 시작 전 필수 환경변수 검증
       signOptions: { expiresIn: '7d' },
     }),
   ],
@@ -1366,7 +1366,7 @@ Expected: Auth 모달이 먼저 표시됨
 
 1. "회원가입" 클릭
 2. 모든 항목 입력
-3. "서버가 어디입니까?" → `2677` 입력
+3. 로컬 환경변수에 설정한 가입 코드를 입력
 4. "가입하기" 클릭
 5. Expected: 앱 본체 표시, 헤더에 닉네임/역할 표시
 
@@ -1385,8 +1385,8 @@ Expected: Auth 모달이 먼저 표시됨
 
 - [ ] **Step 6: 잘못된 서버코드 검증**
 
-1. 회원가입 시 "서버가 어디입니까?" → `1234` 입력
-2. Expected: "서버 코드가 올바르지 않습니다" 에러 메시지
+1. 회원가입 시 설정값과 다른 가입 코드를 입력
+2. Expected: "가입 코드가 올바르지 않습니다" 에러 메시지
 
 - [ ] **Step 7: 최종 커밋**
 

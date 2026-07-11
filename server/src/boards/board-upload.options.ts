@@ -5,8 +5,9 @@ import { existsSync, mkdirSync } from 'fs';
 import { diskStorage } from 'multer';
 import { join } from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import { UPLOAD_ROOT } from '../storage-paths';
 
-export const BOARD_UPLOAD_DIR = join(process.cwd(), '..', 'uploads', 'boards');
+export const BOARD_UPLOAD_DIR = join(UPLOAD_ROOT, 'boards');
 
 export const BOARD_UPLOAD_EXTENSION_BY_MIME_TYPE: Readonly<
   Record<string, string>
@@ -21,8 +22,11 @@ export const BOARD_UPLOAD_ALLOWED_MIME_TYPES = Object.keys(
   BOARD_UPLOAD_EXTENSION_BY_MIME_TYPE,
 );
 
+export const BOARD_UPLOAD_URL_PATTERN =
+  /^\/uploads\/boards\/\d{13}-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(?:jpg|png|gif|webp)$/i;
+
 export const BOARD_UPLOAD_LIMITS: NonNullable<MulterOptions['limits']> = {
-  fileSize: 10 * 1024 * 1024,
+  fileSize: 5 * 1024 * 1024,
   files: 1,
   fields: 0,
   parts: 1,

@@ -5,7 +5,7 @@
  *  - main.ts ValidationPipe 옵션 (whitelist, forbidNonWhitelisted, transform)
  *  - 새/강화된 데코레이터:
  *    · CreateAllianceNoticeDto.lang @MaxLength(10)
- *    · CreateBoardPostDto.imageUrls @ArrayMaxSize(10) @IsString({each}) @MaxLength(500, {each})
+ *    · CreateBoardPostDto.imageUrls 최대 3개와 로컬 업로드 URL 형식
  *    · CreateRallyDto.endTimeUTC @Max(2_000_000_000_000)
  *    · CreateNoticeDto.source @IsString() (이미 @IsIn 존재)
  *    · LoginDto.nickname @MaxLength(50), LoginDto.password @MaxLength(100)
@@ -19,6 +19,7 @@ import { CreateNoticeDto } from './notices/dto/create-notice.dto';
 import { CreateRallyDto } from './rallies/dto/create-rally.dto';
 import { SignupDto } from './auth/dto/signup.dto';
 import { LoginDto } from './auth/dto/login.dto';
+import { TranslateRequestDto } from './translate/dto/translate-request.dto';
 
 // main.ts와 동일한 ValidationPipe (production 분기는 false로 고정해 에러 메시지 확인)
 const pipe = new ValidationPipe({
@@ -58,7 +59,7 @@ describe('DTO Validation — main.ts ValidationPipe 옵션 동작', () => {
         language: 'ko',
         serverCode: '101',
         birthDate: '2000-01-01', // 제거된 필드
-        name: '홍길동',          // 제거된 필드
+        name: '홍길동', // 제거된 필드
       };
       await expect(tx(SignupDto, payload)).rejects.toBeInstanceOf(
         BadRequestException,
@@ -90,17 +91,26 @@ describe('DTO Validation — main.ts ValidationPipe 옵션 동작', () => {
     };
 
     it('영문 닉네임 통과', async () => {
-      const out = (await tx(SignupDto, { ...base, nickname: 'tester01' })) as SignupDto;
+      const out = (await tx(SignupDto, {
+        ...base,
+        nickname: 'tester01',
+      })) as SignupDto;
       expect(out.nickname).toBe('tester01');
     });
 
     it('한글 닉네임 통과', async () => {
-      const out = (await tx(SignupDto, { ...base, nickname: '테스터' })) as SignupDto;
+      const out = (await tx(SignupDto, {
+        ...base,
+        nickname: '테스터',
+      })) as SignupDto;
       expect(out.nickname).toBe('테스터');
     });
 
     it('한글+영문+숫자 혼합 통과', async () => {
-      const out = (await tx(SignupDto, { ...base, nickname: '닉네임abc1' })) as SignupDto;
+      const out = (await tx(SignupDto, {
+        ...base,
+        nickname: '닉네임abc1',
+      })) as SignupDto;
       expect(out.nickname).toBe('닉네임abc1');
     });
 
@@ -193,7 +203,10 @@ describe('DTO Validation — main.ts ValidationPipe 옵션 동작', () => {
     it('숫자 password (예: 12345678)는 거부 — enableImplicitConversion 제거로 type confusion 차단', async () => {
       // enableImplicitConversion 제거 후: number → string 변환이 일어나지 않아
       // @IsString() 검증에서 거부된다. bcrypt DoS 벡터 차단.
-      const payload = { nickname: 'tester', password: 12345678 as unknown as string };
+      const payload = {
+        nickname: 'tester',
+        password: 12345678 as unknown as string,
+      };
       await expect(tx(LoginDto, payload)).rejects.toBeInstanceOf(
         BadRequestException,
       );
@@ -232,51 +245,87 @@ describe('DTO Validation — main.ts ValidationPipe 옵션 동작', () => {
   describe('CreateBoardPostDto.imageUrls', () => {
     const base = {
       alliance: 'KOR',
-      nickname: 'n',
-      userAlliance: 'KOR',
       content: 'c',
     };
+    const imageUrl = (index: number) =>
+      `/uploads/boards/176000000000${index}-123e4567-e89b-12d3-a456-42661417400${index}.png`;
 
-    it('imageUrls 10개 통과 (경계값)', async () => {
-      const out = (await tx(CreateBoardPostDto, {
-        ...base,
-        imageUrls: Array.from({ length: 10 }, (_, i) => `https://example.com/${i}.png`),
-      })) as CreateBoardPostDto;
-      expect(out.imageUrls?.length).toBe(10);
-    });
-
-    it('imageUrls 11개 거부', async () => {
+    it('작성자 identity 필드는 서버 귀속이므로 클라이언트 입력을 거부', async () => {
       await expect(
         tx(CreateBoardPostDto, {
           ...base,
-          imageUrls: Array.from({ length: 11 }, (_, i) => `https://example.com/${i}.png`),
+          nickname: 'spoofed',
+          userAlliance: 'NSL',
         }),
       ).rejects.toBeInstanceOf(BadRequestException);
     });
 
-    it('imageUrls 요소 500자 통과 (경계값)', async () => {
-      const out = (await tx(CreateBoardPostDto, {
-        ...base,
-        imageUrls: ['a'.repeat(500)],
-      })) as CreateBoardPostDto;
-      expect(out.imageUrls?.[0].length).toBe(500);
+    it('지원하지 않는 게시 대상 연맹을 거부', async () => {
+      await expect(
+        tx(CreateBoardPostDto, { ...base, alliance: 'INVALID' }),
+      ).rejects.toBeInstanceOf(BadRequestException);
     });
 
-    it('imageUrls 요소 501자 거부', async () => {
+    it('로컬 업로드 imageUrls 3개 통과 (경계값)', async () => {
+      const out = (await tx(CreateBoardPostDto, {
+        ...base,
+        imageUrls: Array.from({ length: 3 }, (_, i) => imageUrl(i)),
+      })) as CreateBoardPostDto;
+      expect(out.imageUrls?.length).toBe(3);
+    });
+
+    it('imageUrls 4개 거부', async () => {
       await expect(
-        tx(CreateBoardPostDto, { ...base, imageUrls: ['a'.repeat(501)] }),
+        tx(CreateBoardPostDto, {
+          ...base,
+          imageUrls: Array.from({ length: 4 }, (_, i) => imageUrl(i)),
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('외부 URL과 경로 우회 URL을 거부', async () => {
+      await expect(
+        tx(CreateBoardPostDto, {
+          ...base,
+          imageUrls: ['https://example.com/tracker.png'],
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      await expect(
+        tx(CreateBoardPostDto, {
+          ...base,
+          imageUrls: ['/uploads/boards/../../auth/me.png'],
+        }),
       ).rejects.toBeInstanceOf(BadRequestException);
     });
 
     it('imageUrls 요소가 number면 거부 (IsString each)', async () => {
       await expect(
-        tx(CreateBoardPostDto, { ...base, imageUrls: [123 as unknown as string] }),
+        tx(CreateBoardPostDto, {
+          ...base,
+          imageUrls: [123 as unknown as string],
+        }),
       ).rejects.toBeInstanceOf(BadRequestException);
     });
 
     it('imageUrls 미지정 정상 통과 (Optional)', async () => {
       const out = (await tx(CreateBoardPostDto, base)) as CreateBoardPostDto;
       expect(out.imageUrls).toBeUndefined();
+    });
+  });
+
+  describe('TranslateRequestDto.targetLang', () => {
+    it('가입에서 지원하는 러시아어 번역 대상을 허용', async () => {
+      const out = (await tx(TranslateRequestDto, {
+        text: '안녕하세요',
+        targetLang: 'ru',
+      })) as TranslateRequestDto;
+      expect(out.targetLang).toBe('ru');
+    });
+
+    it('번역 대상이 아닌 other 값은 거부', async () => {
+      await expect(
+        tx(TranslateRequestDto, { text: 'hello', targetLang: 'other' }),
+      ).rejects.toBeInstanceOf(BadRequestException);
     });
   });
 
@@ -326,7 +375,11 @@ describe('DTO Validation — main.ts ValidationPipe 옵션 동작', () => {
     it('source가 number면 거부 (IsString)', async () => {
       // enableImplicitConversion 제거 후: number → string 변환 없이 @IsString()에서 직접 거부된다.
       await expect(
-        tx(CreateNoticeDto, { source: 123 as unknown as string, title: 't', content: 'c' }),
+        tx(CreateNoticeDto, {
+          source: 123 as unknown as string,
+          title: 't',
+          content: 'c',
+        }),
       ).rejects.toBeInstanceOf(BadRequestException);
     });
   });

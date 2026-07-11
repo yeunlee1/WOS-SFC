@@ -2,10 +2,9 @@ import { WebSocketGateway, WebSocketServer } from '@nestjs/websockets';
 import { Server } from 'socket.io';
 import { RallyGroup } from './rally-group.entity';
 import { LockHolder } from '../realtime/busy-lock.service';
+import { SOCKET_CORS_OPTIONS } from '../realtime/socket-cors.options';
 
-const WEB_ORIGIN = process.env.WEB_ORIGIN || 'http://localhost:5173';
-
-@WebSocketGateway({ cors: { origin: WEB_ORIGIN, credentials: true } })
+@WebSocketGateway({ cors: SOCKET_CORS_OPTIONS })
 export class RallyGroupsGateway {
   @WebSocketServer() server: Server;
 

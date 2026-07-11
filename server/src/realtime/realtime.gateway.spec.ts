@@ -27,9 +27,11 @@ import { BusyLockService } from './busy-lock.service';
 import { ReadyNegotiationService } from './ready-negotiation.service';
 import { RealtimeGateway } from './realtime.gateway';
 import { WsRateLimitService } from './ws-rate-limit.service';
+import { UsersService } from '../users/users.service';
 
 // Admin role의 JwtService.verify 결과 시뮬레이션.
 const ADMIN_JWT = {
+  sub: 1,
   nickname: 'admin1',
   allianceName: 'KOR',
   role: 'admin',
@@ -38,6 +40,7 @@ const ADMIN_JWT = {
 function makeAdminSocket(id = 's1'): Socket {
   return {
     id,
+    connected: true,
     handshake: {
       headers: { cookie: 'access_token=fake' },
     },
@@ -77,17 +80,49 @@ describe('RealtimeGateway — BusyLock 통합 단위 테스트', () => {
           useValue: { verify: jest.fn().mockReturnValue(ADMIN_JWT) },
         },
         {
+          provide: UsersService,
+          useValue: {
+            findById: jest.fn((id: number) =>
+              id === 2
+                ? {
+                    id: 2,
+                    nickname: 'member1',
+                    allianceName: 'KOR',
+                    role: 'member',
+                  }
+                : {
+                    id: 1,
+                    nickname: 'admin1',
+                    allianceName: 'KOR',
+                    role: 'admin',
+                  },
+            ),
+          },
+        },
+        {
           provide: ReadyNegotiationService,
           useValue: { negotiateStartedAt: jest.fn() },
         },
         // 사용되지 않는 의존성은 빈 객체 stub.
-        { provide: NoticesService, useValue: { findAll: jest.fn() } },
-        { provide: RalliesService, useValue: { findAll: jest.fn() } },
-        { provide: MembersService, useValue: { findAll: jest.fn() } },
-        { provide: BoardsService, useValue: { findAllGrouped: jest.fn() } },
+        {
+          provide: NoticesService,
+          useValue: { findAll: jest.fn().mockResolvedValue([]) },
+        },
+        {
+          provide: RalliesService,
+          useValue: { findAll: jest.fn().mockResolvedValue([]) },
+        },
+        {
+          provide: MembersService,
+          useValue: { findAll: jest.fn().mockResolvedValue([]) },
+        },
+        {
+          provide: BoardsService,
+          useValue: { findAllGrouped: jest.fn().mockResolvedValue({}) },
+        },
         {
           provide: AllianceNoticesService,
-          useValue: { findByAlliance: jest.fn() },
+          useValue: { findByAlliance: jest.fn().mockResolvedValue([]) },
         },
       ],
     }).compile();
@@ -179,9 +214,10 @@ describe('RealtimeGateway — BusyLock 통합 단위 테스트', () => {
       const memberSock = makeAdminSocket('s2');
       const jwt = (gateway as unknown as { jwtService: JwtService }).jwtService;
       (jwt.verify as jest.Mock).mockReturnValueOnce({
+        sub: 2,
         nickname: 'm',
         allianceName: 'KOR',
-        role: 'member',
+        role: 'admin',
       });
       const ack = await gateway.handleCountdownStart(memberSock, 10);
       expect(ack).toEqual({ ok: false });
@@ -212,7 +248,7 @@ describe('RealtimeGateway — BusyLock 통합 단위 테스트', () => {
       // emit 호출 카운트 reset.
       server.emit.mockClear();
 
-      const ack = gateway.handleCountdownStop(sock);
+      const ack = await gateway.handleCountdownStop(sock);
 
       expect(ack).toEqual({ ok: true });
       expect(busyLock.getHolder()).toBeNull();
@@ -228,7 +264,7 @@ describe('RealtimeGateway — BusyLock 통합 단위 테스트', () => {
       busyLock.tryAcquire({ type: 'rally', groupId: 'g1' });
 
       const sock = makeAdminSocket();
-      const ack = gateway.handleCountdownStop(sock);
+      const ack = await gateway.handleCountdownStop(sock);
 
       expect(ack).toEqual({ ok: false });
       // rally lock 유지.
@@ -239,11 +275,12 @@ describe('RealtimeGateway — BusyLock 통합 단위 테스트', () => {
       const sock = makeAdminSocket();
       const jwt = (gateway as unknown as { jwtService: JwtService }).jwtService;
       (jwt.verify as jest.Mock).mockReturnValueOnce({
+        sub: 2,
         nickname: 'm',
         allianceName: 'KOR',
-        role: 'member',
+        role: 'admin',
       });
-      const ack = gateway.handleCountdownStop(sock);
+      const ack = await gateway.handleCountdownStop(sock);
       expect(ack).toEqual({ ok: false });
     });
   });
@@ -310,12 +347,12 @@ describe('RealtimeGateway — BusyLock 통합 단위 테스트', () => {
       const startPromise = gateway.handleCountdownStart(sock, 10);
 
       // 다음 microtask로 yield해 lock 획득까지는 진행되도록.
-      await Promise.resolve();
+      await new Promise<void>((resolve) => setImmediate(resolve));
       // 시점: lock 점유 중, negotiate 대기.
       expect(busyLock.getHolder()).toEqual({ type: 'countdown' });
 
       // race: 다른 admin이 stop 호출.
-      const stopAck = gateway.handleCountdownStop(sock);
+      const stopAck = await gateway.handleCountdownStop(sock);
       expect(stopAck).toEqual({ ok: true });
       // stop 결과 lock 풀림.
       expect(busyLock.getHolder()).toBeNull();
@@ -349,10 +386,10 @@ describe('RealtimeGateway — BusyLock 통합 단위 테스트', () => {
 
       const sock = makeAdminSocket();
       const startPromise = gateway.handleCountdownStart(sock, 10);
-      await Promise.resolve();
+      await new Promise<void>((resolve) => setImmediate(resolve));
       expect(busyLock.getHolder()).toEqual({ type: 'countdown' });
 
-      const stopAck = gateway.handleCountdownStop(sock);
+      const stopAck = await gateway.handleCountdownStop(sock);
       expect(stopAck).toEqual({ ok: true });
       expect(busyLock.getHolder()).toBeNull();
 
@@ -391,12 +428,12 @@ describe('RealtimeGateway — BusyLock 통합 단위 테스트', () => {
 
       const sock = makeAdminSocket();
       const startPromise = gateway.handleCountdownStart(sock, 10);
-      await Promise.resolve();
+      await new Promise<void>((resolve) => setImmediate(resolve));
       expect(busyLock.getHolder()).toEqual({ type: 'countdown' });
 
       // race 시퀀스:
       // (1) 다른 admin이 stop 호출 → countdown lock release.
-      const stopAck = gateway.handleCountdownStop(sock);
+      const stopAck = await gateway.handleCountdownStop(sock);
       expect(stopAck).toEqual({ ok: true });
       expect(busyLock.getHolder()).toBeNull();
 
@@ -427,6 +464,162 @@ describe('RealtimeGateway — BusyLock 통합 단위 테스트', () => {
         .filter((c) => c[0] === 'countdown:state')
         .filter((c) => (c[1] as { active?: boolean })?.active === true);
       expect(activeTrueCalls).toHaveLength(0);
+    });
+  });
+
+  describe('연결 인증 race', () => {
+    it('DB 조회 중 disconnect되면 유령 온라인 사용자를 등록하지 않는다', async () => {
+      const sock = makeAdminSocket('socket-race');
+      const usersService = (
+        gateway as unknown as {
+          usersService: { findById: jest.Mock };
+        }
+      ).usersService;
+      let resolveUser!: (user: {
+        id: number;
+        nickname: string;
+        allianceName: string;
+        role: string;
+      }) => void;
+      usersService.findById.mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveUser = resolve;
+        }),
+      );
+
+      const connecting = gateway.handleConnection(sock);
+      (sock as unknown as { connected: boolean }).connected = false;
+      gateway.handleDisconnect(sock);
+      server.emit.mockClear();
+
+      resolveUser({
+        id: 1,
+        nickname: 'admin1',
+        allianceName: 'KOR',
+        role: 'admin',
+      });
+      await connecting;
+
+      const onlineMap = (
+        gateway as unknown as {
+          onlineMap: Map<string, unknown>;
+        }
+      ).onlineMap;
+      expect(onlineMap.has(sock.id)).toBe(false);
+      expect(sock.emit).not.toHaveBeenCalled();
+      expect(server.emit).not.toHaveBeenCalled();
+    });
+
+    it('countdown:start fallback 인증 중 disconnect되면 시작하지 않는다', async () => {
+      const sock = makeAdminSocket('countdown-start-race');
+      const usersService = (
+        gateway as unknown as {
+          usersService: { findById: jest.Mock };
+        }
+      ).usersService;
+      let resolveUser!: (user: {
+        id: number;
+        nickname: string;
+        allianceName: string;
+        role: string;
+      }) => void;
+      usersService.findById.mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveUser = resolve;
+        }),
+      );
+
+      const starting = gateway.handleCountdownStart(sock, 10);
+      (sock as unknown as { connected: boolean }).connected = false;
+      gateway.handleDisconnect(sock);
+      server.emit.mockClear();
+
+      resolveUser({
+        id: 1,
+        nickname: 'admin1',
+        allianceName: 'KOR',
+        role: 'admin',
+      });
+      await expect(starting).resolves.toEqual({ ok: false });
+      expect(negotiate).not.toHaveBeenCalled();
+      expect(busyLock.getHolder()).toBeNull();
+      expect(server.emit).not.toHaveBeenCalled();
+    });
+
+    it('countdown:stop fallback 인증 중 disconnect되면 잠금을 유지한다', async () => {
+      const sock = makeAdminSocket('countdown-stop-race');
+      busyLock.tryAcquire({ type: 'countdown' });
+      const usersService = (
+        gateway as unknown as {
+          usersService: { findById: jest.Mock };
+        }
+      ).usersService;
+      let resolveUser!: (user: {
+        id: number;
+        nickname: string;
+        allianceName: string;
+        role: string;
+      }) => void;
+      usersService.findById.mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveUser = resolve;
+        }),
+      );
+
+      const stopping = gateway.handleCountdownStop(sock);
+      (sock as unknown as { connected: boolean }).connected = false;
+      gateway.handleDisconnect(sock);
+      server.emit.mockClear();
+
+      resolveUser({
+        id: 1,
+        nickname: 'admin1',
+        allianceName: 'KOR',
+        role: 'admin',
+      });
+      await expect(stopping).resolves.toEqual({ ok: false });
+      expect(busyLock.getHolder()).toEqual({ type: 'countdown' });
+      expect(server.emit).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('사용자 소켓 강제 종료', () => {
+    it('같은 nickname의 모든 연결을 종료한다', () => {
+      const first = makeAdminSocket('socket-a');
+      const second = makeAdminSocket('socket-b');
+      const other = makeAdminSocket('socket-c');
+      const onlineMap = (
+        gateway as unknown as {
+          onlineMap: Map<
+            string,
+            { nickname: string; alliance: string; role: string }
+          >;
+        }
+      ).onlineMap;
+      onlineMap.set('socket-a', {
+        nickname: 'target',
+        alliance: 'KOR',
+        role: 'member',
+      });
+      onlineMap.set('socket-b', {
+        nickname: 'target',
+        alliance: 'KOR',
+        role: 'member',
+      });
+      onlineMap.set('socket-c', {
+        nickname: 'other',
+        alliance: 'KOR',
+        role: 'member',
+      });
+      server.sockets.sockets.set('socket-a', first);
+      server.sockets.sockets.set('socket-b', second);
+      server.sockets.sockets.set('socket-c', other);
+
+      gateway.kickUser('target');
+
+      expect(first.disconnect).toHaveBeenCalledTimes(1);
+      expect(second.disconnect).toHaveBeenCalledTimes(1);
+      expect(other.disconnect).not.toHaveBeenCalled();
     });
   });
 });

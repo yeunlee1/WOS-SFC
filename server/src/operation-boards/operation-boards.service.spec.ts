@@ -94,12 +94,15 @@ describe('OperationBoardsService', () => {
       {
         title: '이미지 작전',
         backgroundType: 'image',
-        backgroundImageUrl: '/uploads/operation-boards/map.webp',
+        backgroundImageUrl:
+          '/uploads/operation-boards/1760000000000-123e4567-e89b-12d3-a456-426614174000.webp',
         elements: [],
       },
     );
 
-    expect(saved.backgroundImageUrl).toBe('/uploads/operation-boards/map.webp');
+    expect(saved.backgroundImageUrl).toBe(
+      '/uploads/operation-boards/1760000000000-123e4567-e89b-12d3-a456-426614174000.webp',
+    );
     expect(saved.updatedByUserId).toBe(3);
   });
 
@@ -172,6 +175,28 @@ describe('OperationBoardsService', () => {
         malformedDto,
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejects external and path-traversal background image URLs', async () => {
+    const { service } = await setup();
+
+    for (const backgroundImageUrl of [
+      'https://example.com/tracker.webp',
+      '/uploads/operation-boards/../../auth/me.webp',
+      '/uploads/operation-boards/not-generated.webp',
+    ]) {
+      await expect(
+        service.saveSnapshot(
+          { id: 1, nickname: 'devKo', role: 'developer' },
+          {
+            title: '외부 이미지',
+            backgroundType: 'image',
+            backgroundImageUrl,
+            elements: [],
+          },
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    }
   });
 
   it('rejects save, rename, and delete attempts from member users', async () => {
@@ -304,10 +329,7 @@ describe('operation board background upload options', () => {
     const mod = require('./operation-board-upload.options') as {
       OPERATION_BOARD_BACKGROUND_LIMITS: Record<string, number>;
       OPERATION_BOARD_BACKGROUND_ALLOWED_MIME_TYPES: string[];
-      OPERATION_BOARD_BACKGROUND_EXTENSION_BY_MIME_TYPE: Record<
-        string,
-        string
-      >;
+      OPERATION_BOARD_BACKGROUND_EXTENSION_BY_MIME_TYPE: Record<string, string>;
     };
 
     expect(mod.OPERATION_BOARD_BACKGROUND_LIMITS).toEqual({
@@ -322,12 +344,12 @@ describe('operation board background upload options', () => {
       'image/png',
       'image/webp',
     ]);
-    expect(
-      mod.OPERATION_BOARD_BACKGROUND_EXTENSION_BY_MIME_TYPE,
-    ).toMatchObject({
-      'image/jpeg': '.jpg',
-      'image/png': '.png',
-      'image/webp': '.webp',
-    });
+    expect(mod.OPERATION_BOARD_BACKGROUND_EXTENSION_BY_MIME_TYPE).toMatchObject(
+      {
+        'image/jpeg': '.jpg',
+        'image/png': '.png',
+        'image/webp': '.webp',
+      },
+    );
   });
 });

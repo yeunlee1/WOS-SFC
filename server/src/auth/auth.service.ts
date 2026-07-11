@@ -36,7 +36,7 @@ export class AuthService {
     // 모듈 file top-level에서 process.env를 캡처하면 그 시점엔 dotenv가 아직 안 돌아 undefined가 들어간다 —
     // 그래서 메서드 호출 시점에 lazy 읽기로 바꿔야 .env 값이 정상 매칭된다.
     if (dto.serverCode !== process.env.SERVER_CODE) {
-      throw new ForbiddenException('서버 코드가 올바르지 않습니다');
+      throw new ForbiddenException('가입 코드가 올바르지 않습니다');
     }
     const user = await this.usersService.create({
       nickname: dto.nickname,

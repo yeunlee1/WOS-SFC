@@ -21,7 +21,14 @@ export class NoticesController {
   }
 
   @Delete(':id')
-  remove(@Param('id', ParseIntPipe) id: number) {
+  remove(@Param('id', ParseIntPipe) id: number, @Request() req: any) {
+    const user = req.user;
+    if (user.role !== 'admin' && user.role !== 'developer') {
+      throw new ForbiddenException('관리자만 공지를 삭제할 수 있습니다');
+    }
+    if (user.allianceName !== 'KOR') {
+      throw new ForbiddenException('KOR 연맹의 관리자만 서버 공지를 삭제할 수 있습니다');
+    }
     return this.service.remove(id);
   }
 }
