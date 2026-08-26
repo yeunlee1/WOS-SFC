@@ -112,6 +112,8 @@ const UI_TEXTS = {
     // Phase 3 — AuthModal
     authBrand: 'WOS · SFC',
     authBrandSubtitle: 'FROST PROTOCOL · 얼어붙은 전장',
+    // daylight(백야) 스킨 전용 부제 — frost/spring은 위 문구를 그대로 쓴다.
+    authBrandSubtitleDaylight: 'DAYLIGHT PROTOCOL · 백야의 설원',
   },
   en: {
     modalTitle: 'Enter invite code',
@@ -206,6 +208,8 @@ const UI_TEXTS = {
     breadcrumbSep: '›',
     authBrand: 'WOS · SFC',
     authBrandSubtitle: 'FROST PROTOCOL · FROZEN BATTLEFIELD',
+    // daylight(백야) 스킨 전용 부제 — frost/spring은 위 문구를 그대로 쓴다.
+    authBrandSubtitleDaylight: 'DAYLIGHT PROTOCOL · POLAR DAY SNOWFIELD',
   },
   ja: {
     modalTitle: '招待コードを入力してください',
@@ -300,6 +304,8 @@ const UI_TEXTS = {
     breadcrumbSep: '›',
     authBrand: 'WOS · SFC',
     authBrandSubtitle: 'FROST PROTOCOL · 凍りついた戦場',
+    // daylight(백야) 스킨 전용 부제 — frost/spring은 위 문구를 그대로 쓴다.
+    authBrandSubtitleDaylight: 'DAYLIGHT PROTOCOL · 白夜の雪原',
   },
   zh: {
     modalTitle: '请输入邀请码',
@@ -394,6 +400,8 @@ const UI_TEXTS = {
     breadcrumbSep: '›',
     authBrand: 'WOS · SFC',
     authBrandSubtitle: 'FROST PROTOCOL · 冰封战场',
+    // daylight(백야) 스킨 전용 부제 — frost/spring은 위 문구를 그대로 쓴다.
+    authBrandSubtitleDaylight: 'DAYLIGHT PROTOCOL · 白夜雪原',
   },
 };
 
