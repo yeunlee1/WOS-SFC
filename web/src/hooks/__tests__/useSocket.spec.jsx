@@ -257,3 +257,75 @@ describe('useSocket chat state', () => {
     mounted.unmount();
   });
 });
+
+// 재접속 복구 경로 — 서버(RallyGroupsGateway.handleConnection)가 접속한 소켓에만
+// rallyGroup:updated + rallyGroup:countdown:start 를 되돌려준다.
+// 이 훅이 두 이벤트를 스토어까지 흘려보내야 RallyGroupPanel이 running으로 렌더된다.
+describe('useSocket 집결 그룹 재접속 스냅샷', () => {
+  const STARTED_AT = 1_800_000_000_000;
+  const FIRE_OFFSETS = [
+    { orderIndex: 1, offsetMs: 0, userId: 11 },
+    { orderIndex: 2, offsetMs: 187_000, userId: 12 },
+  ];
+
+  beforeEach(() => {
+    Object.keys(socketMocks.handlers).forEach(
+      (key) => delete socketMocks.handlers[key],
+    );
+    socketMocks.socket.on.mockClear();
+    socketMocks.socket.off.mockClear();
+    useStore.setState({ user, rallyGroups: [], rallyCountdowns: {} });
+  });
+
+  it('스냅샷 두 이벤트를 스토어에 반영해 남은 슬롯의 절대시각을 복원한다', () => {
+    const mounted = renderHook(() => useSocket(user, 'ko'));
+
+    act(() => {
+      socketMocks.handlers['rallyGroup:updated']({
+        id: 'g1',
+        name: '1번 집결그룹',
+        displayOrder: 1,
+        state: 'running',
+        members: [],
+      });
+      socketMocks.handlers['rallyGroup:countdown:start']({
+        groupId: 'g1',
+        startedAtServerMs: STARTED_AT,
+        fireOffsets: FIRE_OFFSETS,
+      });
+    });
+
+    const state = useStore.getState();
+    expect(state.rallyGroups.find((g) => g.id === 'g1')?.state).toBe('running');
+    const countdown = state.rallyCountdowns.g1;
+    expect(countdown).toEqual({
+      groupId: 'g1',
+      startedAtServerMs: STARTED_AT,
+      fireOffsets: FIRE_OFFSETS,
+    });
+    // 스케줄러가 쓰는 절대시각이 그대로 복원되는지 수치로 확인
+    expect(
+      countdown.fireOffsets.map((f) => countdown.startedAtServerMs + f.offsetMs),
+    ).toEqual([STARTED_AT, STARTED_AT + 187_000]);
+
+    mounted.unmount();
+  });
+
+  it('정지 이벤트가 오면 복원된 카운트다운을 비운다', () => {
+    const mounted = renderHook(() => useSocket(user, 'ko'));
+
+    act(() => {
+      socketMocks.handlers['rallyGroup:countdown:start']({
+        groupId: 'g1',
+        startedAtServerMs: STARTED_AT,
+        fireOffsets: FIRE_OFFSETS,
+      });
+    });
+    expect(useStore.getState().rallyCountdowns.g1).toBeDefined();
+
+    act(() => socketMocks.handlers['rallyGroup:countdown:stop']({ groupId: 'g1' }));
+    expect(useStore.getState().rallyCountdowns.g1).toBeUndefined();
+
+    mounted.unmount();
+  });
+});
