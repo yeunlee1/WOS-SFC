@@ -77,9 +77,9 @@ function _initPersonalOffsetMs() {
 }
 
 // 테마 초기값: localStorage 우선, 없으면 'frost' (기본 — FROST PROTOCOL).
-// frost가 메인, spring은 후속 리뉴얼 예정 (Phase 8). anthropic/dark 테마는 폐기됨.
-// 기존 사용자 localStorage에 'anthropic'/'dark' 저장돼있으면 frost로 마이그레이션.
-export const THEMES = ['frost', 'spring'];
+// frost(다크 얼음)가 메인, spring(다크 벚꽃)이 Phase 8, daylight(백야 라이트)가 Phase 9.
+// anthropic/dark 테마는 폐기됨 — localStorage에 남아있으면 frost로 마이그레이션.
+export const THEMES = ['frost', 'spring', 'daylight'];
 function _initTheme() {
   try {
     const t = localStorage.getItem('wos-theme');

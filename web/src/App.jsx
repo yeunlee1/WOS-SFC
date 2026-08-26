@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useStore } from './store';
+import { useStore, THEMES } from './store';
 import { useSocket } from './hooks/useSocket';
 import { useReadyProbe } from './hooks/useReadyProbe';
 import { useResizable } from './hooks/useResizable';
@@ -11,6 +11,7 @@ import { warmupRallyAudio } from './components/Battle/rallyGroupPlayer';
 import Petals from './components/Layout/Petals';
 import SnowCanvas from './components/Layout/SnowCanvas';
 import BlossomCanvas from './components/Layout/BlossomCanvas';
+import DaylightCanvas from './components/Layout/DaylightCanvas';
 import Header from './components/Layout/Header';
 import OnlinePanel from './components/Layout/OnlinePanel';
 import IconRail from './components/Layout/IconRail';
@@ -51,10 +52,10 @@ export default function App() {
   useReadyProbe(user);
 
   // 테마 클래스를 <body>에 적용 — CSS 변수 cascade 기반 전역 전환.
-  // frost(메인) + spring(후속 리뉴얼). anthropic/dark는 폐기됨.
+  // 제거 목록은 THEMES에서 파생한다 — 테마를 추가하고 이 배열을 갱신하지 않아
+  // 이전 클래스가 남는 드리프트를 구조적으로 차단.
   useEffect(() => {
-    const THEME_CLASSES = ['theme-frost', 'theme-spring'];
-    document.body.classList.remove(...THEME_CLASSES);
+    document.body.classList.remove(...THEMES.map((t) => `theme-${t}`));
     document.body.classList.add(`theme-${theme}`);
   }, [theme]);
 
@@ -192,6 +193,7 @@ export default function App() {
         <Petals />
         {theme === 'frost' && <SnowCanvas />}
         {theme === 'spring' && <BlossomCanvas />}
+        {theme === 'daylight' && <DaylightCanvas />}
         <AuthModal />
       </>
     );
@@ -205,6 +207,7 @@ export default function App() {
       {theme === 'spring' && <Petals />}
       {theme === 'frost' && <SnowCanvas />}
       {theme === 'spring' && <BlossomCanvas />}
+      {theme === 'daylight' && <DaylightCanvas />}
       <div
         className={
           'app-container console' +

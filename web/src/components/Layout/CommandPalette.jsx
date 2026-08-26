@@ -12,10 +12,10 @@ const TAB_DEFS = [
 ];
 
 const THEME_ICON = {
-  frost: '🧊', spring: '🌸',
+  frost: '🧊', spring: '🌸', daylight: '☀',
 };
 const THEME_LABEL = {
-  frost: 'Frost', spring: 'Spring',
+  frost: 'Frost', spring: 'Spring', daylight: '백야(Daylight)',
 };
 
 /**
@@ -25,7 +25,7 @@ const THEME_LABEL = {
  *  - 이동: 탭 전환 (battle/community/chat/admin)
  *  - 액션: 채팅 도크 토글, TTS 토글
  *  - 언어: ko/en/ja/zh 전환
- *  - 테마: frost/spring/anthropic/dark 전환
+ *  - 테마: frost/spring/daylight 전환
  *  - 세션: 로그아웃
  *
  * 키보드:
