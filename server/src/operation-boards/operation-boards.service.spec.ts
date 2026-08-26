@@ -82,8 +82,11 @@ describe('OperationBoardsService', () => {
     expect(saved).not.toHaveProperty('elementsJson');
     expect(saved.createdByNick).toBe('adminKo');
 
+    // 목록은 요소를 뺀 메타만 준다 — 나머지 필드는 저장 응답과 같아야 한다.
+    const { elements: savedElements, ...savedMeta } = saved;
     const list = await service.list();
-    expect(list).toEqual([saved]);
+    expect(list).toEqual([savedMeta]);
+    expect(savedElements).toHaveLength(1);
   });
 
   it('persists image background URLs for developer users', async () => {
@@ -260,6 +263,58 @@ describe('OperationBoardsService', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
+  it('저장 요소를 화이트리스트로 검증해 형식이 틀리면 거절한다', async () => {
+    const { service } = await setup();
+    const actor = { id: 1, nickname: 'devKo', role: 'developer' };
+
+    for (const elements of [
+      [{ id: 'e1', type: 'nope' }],
+      [{ id: 'e1', type: 'text', label: 'main' }],
+      [{ id: 'e1', type: 'path', points: [{ x: 1, y: 2 }] }],
+      [{ id: 'e1', type: 'text', text: 'x'.repeat(301) }],
+    ]) {
+      await expect(
+        service.saveSnapshot(actor, {
+          title: '형식 오류',
+          backgroundType: 'grid',
+          backgroundImageUrl: null,
+          elements,
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    }
+  });
+
+  it('실측 크기의 펜 200획 저장본은 그대로 저장한다', async () => {
+    const { service } = await setup();
+    const elements = Array.from({ length: 200 }, (_, index) => ({
+      id: `op-${String(index).padStart(36, '0')}`,
+      type: 'path',
+      x: index,
+      y: index,
+      x2: index + 1,
+      y2: index + 1,
+      strokeWidth: 3,
+      color: '#7dd3fc',
+      d: `M ${index} ${index}`.padEnd(380, ' L 1 1'),
+    }));
+    // 이 본문은 전역 50kb 상한을 넘는 크기다 — 라우트별 상한이 없으면 도달조차 못 한다.
+    expect(
+      Buffer.byteLength(JSON.stringify({ elements }), 'utf8'),
+    ).toBeGreaterThan(50 * 1024);
+
+    const saved = await service.saveSnapshot(
+      { id: 1, nickname: 'adminKo', role: 'admin' },
+      {
+        title: '펜 200획',
+        backgroundType: 'grid',
+        backgroundImageUrl: null,
+        elements,
+      },
+    );
+
+    expect(saved.elements).toHaveLength(200);
+  });
+
   it('renames and deletes only existing snapshots', async () => {
     const { service } = await setup();
     const saved = await service.saveSnapshot(
@@ -351,5 +406,103 @@ describe('operation board background upload options', () => {
         'image/webp': '.webp',
       },
     );
+  });
+});
+
+// ─── 목록 조회 응답 크기 ───
+// 저장본 50개 × 요소 500개면 목록 한 번이 수 MB 다. 회원 전원이 작전판 탭에 들어올 때마다
+// 그것을 내려받으면 카운트다운 브로드캐스트가 밀린다. 목록은 메타만 실어야 한다.
+describe('OperationBoardsService 목록 조회', () => {
+  function makeElements(count: number) {
+    return Array.from({ length: count }, (_, index) => ({
+      id: `e${index}`,
+      type: 'path',
+      x: index,
+      y: index,
+      d: `M ${index} ${index}`.padEnd(400, ' L 1 1'),
+    }));
+  }
+
+  async function setupWithBoards(boardCount: number, elementCount: number) {
+    const repo = makeRepo();
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        OperationBoardsService,
+        { provide: getRepositoryToken(OperationBoard), useValue: repo },
+      ],
+    }).compile();
+    const service: OperationBoardsService = moduleRef.get(
+      OperationBoardsService,
+    );
+
+    for (let index = 0; index < boardCount; index += 1) {
+      await service.saveSnapshot(
+        { id: 1, nickname: 'adminKo', role: 'admin' },
+        {
+          title: `작전 ${index}`,
+          backgroundType: 'grid',
+          backgroundImageUrl: null,
+          elements: makeElements(elementCount),
+        },
+      );
+    }
+    repo.find.mockClear();
+    return { service, repo };
+  }
+
+  it('목록 응답에 요소를 싣지 않는다', async () => {
+    const { service } = await setupWithBoards(3, 300);
+
+    const list = await service.list();
+
+    expect(list).toHaveLength(3);
+    for (const row of list) {
+      expect(row).not.toHaveProperty('elements');
+      expect(row).not.toHaveProperty('elementsJson');
+      expect(row.id).toEqual(expect.any(Number));
+      expect(typeof row.title).toBe('string');
+      expect(row.createdAt).toBeInstanceOf(Date);
+      expect(row.updatedAt).toBeInstanceOf(Date);
+    }
+  });
+
+  it('요소가 가득 찬 저장본이 여러 개여도 목록 응답이 작다', async () => {
+    const { service } = await setupWithBoards(5, 500);
+
+    const list = await service.list();
+    const bytes = Buffer.byteLength(JSON.stringify(list), 'utf8');
+
+    // 저장본 하나에 실린 요소만 200KB 가 넘는다. 메타만 실으면 저장본당 1KB 미만이어야 한다.
+    expect(bytes).toBeLessThan(5 * 1024);
+  });
+
+  it('목록 조회는 DB 에서도 요소 컬럼을 읽지 않는다', async () => {
+    const { service, repo } = await setupWithBoards(1, 10);
+
+    await service.list();
+
+    expect(repo.find).toHaveBeenCalledTimes(1);
+    const findCalls = repo.find.mock.calls as unknown as Array<
+      [{ select?: Record<string, unknown>; take?: number }]
+    >;
+    const options = findCalls[0][0];
+    expect(options?.select).toBeDefined();
+    expect(options.select).not.toHaveProperty('elementsJson');
+    expect(options.select?.id).toBe(true);
+    expect(options.select?.title).toBe(true);
+    expect(options.select?.updatedAt).toBe(true);
+    expect(options.take).toBe(50);
+  });
+
+  it('개별 조회는 요소를 그대로 싣는다', async () => {
+    const { service } = await setupWithBoards(1, 12);
+
+    const list = await service.list();
+    const one = await service.getOne(list[0].id);
+
+    expect(one.elements).toHaveLength(12);
+    expect(one.title).toBe(list[0].title);
+    expect(one.backgroundType).toBe(list[0].backgroundType);
+    expect(one.backgroundImageUrl).toBe(list[0].backgroundImageUrl);
   });
 });
