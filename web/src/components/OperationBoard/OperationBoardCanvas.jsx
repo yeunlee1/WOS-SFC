@@ -219,13 +219,16 @@ export default function OperationBoardCanvas({
       >
         <defs>
           <pattern id="operation-grid" width="40" height="40" patternUnits="userSpaceOnUse">
-            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(125,211,252,0.12)" strokeWidth="1" />
+            {/* 격자·바탕 색은 CSS 변수로 뺀다 — 테마마다 다른 값이 필요하고,
+                SVG presentation attribute는 var()를 못 받으므로 style prop을 쓴다.
+                기본값은 frost/spring이 쓰던 원래 값이라 두 테마의 결과는 그대로다. */}
+            <path d="M 40 0 L 0 0 0 40" fill="none" style={{ stroke: 'var(--op-grid, rgba(125,211,252,0.12))' }} strokeWidth="1" />
           </pattern>
           <marker id="operation-arrow" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="10" markerHeight="10" orient="auto">
             <path d="M 1 1 L 11 6 L 1 11 z" fill="currentColor" />
           </marker>
         </defs>
-        <rect width={BOARD_WIDTH} height={BOARD_HEIGHT} fill="rgba(6,14,28,0.84)" />
+        <rect width={BOARD_WIDTH} height={BOARD_HEIGHT} style={{ fill: 'var(--op-canvas-bg, rgba(6,14,28,0.84))' }} />
         <rect width={BOARD_WIDTH} height={BOARD_HEIGHT} fill="url(#operation-grid)" />
         {background?.type === 'image' && background.imageUrl && (
           <image href={background.imageUrl} x="0" y="0" width={BOARD_WIDTH} height={BOARD_HEIGHT} preserveAspectRatio="xMidYMid meet" opacity="0.82" />
