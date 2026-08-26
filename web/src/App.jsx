@@ -57,6 +57,21 @@ export default function App() {
   useEffect(() => {
     document.body.classList.remove(...THEMES.map((t) => `theme-${t}`));
     document.body.classList.add(`theme-${theme}`);
+
+    // 모바일 브라우저 크롬(주소창) 색을 라이트 스킨 배경에 맞춘다.
+    // daylight일 때만 meta를 심고 그 외에는 제거한다 — frost/spring은 원래 이 meta가
+    // 없었고, 넣어 두면 두 테마의 크롬 색까지 바뀌므로 회귀가 된다.
+    const META_ID = 'wos-theme-color';
+    const existing = document.getElementById(META_ID);
+    if (theme === 'daylight') {
+      const meta = existing || document.createElement('meta');
+      meta.id = META_ID;
+      meta.name = 'theme-color';
+      meta.content = '#f7fafd'; // --bg-page (daylight)
+      if (!existing) document.head.appendChild(meta);
+    } else if (existing) {
+      existing.remove();
+    }
   }, [theme]);
 
   // chatDockOpen(=isOnlineOpen) 상태 localStorage 동기화

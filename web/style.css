@@ -270,6 +270,10 @@ body.theme-frost {
  *    (daylightTheme.spec.js가 수치로 감시한다.)
  *  - radius는 Linear 스케일(6/8/12/16)로 좁힌다 — frost의 8/14/22/32보다 단단한 인상. */
 body.theme-daylight {
+  /* 네이티브 컨트롤(select 드롭다운 목록, 스크롤바, 자동완성)도 라이트로 그리게 한다.
+   * frost/spring에는 넣지 않는다 — 현재 선언이 없어 브라우저 기본이고, 넣으면 결과가 바뀐다. */
+  color-scheme: light;
+
   /* 배경 계층 — rail(가장 틴트 짙음) < page < card(순백) */
   --bg-page:    #f7fafd;
   --bg-card:    #ffffff;
@@ -6146,7 +6150,7 @@ body.theme-daylight .rail-btn {
   background: rgba(31,111,196,0.04);
   color: var(--text-2);
   font-size: 18px;
-  transition: all 0.2s cubic-bezier(.22,1,.36,1);
+  transition: background 0.2s cubic-bezier(.22,1,.36,1), color 0.2s cubic-bezier(.22,1,.36,1), box-shadow 0.2s cubic-bezier(.22,1,.36,1);
 }
 body.theme-daylight .rail-btn:hover {
   background: rgba(31,111,196,0.12);
@@ -6346,7 +6350,7 @@ body.theme-daylight .cmdk-overlay {
   -webkit-backdrop-filter: blur(6px);
 }
 body.theme-daylight .cmdk {
-  background: linear-gradient(180deg, rgba(255,255,255,0.95), rgba(255,255,255,0.95));
+  background: rgba(255,255,255,0.95);
   border: 1px solid var(--line-2);
   box-shadow: var(--shadow-lg);
 }
