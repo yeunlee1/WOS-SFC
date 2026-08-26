@@ -287,6 +287,17 @@ export function useSocket(user, chatLanguage = user?.language) {
       appendChatMessage(message);
       queueChatTranslation(message, chatLanguageRef.current, true);
     };
+    // 서버가 히스토리 조회에 실패한 경우. 빈 채팅을 정상처럼 보이게 두지 않는다.
+    // (문구는 서버가 보내는 입퇴장 알림과 마찬가지로 아직 한국어 고정 — i18n 키 추가 필요)
+    const onChatError = (payload) => {
+      if (payload?.scope !== 'history') return;
+      appendChatMessage({
+        _type: 'system',
+        _id: `${Date.now()}-${systemMessageSequence++}`,
+        text: '지난 대화를 불러오지 못했습니다. 새 메시지는 정상 수신됩니다.',
+        createdAt: new Date().toISOString(),
+      });
+    };
     const onChatSystem = (message) => {
       appendChatMessage({
         _type: 'system',
@@ -309,6 +320,7 @@ export function useSocket(user, chatLanguage = user?.language) {
     socket.on('chat:history', onChatHistory);
     socket.on('chat:message', onChatMessage);
     socket.on('chat:system', onChatSystem);
+    socket.on('chat:error', onChatError);
     ALLIANCES.forEach((a, i) =>
       socket.on(`board:updated:${a}`, boardHandlers[i]),
     );
@@ -330,6 +342,7 @@ export function useSocket(user, chatLanguage = user?.language) {
       socket.off('chat:history', onChatHistory);
       socket.off('chat:message', onChatMessage);
       socket.off('chat:system', onChatSystem);
+      socket.off('chat:error', onChatError);
       ALLIANCES.forEach((a, i) =>
         socket.off(`board:updated:${a}`, boardHandlers[i]),
       );

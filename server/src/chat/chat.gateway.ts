@@ -35,7 +35,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {}
 
   // 클라이언트 연결 시: JWT 검증 → 유저 확인 → 히스토리 전송
+  // 인증 실패만 연결을 끊는다. 이 소켓은 RealtimeGateway(전투 카운트다운)와 같은
+  // 기본 네임스페이스를 공유하므로 채팅 내부 오류로 끊으면 전투 기능까지 죽는다.
   async handleConnection(client: Socket) {
+    let user: User | null;
     try {
       // httpOnly 쿠키에서 access_token 파싱 (RealtimeGateway와 동일 방식)
       const cookieStr = client.handshake.headers.cookie || '';
@@ -52,19 +55,28 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         client.disconnect();
         return;
       }
-      const user = await this.usersService.findById(payload.sub!);
-      if (!client.connected) return;
-      if (!user) {
-        client.disconnect();
-        return;
-      }
+      user = await this.usersService.findById(payload.sub!);
+    } catch {
+      client.disconnect();
+      return;
+    }
 
-      // 유저 정보를 소켓 객체에 저장
-      (client.data as { user?: User }).user = user;
-      this.connectedUsers.set(client.id, { nickname: user.nickname, language: user.language });
+    if (!client.connected) return;
+    if (!user) {
+      client.disconnect();
+      return;
+    }
 
-      // 최근 7일치 메시지 히스토리 전송
+    // 유저 정보를 소켓 객체에 저장
+    (client.data as { user?: User }).user = user;
+    this.connectedUsers.set(client.id, { nickname: user.nickname, language: user.language });
+
+    // 최근 7일치 메시지 히스토리 전송.
+    // 조회가 실패해도 소켓을 끊지 않는다 — 채팅은 부가 기능이고, 여기서 끊으면
+    // 클라이언트가 'io server disconnect'를 인증 실패로 읽어 앱 전체가 로그아웃된다.
+    try {
       const history = await this.chatService.getRecentMessages();
+      if (!client.connected) return;
       client.emit(
         'chat:history',
         history.map((m) => ({
@@ -76,28 +88,22 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
           createdAt: m.createdAt,
         })),
       );
-
-      // 전체에게 입장 알림 및 온라인 목록 갱신
-      this.server.emit('chat:system', `${user.nickname}님이 입장했습니다`);
-      this.server.emit(
-        'chat:online',
-        Array.from(this.connectedUsers.values()).map((u) => u.nickname),
-      );
     } catch {
-      client.disconnect();
+      if (!client.connected) return;
+      client.emit('chat:error', { scope: 'history' });
     }
+
+    // 전체에게 입장 알림.
+    // 온라인 목록은 RealtimeGateway의 'online:updated'가 이미 담당한다.
+    this.server.emit('chat:system', `${user.nickname}님이 입장했습니다`);
   }
 
-  // 클라이언트 연결 해제 시: 퇴장 알림 및 온라인 목록 갱신
+  // 클라이언트 연결 해제 시: 퇴장 알림
   handleDisconnect(client: Socket) {
     const info = this.connectedUsers.get(client.id);
     if (info) {
       this.connectedUsers.delete(client.id);
       this.server.emit('chat:system', `${info.nickname}님이 퇴장했습니다`);
-      this.server.emit(
-        'chat:online',
-        Array.from(this.connectedUsers.values()).map((u) => u.nickname),
-      );
     }
   }
 

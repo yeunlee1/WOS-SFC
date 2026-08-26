@@ -328,4 +328,18 @@ describe('useSocket 집결 그룹 재접속 스냅샷', () => {
 
     mounted.unmount();
   });
+
+  it('히스토리 조회 실패(chat:error)를 시스템 메시지로 드러낸다', () => {
+    useStore.setState({ chatMessages: [] });
+    renderHook(() => useSocket(user, 'ko'));
+
+    act(() => {
+      socketMocks.handlers['chat:error']({ scope: 'history' });
+    });
+
+    const messages = useStore.getState().chatMessages;
+    expect(messages).toHaveLength(1);
+    expect(messages[0]._type).toBe('system');
+    expect(messages[0].text.trim().length).toBeGreaterThan(0);
+  });
 });

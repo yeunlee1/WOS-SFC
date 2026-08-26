@@ -46,6 +46,12 @@ export function getChatMessageKey(message) {
   ].join(':');
 }
 
+// 실제 대화와 입퇴장 시스템 메시지의 상한을 분리한다.
+// 하나의 500칸 버퍼를 공유하면 100명이 입퇴장하는 순간 시스템 메시지가
+// 실제 대화를 통째로 밀어내 버린다.
+const CHAT_MESSAGE_LIMIT = 500;
+const CHAT_SYSTEM_LIMIT = 50;
+
 function mergeChatMessages(current, incoming) {
   const byKey = new Map(
     current.map((message) => [getChatMessageKey(message), message]),
@@ -55,13 +61,24 @@ function mergeChatMessages(current, incoming) {
     const previous = byKey.get(key);
     byKey.set(key, previous ? { ...message, ...previous } : message);
   }
-  return Array.from(byKey.values())
-    .sort((a, b) => {
-      const aTime = Date.parse(a.createdAt || '') || 0;
-      const bTime = Date.parse(b.createdAt || '') || 0;
-      return aTime - bTime;
-    })
-    .slice(-500);
+  const ordered = Array.from(byKey.values()).sort((a, b) => {
+    const aTime = Date.parse(a.createdAt || '') || 0;
+    const bTime = Date.parse(b.createdAt || '') || 0;
+    return aTime - bTime;
+  });
+
+  const kept = new Set([
+    ...ordered
+      .filter((message) => message?._type !== 'system')
+      .slice(-CHAT_MESSAGE_LIMIT)
+      .map(getChatMessageKey),
+    ...ordered
+      .filter((message) => message?._type === 'system')
+      .slice(-CHAT_SYSTEM_LIMIT)
+      .map(getChatMessageKey),
+  ]);
+  // 시간순 정렬을 유지한 채 살아남은 항목만 남긴다.
+  return ordered.filter((message) => kept.has(getChatMessageKey(message)));
 }
 
 // personalOffsetMs 초기값: localStorage 우선, 없으면 0. 범위 -1000~+1000ms로 clamp.

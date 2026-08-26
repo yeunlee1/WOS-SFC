@@ -140,6 +140,105 @@ describe('ChatGateway 메시지 보안', () => {
     expect(rateLimit.cleanup).not.toHaveBeenCalled();
   });
 
+  // 히스토리 조회 실패가 소켓 전체(=전투 카운트다운)를 끊지 않아야 한다.
+  describe('히스토리 조회 실패 격리', () => {
+    function makeConnectingSocket() {
+      return {
+        id: 'socket-history',
+        connected: true,
+        handshake: { headers: { cookie: 'access_token=fake' } },
+        data: {},
+        emit: jest.fn(),
+        disconnect: jest.fn(),
+      } as unknown as Socket;
+    }
+
+    beforeEach(() => {
+      jwtService.verify.mockReturnValue({ sub: user.id });
+      usersService.findById.mockResolvedValue(user);
+    });
+
+    it('히스토리 조회가 실패해도 소켓을 끊지 않는다', async () => {
+      chatService.getRecentMessages.mockRejectedValueOnce(new Error('db down'));
+      const connectingSocket = makeConnectingSocket();
+
+      await gateway.handleConnection(connectingSocket);
+
+      expect(connectingSocket.disconnect).not.toHaveBeenCalled();
+    });
+
+    it('히스토리 조회가 실패하면 chat:error를 알리고 입장 처리는 유지한다', async () => {
+      chatService.getRecentMessages.mockRejectedValueOnce(new Error('db down'));
+      const connectingSocket = makeConnectingSocket();
+
+      await gateway.handleConnection(connectingSocket);
+
+      expect(connectingSocket.emit).toHaveBeenCalledWith(
+        'chat:error',
+        expect.objectContaining({ scope: 'history' }),
+      );
+      expect(
+        (connectingSocket.data as { user?: User }).user,
+      ).toBe(user);
+      expect(server.emit).toHaveBeenCalledWith(
+        'chat:system',
+        expect.stringContaining(user.nickname),
+      );
+    });
+
+    it('히스토리 조회 성공 시에는 chat:error를 보내지 않는다', async () => {
+      chatService.getRecentMessages.mockResolvedValueOnce([]);
+      const connectingSocket = makeConnectingSocket();
+
+      await gateway.handleConnection(connectingSocket);
+
+      expect(connectingSocket.emit).toHaveBeenCalledWith('chat:history', []);
+      expect(connectingSocket.emit).not.toHaveBeenCalledWith(
+        'chat:error',
+        expect.anything(),
+      );
+    });
+  });
+
+  // 구독자가 0인 이벤트는 100명 규모에서 순수한 낭비다 (항목 6).
+  describe('구독자 없는 chat:online 브로드캐스트 제거', () => {
+    it('입장 시 chat:online을 브로드캐스트하지 않는다', async () => {
+      jwtService.verify.mockReturnValue({ sub: user.id });
+      usersService.findById.mockResolvedValue(user);
+      chatService.getRecentMessages.mockResolvedValueOnce([]);
+      const connectingSocket = {
+        id: 'socket-online',
+        connected: true,
+        handshake: { headers: { cookie: 'access_token=fake' } },
+        data: {},
+        emit: jest.fn(),
+        disconnect: jest.fn(),
+      } as unknown as Socket;
+
+      await gateway.handleConnection(connectingSocket);
+
+      const events = server.emit.mock.calls.map((call) => call[0]);
+      expect(events).not.toContain('chat:online');
+    });
+
+    it('퇴장 시에도 chat:online을 브로드캐스트하지 않는다', () => {
+      (
+        gateway as unknown as {
+          connectedUsers: Map<string, { nickname: string; language: string }>;
+        }
+      ).connectedUsers.set(socket.id, {
+        nickname: user.nickname,
+        language: user.language,
+      });
+
+      gateway.handleDisconnect(socket);
+
+      const events = server.emit.mock.calls.map((call) => call[0]);
+      expect(events).toContain('chat:system');
+      expect(events).not.toContain('chat:online');
+    });
+  });
+
   it('허용된 메시지는 trim 후 저장하고 브로드캐스트한다', async () => {
     await expect(gateway.handleMessage(socket, '  hello  ')).resolves.toEqual({
       ok: true,

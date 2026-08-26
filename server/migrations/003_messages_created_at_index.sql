@@ -1,0 +1,15 @@
+-- 채팅 히스토리 조회(WHERE created_at > ? ORDER BY created_at DESC LIMIT 200)용 인덱스.
+-- (코드: server/src/chat/chat.service.ts — getRecentMessages / deleteOldMessages)
+--
+-- 왜 필요한가:
+--   messages 테이블에는 PK(id)와 FK(user_id) 인덱스만 있고 created_at 인덱스가 없다.
+--   메시지가 누적될수록 접속 시 히스토리 조회가 풀 스캔 + filesort로 떨어지고,
+--   그 지연이 handleConnection을 붙잡아 동시 접속 처리를 느리게 만든다.
+--   보존 정리(deleteOldMessages)의 WHERE created_at < ? 도 같은 인덱스를 쓴다.
+--
+-- 적용 전 확인:
+--   SHOW INDEX FROM messages;   -- idx_messages_created_at 이 이미 있으면 실행하지 말 것
+--                               -- (MySQL은 CREATE INDEX IF NOT EXISTS를 지원하지 않는다)
+--
+-- 적용 시점: 채팅 배포 전. 온라인 DDL이지만 대형 테이블에서는 잠금 시간을 미리 확인할 것.
+CREATE INDEX idx_messages_created_at ON messages (created_at);
