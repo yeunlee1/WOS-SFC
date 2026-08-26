@@ -31,11 +31,17 @@ export class BoardsService {
     });
   }
 
+  // 연맹별 조회를 순차 await 하면 소켓 접속 1건마다 왕복 5회가 직렬로 쌓인다.
+  // 100명 동시 재접속에서 이 구간만으로 커넥션 풀 대기열이 길어져 지연이 누적된다.
+  // 병렬로 띄우고 고정 목록 순서대로 다시 묶는다 (Promise.all은 순서를 보존한다).
   async findAllGrouped(): Promise<Record<string, BoardPost[]>> {
+    const lists = await Promise.all(
+      BOARD_ALLIANCES.map((a) => this.findByAlliance(a)),
+    );
     const result: Record<string, BoardPost[]> = {};
-    for (const a of BOARD_ALLIANCES) {
-      result[a] = await this.findByAlliance(a);
-    }
+    BOARD_ALLIANCES.forEach((a, i) => {
+      result[a] = lists[i];
+    });
     return result;
   }
 

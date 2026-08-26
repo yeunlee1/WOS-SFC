@@ -10,7 +10,7 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
-import { Inject, forwardRef } from '@nestjs/common';
+import { Inject, Logger, forwardRef } from '@nestjs/common';
 import { NoticesService } from '../notices/notices.service';
 import { RalliesService } from '../rallies/rallies.service';
 import { MembersService } from '../members/members.service';
@@ -28,8 +28,32 @@ interface OnlineUser {
   role: string;
 }
 
-// setTimeout 자동 해제 여유 — countdown 총 시간 + 1초 후 lock 자동 release.
+// setTimeout 자동 해제 여유 — countdown 실제 종료 시각 + 1초 후 lock 자동 release.
 const COUNTDOWN_AUTO_RELEASE_GRACE_MS = 1000;
+
+// 접속 스냅샷으로 내려보내는 연맹 목록. 방출 순서를 이 순서로 고정한다.
+const SNAPSHOT_ALLIANCES = ['KOR', 'NSL', 'JKY', 'GPX', 'UFO'] as const;
+
+// 접속 1건이 수백 행을 직렬화한다. toLocaleString(옵션 객체)은 호출마다 Intl 포매터를
+// 새로 만들어 행당 약 30µs가 들지만, 포매터를 한 번 만들어 재사용하면 약 1µs다
+// (이 PC에서 20,000회 평균 30.8µs → 1.05µs, 2,000개 날짜 표본에서 출력 문자열 불일치 0건).
+// 100명 동시 재접속이면 이 차이가 이벤트 루프 동기 블로킹으로 누적돼 카운트다운
+// broadcast를 밀어낸다.
+//
+// 한계 — 로케일이 'ko-KR'로 고정이라 다국어 사용자에게도 한국어 표기가 나간다.
+// 서버가 문자열 대신 epoch ms를 보내고 표시를 클라이언트에 맡기는 것이 옳지만
+// 이벤트 계약 변경이라 여기서는 다루지 않는다.
+const KO_DATETIME_FORMAT = new Intl.DateTimeFormat('ko-KR', {
+  dateStyle: 'short',
+  timeStyle: 'short',
+});
+
+/** createdAt 표시 문자열. Date면 캐시된 포매터, 그 밖에는 그대로 문자열화. */
+function formatCreatedAt(value: unknown): string {
+  return value instanceof Date
+    ? KO_DATETIME_FORMAT.format(value)
+    : String(value);
+}
 
 // countdown ack 응답 타입.
 // `forbidden`은 의도적으로 제외 — 권한 없는 사용자에게 reason 노출 보안 우려.
@@ -47,6 +71,8 @@ export class RealtimeGateway
   implements OnGatewayConnection, OnGatewayDisconnect
 {
   @WebSocketServer() server: Server;
+
+  private readonly logger = new Logger(RealtimeGateway.name);
 
   private onlineMap = new Map<string, OnlineUser>();
   private countdown = { active: false, startedAt: 0, totalSeconds: 0 };
@@ -120,9 +146,32 @@ export class RealtimeGateway
     }
   }
 
+  /**
+   * 접속 진입점. 본체에서 새어 나온 예외를 여기서 전부 잡는다.
+   *
+   * Nest의 web-sockets-controller는 `subscribe((args) => instance.handleConnection(...args))`
+   * 로 호출만 하고 반환된 Promise를 버린다(catch 없음). 그래서 여기서 reject가 새면
+   * unhandled rejection이 되고, Node 기본값(--unhandled-rejections=throw)에서
+   * uncaughtException으로 승격되어 프로세스가 종료된다. 저장소에 전역
+   * unhandledRejection 핸들러도 없다(2026-08-27 확인). DB 순단 한 번에 서버가
+   * 죽지 않도록 소켓만 정리하고 살아남는다.
+   */
   async handleConnection(client: Socket) {
     // await 이전에 붙인다 — 인증 조회 중 도착한 패킷도 시각이 기록되도록.
     this.trackPacketArrival(client);
+    try {
+      await this.sendConnectionSnapshot(client);
+    } catch (err) {
+      this.logger.error(
+        `handleConnection 실패 — 소켓 ${client.id}만 정리한다`,
+        err instanceof Error ? err.stack : String(err),
+      );
+      this.cleanupFailedConnection(client);
+    }
+  }
+
+  /** 접속 스냅샷 전송 본체. 실패는 handleConnection이 잡는다. */
+  private async sendConnectionSnapshot(client: Socket): Promise<void> {
     const user = await this.getUserFromSocket(client);
     if (!client.connected) return;
     if (!user) {
@@ -133,12 +182,21 @@ export class RealtimeGateway
     this.onlineMap.set(client.id, user);
     this.broadcastOnline();
 
-    const [notices, rallies, members, boards] = await Promise.all([
-      this.noticesService.findAll(),
-      this.ralliesService.findAll(),
-      this.membersService.findAll(),
-      this.boardsService.findAllGrouped(),
-    ]);
+    // 스냅샷 조회를 한 번에 띄운다. 순차 await면 왕복이 직렬로 쌓여
+    // 100명 동시 재접속에서 커넥션 풀 대기열이 길어지고 지연으로 나타난다.
+    // Promise.all은 입력 순서를 보존하므로 방출 순서는 그대로다.
+    const [notices, rallies, members, boards, allianceNoticeLists] =
+      await Promise.all([
+        this.noticesService.findAll(),
+        this.ralliesService.findAll(),
+        this.membersService.findAll(),
+        this.boardsService.findAllGrouped(),
+        Promise.all(
+          SNAPSHOT_ALLIANCES.map((a) =>
+            this.allianceNoticesService.findByAlliance(a),
+          ),
+        ),
+      ]);
 
     client.emit('notices:updated', notices.map(this.formatNotice));
     client.emit('rallies:updated', rallies.map(this.formatRally));
@@ -147,20 +205,34 @@ export class RealtimeGateway
       client.emit(`board:updated:${alliance}`, posts.map(this.formatBoardPost));
     }
 
-    for (const a of ['KOR', 'NSL', 'JKY', 'GPX', 'UFO']) {
-      const allianceNotices =
-        await this.allianceNoticesService.findByAlliance(a);
+    SNAPSHOT_ALLIANCES.forEach((a, i) => {
       client.emit(
         `alliance-notice:updated:${a}`,
-        allianceNotices.map(this.formatAllianceNotice),
+        allianceNoticeLists[i].map(this.formatAllianceNotice),
       );
-    }
+    });
 
     client.emit('countdown:state', {
       ...this.countdown,
       serverEmitAt: Date.now(),
     });
     client.emit('busy:state', { holder: this.busyLock.getHolder() });
+  }
+
+  /** 접속 처리 실패 시 소켓만 정리한다 — 프로세스는 살아 있어야 한다. */
+  private cleanupFailedConnection(client: Socket): void {
+    try {
+      this.onlineMap.delete(client.id);
+      this.rateLimit.cleanup(client.id);
+      this.broadcastOnline();
+    } catch {
+      // 정리 중 예외는 삼킨다 — 아래 disconnect까지는 반드시 시도한다.
+    }
+    try {
+      client.disconnect();
+    } catch {
+      // 이미 끊긴 소켓
+    }
   }
 
   // 시간 동기화용 ws ping/pong — REST `/time` 대비 HTTP overhead 5~20ms 절약.
@@ -215,6 +287,8 @@ export class RealtimeGateway
 
     // BusyLock 게이팅 — Countdown(1번) ↔ Rally(3번) 음성 충돌 방지.
     // probe 이전에 잠금 획득 — probe 중 동시 시작 race를 차단.
+    // 여기서 거는 자동 해제 시각은 잠정값이다. 실제 시작 시각(startedAt)은 probe가
+    // 끝나야 정해지므로 확정 뒤 reschedule로 다시 잡는다(아래).
     const acquired = this.busyLock.tryAcquire(
       { type: 'countdown' },
       totalSeconds * 1000 + COUNTDOWN_AUTO_RELEASE_GRACE_MS,
@@ -268,6 +342,20 @@ export class RealtimeGateway
       };
     }
 
+    // 자동 해제 시각을 startedAt 확정 뒤로 다시 잡는다.
+    // tryAcquire 시점을 기준으로 두면 probe 소요 + grace 만큼(최악 약 1.7초) 일찍
+    // 발화한다. 조기 발화는 countdown:state{active:false} broadcast → 클라이언트가
+    // 오디오를 끊고 "중지되었습니다"를 재생하므로(Countdown.jsx), 마지막 "1"과
+    // 개인 "출발"이 잘린다. rally 경로도 같은 목적으로 reschedule을 쓴다.
+    this.busyLock.reschedule(
+      { type: 'countdown' },
+      startedAt +
+        totalSeconds * 1000 +
+        COUNTDOWN_AUTO_RELEASE_GRACE_MS -
+        Date.now(),
+      () => this.handleCountdownAutoExpire(),
+    );
+
     this.countdown = { active: true, startedAt, totalSeconds };
     this.server.emit('countdown:state', {
       ...this.countdown,
@@ -308,14 +396,42 @@ export class RealtimeGateway
    * setTimeout 만료 시 호출 — 카운트다운 시간이 끝났는데 사용자가 stop을 안 누른 경우
    * 자동으로 active=false로 reset하여 모든 클라이언트 동기화.
    * 이 시점에 BusyLockService 내부 holder는 이미 null (autoRelease가 holder→null 후 콜백 호출).
+   *
+   * 조기 발화 방어 — 아직 종료 시각이 남았으면 상태를 그대로 두고 잠금과 타이머만
+   * 다시 잡는다. 조기 broadcast는 100명이 출발해야 하는 순간에 오디오를 끊는다.
    */
   private handleCountdownAutoExpire(): void {
+    const remainingMs = this.countdownRemainingMs();
+    if (
+      remainingMs > 0 &&
+      this.busyLock.tryAcquire({ type: 'countdown' }, remainingMs, () =>
+        this.handleCountdownAutoExpire(),
+      )
+    ) {
+      return;
+    }
+
     this.countdown = { active: false, startedAt: 0, totalSeconds: 0 };
     this.server.emit('countdown:state', {
       ...this.countdown,
       serverEmitAt: Date.now(),
     });
-    this.server.emit('busy:state', { holder: null });
+    // 정상 경로에서는 holder가 이미 null이다. 재획득에 실패한 경우(다른 holder 점유)에
+    // null을 단정해 broadcast하면 그 holder의 점유가 잘못 해제된 것처럼 보이므로
+    // 실제 holder를 그대로 싣는다.
+    this.server.emit('busy:state', { holder: this.busyLock.getHolder() });
+  }
+
+  /** 자동 해제까지 남은 시간(ms). 진행 중이 아니면 0. */
+  private countdownRemainingMs(): number {
+    const { active, startedAt, totalSeconds } = this.countdown;
+    if (!active || !startedAt || !totalSeconds) return 0;
+    return (
+      startedAt +
+      totalSeconds * 1000 +
+      COUNTDOWN_AUTO_RELEASE_GRACE_MS -
+      Date.now()
+    );
   }
 
   handleDisconnect(client: Socket) {
@@ -380,13 +496,7 @@ export class RealtimeGateway
       content: n.content,
       authorNick: n.authorNick,
       lang: n.lang,
-      createdAt:
-        n.createdAt instanceof Date
-          ? n.createdAt.toLocaleString('ko-KR', {
-              dateStyle: 'short',
-              timeStyle: 'short',
-            })
-          : String(n.createdAt),
+      createdAt: formatCreatedAt(n.createdAt),
     };
   }
 
@@ -398,13 +508,7 @@ export class RealtimeGateway
       content: n.content,
       authorNick: n.authorNick,
       lang: n.lang,
-      createdAt:
-        n.createdAt instanceof Date
-          ? n.createdAt.toLocaleString('ko-KR', {
-              dateStyle: 'short',
-              timeStyle: 'short',
-            })
-          : String(n.createdAt),
+      createdAt: formatCreatedAt(n.createdAt),
     };
   }
 
@@ -430,13 +534,7 @@ export class RealtimeGateway
       content: p.content,
       lang: p.lang,
       imageUrls: p.imageUrls || [],
-      createdAt:
-        p.createdAt instanceof Date
-          ? p.createdAt.toLocaleString('ko-KR', {
-              dateStyle: 'short',
-              timeStyle: 'short',
-            })
-          : String(p.createdAt),
+      createdAt: formatCreatedAt(p.createdAt),
     };
   }
 }

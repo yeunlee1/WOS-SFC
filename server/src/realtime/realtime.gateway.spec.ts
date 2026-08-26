@@ -15,6 +15,7 @@
 // 모킹 전략: socket.io Server는 단순 emit/sockets stub.
 // negotiateStartedAt은 ReadyNegotiationService를 mock하여 임의 시점에 resolve.
 
+import { Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
 import { EventEmitter } from 'events';
@@ -297,8 +298,14 @@ describe('RealtimeGateway — BusyLock 통합 단위 테스트', () => {
         await gateway.handleCountdownStart(sock, 5);
         expect(busyLock.getHolder()).toEqual({ type: 'countdown' });
 
-        // 5000ms (totalSeconds * 1000) + 1000ms grace = 6000ms.
-        jest.advanceTimersByTime(6001);
+        // 자동 해제 기준은 tryAcquire 시각이 아니라 확정된 startedAt이다.
+        // startedAt + 5000ms (totalSeconds * 1000) + 1000ms grace 이후에 발화한다.
+        const startedAt = (
+          server.emit.mock.calls
+            .filter((c) => c[0] === 'countdown:state')
+            .pop() as [string, { startedAt: number }]
+        )[1].startedAt;
+        jest.advanceTimersByTime(startedAt + 5000 + 1000 + 1 - Date.now());
         // microtask 큐 비우기.
         await Promise.resolve();
         await Promise.resolve();
@@ -697,6 +704,283 @@ describe('RealtimeGateway — BusyLock 통합 단위 테스트', () => {
       expect(passedServer).toBe(server);
       expect(passedIds).toBeInstanceOf(Set);
       expect(passedIds.has('admin-1')).toBe(true);
+    });
+  });
+
+  // ── 자동 해제 시각 (항목 1) ────────────────────────────────────────────
+  // handleCountdownStart는 probe(negotiateStartedAt) 이전에 lock을 잡으므로
+  // 자동 해제 타이머의 기준 시각(tryAcquire 시점)과 실제 카운트다운 시작 시각
+  // (startedAt = tryAcquire + probe소요 + grace)이 어긋난다.
+  // 이 어긋남만큼 자동 해제가 실제 종료보다 먼저 발화하면 마지막 "1"과 개인 "출발"
+  // 음성이 잘리고 전원에게 "중지되었습니다"가 겹쳐 나온다.
+  describe('자동 해제 시각 — 실제 종료 시각 이후에만 발화', () => {
+    const PROBE_MS = 500; // ReadyNegotiationService.PROBE_DEADLINE_MS 최악값
+    const GRACE_MS = 1200; // p95 clamp 시 계산되는 grace 최대값
+    const AUTO_RELEASE_GRACE_MS = 1000; // 게이트웨이 상수와 동일
+
+    function lastCountdownState(): { active: boolean; startedAt: number } {
+      const calls = server.emit.mock.calls.filter(
+        (c) => c[0] === 'countdown:state',
+      );
+      return calls[calls.length - 1][1] as {
+        active: boolean;
+        startedAt: number;
+      };
+    }
+
+    it('probe+grace가 큰 값이어도 실제 종료 전에는 자동 해제가 발화하지 않는다', async () => {
+      jest.useFakeTimers();
+      try {
+        // probe에 PROBE_MS가 걸리고 그 뒤 GRACE_MS를 더한 시각을 startedAt으로 돌려준다.
+        negotiate.mockImplementation(() => {
+          jest.advanceTimersByTime(PROBE_MS);
+          return Promise.resolve(Date.now() + GRACE_MS);
+        });
+
+        const sock = makeAdminSocket('auto-expire-1');
+        const totalSeconds = 30;
+        const t0 = Date.now();
+
+        await gateway.handleCountdownStart(sock, totalSeconds);
+
+        const started = lastCountdownState();
+        expect(started.active).toBe(true);
+        expect(started.startedAt).toBe(t0 + PROBE_MS + GRACE_MS);
+
+        server.emit.mockClear();
+
+        // 실제 마지막 슬롯("1") 시각 = startedAt + (totalSeconds - 1) * 1000.
+        // 그 시각까지는 자동 해제가 절대 발화하면 안 된다.
+        const lastSlotAt = started.startedAt + (totalSeconds - 1) * 1000;
+        jest.advanceTimersByTime(lastSlotAt - Date.now());
+        expect(
+          server.emit.mock.calls.filter((c) => c[0] === 'countdown:state'),
+        ).toHaveLength(0);
+        expect(busyLock.getHolder()).toEqual({ type: 'countdown' });
+
+        // 카운트다운 종료 시각(startedAt + totalSeconds*1000)까지도 유지되어야 한다.
+        const endAt = started.startedAt + totalSeconds * 1000;
+        jest.advanceTimersByTime(endAt - Date.now());
+        expect(
+          server.emit.mock.calls.filter((c) => c[0] === 'countdown:state'),
+        ).toHaveLength(0);
+        expect(busyLock.getHolder()).toEqual({ type: 'countdown' });
+
+        // 종료 + 여유가 지나면 그제서야 자동 해제된다.
+        jest.advanceTimersByTime(AUTO_RELEASE_GRACE_MS + 1);
+        expect(busyLock.getHolder()).toBeNull();
+        expect(lastCountdownState()).toEqual(
+          expect.objectContaining({ active: false }),
+        );
+        expect(server.emit).toHaveBeenCalledWith('busy:state', {
+          holder: null,
+        });
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('종료 시각이 아직 남았는데 타이머가 발화하면 상태를 유지하고 다시 잡는다', () => {
+      jest.useFakeTimers();
+      try {
+        const now = Date.now();
+        // 진행 중인 카운트다운 상태를 직접 심는다 (아직 5초 남음).
+        (
+          gateway as unknown as {
+            countdown: {
+              active: boolean;
+              startedAt: number;
+              totalSeconds: number;
+            };
+          }
+        ).countdown = {
+          active: true,
+          startedAt: now - 25_000,
+          totalSeconds: 30,
+        };
+        server.emit.mockClear();
+
+        // BusyLock이 holder를 null로 만든 뒤 콜백을 부르는 상황을 그대로 재현.
+        (
+          gateway as unknown as { handleCountdownAutoExpire: () => void }
+        ).handleCountdownAutoExpire();
+
+        // 조기 발화이므로 중지 broadcast가 나가면 안 되고, lock을 다시 잡아야 한다.
+        expect(
+          server.emit.mock.calls.filter((c) => c[0] === 'countdown:state'),
+        ).toHaveLength(0);
+        expect(busyLock.getHolder()).toEqual({ type: 'countdown' });
+
+        // 남은 시간 + 여유가 지나면 정상 종료된다.
+        jest.advanceTimersByTime(5_000 + 1_000 + 1);
+        expect(busyLock.getHolder()).toBeNull();
+        expect(server.emit).toHaveBeenCalledWith(
+          'countdown:state',
+          expect.objectContaining({ active: false }),
+        );
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+  });
+
+  // ── handleConnection 예외 격리 (항목 2) ────────────────────────────────
+  // Nest의 web-sockets-controller는 handleConnection이 돌려준 Promise를
+  // subscribe 콜백에서 그냥 버린다(catch 없음). Node 24 기본값
+  // (--unhandled-rejections=throw)에서는 이 rejection이 uncaughtException으로
+  // 승격되어 프로세스가 종료된다.
+  describe('handleConnection DB 예외 격리', () => {
+    it('스냅샷 조회가 실패해도 reject하지 않고 소켓만 정리한다', async () => {
+      const errorSpy = jest
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation(() => undefined);
+      try {
+        const notices = (
+          gateway as unknown as { noticesService: { findAll: jest.Mock } }
+        ).noticesService;
+        notices.findAll.mockRejectedValueOnce(new Error('DB 순단'));
+
+        const sock = makeAdminSocket('db-down-1');
+
+        await expect(gateway.handleConnection(sock)).resolves.toBeUndefined();
+
+        const onlineMap = (
+          gateway as unknown as { onlineMap: Map<string, unknown> }
+        ).onlineMap;
+        expect(onlineMap.has(sock.id)).toBe(false);
+        expect(sock.disconnect).toHaveBeenCalled();
+        expect(errorSpy).toHaveBeenCalled();
+      } finally {
+        errorSpy.mockRestore();
+      }
+    });
+
+    it('연맹 공지 조회가 실패해도 reject하지 않는다', async () => {
+      const errorSpy = jest
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation(() => undefined);
+      try {
+        const allianceNotices = (
+          gateway as unknown as {
+            allianceNoticesService: { findByAlliance: jest.Mock };
+          }
+        ).allianceNoticesService;
+        allianceNotices.findByAlliance.mockRejectedValueOnce(
+          new Error('DB 순단'),
+        );
+
+        const sock = makeAdminSocket('db-down-2');
+
+        await expect(gateway.handleConnection(sock)).resolves.toBeUndefined();
+        expect(sock.disconnect).toHaveBeenCalled();
+        expect(errorSpy).toHaveBeenCalled();
+      } finally {
+        errorSpy.mockRestore();
+      }
+    });
+  });
+
+  // ── 접속 스냅샷 병렬화 (항목 3) ────────────────────────────────────────
+  describe('접속 스냅샷 조회 병렬화', () => {
+    it('연맹 공지 5건을 순차 대기하지 않고 한 번에 띄운다', async () => {
+      const allianceNotices = (
+        gateway as unknown as {
+          allianceNoticesService: { findByAlliance: jest.Mock };
+        }
+      ).allianceNoticesService;
+      const release: Array<() => void> = [];
+      allianceNotices.findByAlliance.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            release.push(() => resolve([]));
+          }),
+      );
+
+      const sock = makeAdminSocket('parallel-1');
+      const connecting = gateway.handleConnection(sock);
+      await new Promise((resolve) => setImmediate(resolve));
+
+      // 순차 await면 첫 호출이 pending이라 1회에서 멈춘다.
+      expect(allianceNotices.findByAlliance).toHaveBeenCalledTimes(5);
+
+      release.forEach((fn) => fn());
+      await connecting;
+
+      // 방출 순서는 고정 목록 순서를 유지해야 한다.
+      const events = (sock.emit as jest.Mock).mock.calls
+        .map((c) => c[0] as string)
+        .filter((name) => name.startsWith('alliance-notice:updated:'));
+      expect(events).toEqual([
+        'alliance-notice:updated:KOR',
+        'alliance-notice:updated:NSL',
+        'alliance-notice:updated:JKY',
+        'alliance-notice:updated:GPX',
+        'alliance-notice:updated:UFO',
+      ]);
+    });
+  });
+
+  // ── 브로드캐스트 직렬화 (항목 4) ───────────────────────────────────────
+  // 행마다 toLocaleString(옵션객체)를 부르면 매번 Intl 포매터가 새로 만들어져
+  // 접속 1건(수백 행)에서 이벤트 루프가 수십 ms 동기 블로킹된다.
+  describe('날짜 포맷 — 캐시된 Intl 포매터 사용', () => {
+    const sample = new Date('2026-08-27T13:45:06.000Z');
+    const expected = sample.toLocaleString('ko-KR', {
+      dateStyle: 'short',
+      timeStyle: 'short',
+    });
+
+    function withoutToLocaleString<T>(fn: () => T): {
+      value: T;
+      calls: number;
+    } {
+      const spy = jest.spyOn(Date.prototype, 'toLocaleString');
+      try {
+        const value = fn();
+        return { value, calls: spy.mock.calls.length };
+      } finally {
+        spy.mockRestore();
+      }
+    }
+
+    it('formatNotice는 행마다 toLocaleString을 부르지 않으면서 같은 문자열을 낸다', () => {
+      const format = (
+        gateway as unknown as {
+          formatNotice: (n: unknown) => { createdAt: string };
+        }
+      ).formatNotice;
+      const { value, calls } = withoutToLocaleString(() =>
+        format({ id: 1, createdAt: sample }),
+      );
+      expect(value.createdAt).toBe(expected);
+      expect(calls).toBe(0);
+    });
+
+    it('formatAllianceNotice / formatBoardPost도 동일하다', () => {
+      const g = gateway as unknown as {
+        formatAllianceNotice: (n: unknown) => { createdAt: string };
+        formatBoardPost: (p: unknown) => { createdAt: string };
+      };
+      const notice = withoutToLocaleString(() =>
+        g.formatAllianceNotice({ id: 1, createdAt: sample }),
+      );
+      expect(notice.value.createdAt).toBe(expected);
+      expect(notice.calls).toBe(0);
+
+      const post = withoutToLocaleString(() =>
+        g.formatBoardPost({ id: 1, createdAt: sample }),
+      );
+      expect(post.value.createdAt).toBe(expected);
+      expect(post.calls).toBe(0);
+    });
+
+    it('Date가 아닌 createdAt은 그대로 문자열화한다 (회귀 방지)', () => {
+      const g = gateway as unknown as {
+        formatNotice: (n: unknown) => { createdAt: string };
+      };
+      expect(g.formatNotice({ id: 1, createdAt: '2026-08-27' }).createdAt).toBe(
+        '2026-08-27',
+      );
     });
   });
 });

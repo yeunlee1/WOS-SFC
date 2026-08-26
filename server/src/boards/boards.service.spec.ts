@@ -147,3 +147,53 @@ describe('BoardsController 사용자 전달', () => {
     expect(service.remove).toHaveBeenCalledWith(1, user);
   });
 });
+
+// 접속 1건마다 findAllGrouped가 연맹 5개를 순차로 await 하면 왕복 5회가 직렬로 쌓인다.
+// 100명 동시 재접속이면 이 구간만으로 커넥션 풀 대기열이 길어져 지연이 누적된다.
+describe('BoardsService.findAllGrouped 병렬 조회', () => {
+  const repo = {
+    find: jest.fn(),
+  };
+  const gateway = { broadcastBoard: jest.fn() };
+  let service: BoardsService;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    service = new BoardsService(
+      repo as unknown as Repository<BoardPost>,
+      gateway as unknown as RealtimeGateway,
+    );
+  });
+
+  it('연맹 5개 조회를 순차 대기하지 않고 한 번에 띄운다', async () => {
+    const release: Array<() => void> = [];
+    repo.find.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release.push(() => resolve([]));
+        }),
+    );
+
+    const pending = service.findAllGrouped();
+    await new Promise((resolve) => setImmediate(resolve));
+
+    // 순차 await면 첫 조회가 pending이라 1회에서 멈춘다.
+    expect(repo.find).toHaveBeenCalledTimes(5);
+
+    release.forEach((fn) => fn());
+    await pending;
+  });
+
+  it('연맹 키와 각 연맹의 결과 대응은 그대로 유지된다', async () => {
+    repo.find.mockImplementation(({ where }: { where: { alliance: string } }) =>
+      Promise.resolve([{ id: where.alliance }]),
+    );
+
+    const grouped = await service.findAllGrouped();
+
+    expect(Object.keys(grouped)).toEqual(['KOR', 'NSL', 'JKY', 'GPX', 'UFO']);
+    for (const alliance of Object.keys(grouped)) {
+      expect(grouped[alliance]).toEqual([{ id: alliance }]);
+    }
+  });
+});
