@@ -25,6 +25,12 @@ export const SPEAKING_RATE = 1.5;
 export const PHRASES: Record<string, Record<string, string>> = {
   start:      { ko: '준비해주세요.', en: 'Get ready.', ja: '準備してください。', zh: '请准备。' },
   stop:       { ko: '카운트다운이 중지되었습니다.', en: 'Countdown stopped.', ja: 'カウントダウンが中止されました。', zh: '倒计时已停止。' },
+
+  // 개인 출발 안내 — 사용자별 marchSeconds 시점에 로컬에서만 재생된다.
+  // web/src/components/Battle/PersonalPanel.jsx 의 speak('march', lang) 대응.
+  // 숫자 슬롯과 겹쳐 재생되므로 start/stop 톤은 유지하되 짧게 둔다.
+  march:      { ko: '출발하세요.', en: 'March now.', ja: '出発してください。', zh: '请出发。' },
+
   captain_1:  { ko: '1번 집결장', en: 'Captain 1', ja: '集結場1番', zh: '集结场1号' },
   captain_2:  { ko: '2번 집결장', en: 'Captain 2', ja: '集結場2番', zh: '集结场2号' },
   captain_3:  { ko: '3번 집결장', en: 'Captain 3', ja: '集結場3番', zh: '集结场3号' },

@@ -17,6 +17,7 @@
 
 import { JwtService } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
+import { EventEmitter } from 'events';
 import type { Server, Socket } from 'socket.io';
 import { AllianceNoticesService } from '../alliance-notices/alliance-notices.service';
 import { BoardsService } from '../boards/boards.service';
@@ -620,6 +621,82 @@ describe('RealtimeGateway — BusyLock 통합 단위 테스트', () => {
       expect(first.disconnect).toHaveBeenCalledTimes(1);
       expect(second.disconnect).toHaveBeenCalledTimes(1);
       expect(other.disconnect).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── time:ping 서버 체류 시간 분리 ───────────────────────────────────────
+  // 클라이언트(clockSync.js)는 rtt = (t3-t0) - (t2-t1) 로 서버 체류 시간을 빼고
+  // offset = ((t1-t0) + (t2-t3)) / 2 로 시계 오차를 추정한다.
+  // t1과 t2를 붙여서 찍으면 t2-t1 = 0 이라 이 분리가 통째로 no-op이 되고,
+  // 서버 체류 시간의 절반이 그대로 offset 오차로 들어간다.
+  describe('time:ping 4-timestamp', () => {
+    it('t1은 engine.io 패킷 수신 시각 — 핸들러 체류 시간이 t2-t1에 잡힌다', async () => {
+      const conn = new EventEmitter();
+      const client = {
+        id: 'ping-1',
+        connected: true,
+        conn,
+        handshake: { headers: { cookie: 'access_token=fake' } },
+        emit: jest.fn(),
+        disconnect: jest.fn(),
+      } as unknown as Socket;
+
+      await gateway.handleConnection(client);
+
+      // 소켓이 패킷을 받은 시각
+      conn.emit('packet', { type: 'message' });
+      const packetAt = Date.now();
+
+      // 이벤트 루프가 밀려 핸들러 진입이 늦어지는 상황을 동기 대기로 흉내낸다.
+      const spinUntil = packetAt + 15;
+      while (Date.now() < spinUntil) {
+        /* busy wait */
+      }
+
+      const res = gateway.handleTimePing(client);
+      expect(res).not.toBeNull();
+      // t1/t2를 붙여 찍는 구현이면 이 값이 0이라 실패한다.
+      expect(res!.t2 - res!.t1).toBeGreaterThanOrEqual(12);
+      expect(res!.t1).toBeLessThanOrEqual(packetAt + 2);
+      expect(res!.utc).toBe(res!.t2);
+    });
+
+    it('engine.io conn이 없는 소켓도 t1 ≤ t2로 안전하게 응답한다', async () => {
+      const client = makeAdminSocket('ping-2');
+      await gateway.handleConnection(client);
+
+      const res = gateway.handleTimePing(client);
+      expect(res).not.toBeNull();
+      expect(res!.t1).toBeLessThanOrEqual(res!.t2);
+      expect(res!.utc).toBe(res!.t2);
+    });
+
+    it('rate limit 초과 시 null을 반환한다', () => {
+      const client = makeAdminSocket('ping-3');
+      for (let i = 0; i < 30; i++) {
+        expect(gateway.handleTimePing(client)).not.toBeNull();
+      }
+      expect(gateway.handleTimePing(client)).toBeNull();
+    });
+  });
+
+  // ── probe 대상 축소 ────────────────────────────────────────────────────
+  describe('countdown:start probe 대상', () => {
+    it('인증된(onlineMap) 소켓 id 집합을 협상 서비스에 전달한다', async () => {
+      const client = makeAdminSocket('admin-1');
+      await gateway.handleConnection(client);
+      server.emit.mockClear();
+
+      await gateway.handleCountdownStart(client, 10);
+
+      expect(negotiate).toHaveBeenCalledTimes(1);
+      const [passedServer, passedIds] = negotiate.mock.calls[0] as [
+        unknown,
+        Set<string>,
+      ];
+      expect(passedServer).toBe(server);
+      expect(passedIds).toBeInstanceOf(Set);
+      expect(passedIds.has('admin-1')).toBe(true);
     });
   });
 });

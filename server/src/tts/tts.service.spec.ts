@@ -36,6 +36,20 @@ describe('TtsService cache path', () => {
     expect(relative(cacheDir, filePath)).toBe('ko-1.mp3');
   });
 
+  // march 가 allowlist 에 없으면 filePath 가 BadRequestException 을 던져
+  // 캐시 미스 시 Google TTS 생성 경로로 진입조차 못 한다.
+  it.each(['ko', 'en', 'ja', 'zh'])(
+    '%s-march.mp3 가 allowlist 경로로 해석되어 생성 경로에 진입할 수 있다',
+    (lang) => {
+      const filePath = (
+        service as unknown as { filePath: (l: string, k: string) => string }
+      ).filePath(lang, 'march');
+
+      expect(dirname(filePath)).toBe(cacheDir);
+      expect(relative(cacheDir, filePath)).toBe(`${lang}-march.mp3`);
+    },
+  );
+
   it.each([
     ['../ko', '1'],
     ['ko', '../1'],

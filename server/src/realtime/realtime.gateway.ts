@@ -51,6 +51,11 @@ export class RealtimeGateway
   private onlineMap = new Map<string, OnlineUser>();
   private countdown = { active: false, startedAt: 0, totalSeconds: 0 };
 
+  // socket → 마지막 message 패킷의 engine.io 수신 시각.
+  // time:ping의 t1을 핸들러 진입보다 앞선 시점으로 잡기 위한 것. socket 인스턴스가
+  // GC되면 항목도 함께 사라지도록 WeakMap을 쓴다 (disconnect 시 별도 정리 불필요).
+  private readonly packetReceivedAt = new WeakMap<object, number>();
+
   constructor(
     private jwtService: JwtService,
     private usersService: UsersService,
@@ -90,7 +95,34 @@ export class RealtimeGateway
     }
   }
 
+  /**
+   * engine.io 패킷 수신 시각 기록기를 붙인다.
+   * socket.io 디코딩과 Nest 디스패치 파이프라인보다 앞선 시점이라, time:ping의 t1을
+   * 핸들러 진입 시각보다 이르게 잡을 수 있다. 한 tick에 여러 패킷이 몰려 들어오면
+   * 저장값이 뒤 패킷의 것일 수 있으나, 그 경우에도 항상 핸들러 진입 시각 이하이므로
+   * 폴백보다 나빠지지 않는다.
+   * engine.io 내부 구조가 다르거나(테스트 stub 등) 실패하면 조용히 폴백한다.
+   */
+  private trackPacketArrival(client: Socket): void {
+    try {
+      const conn = (client as unknown as { conn?: { on?: unknown } }).conn;
+      if (!conn || typeof conn.on !== 'function') return;
+      (conn.on as (e: string, cb: (p: unknown) => void) => void)(
+        'packet',
+        (packet: unknown) => {
+          if ((packet as { type?: string })?.type === 'message') {
+            this.packetReceivedAt.set(client, Date.now());
+          }
+        },
+      );
+    } catch {
+      // 수신 시각을 못 잡아도 t1은 핸들러 진입 시각으로 폴백된다
+    }
+  }
+
   async handleConnection(client: Socket) {
+    // await 이전에 붙인다 — 인증 조회 중 도착한 패킷도 시각이 기록되도록.
+    this.trackPacketArrival(client);
     const user = await this.getUserFromSocket(client);
     if (!client.connected) return;
     if (!user) {
@@ -134,12 +166,25 @@ export class RealtimeGateway
   // 시간 동기화용 ws ping/pong — REST `/time` 대비 HTTP overhead 5~20ms 절약.
   // 클라이언트가 ack callback으로 응답을 받아 NTP 4-timestamp 알고리즘에 사용.
   // Rate limit: 분당 30회 (정상 5초 주기 sync는 분당 12회 — 충분히 여유, abuse 차단).
+  //
+  // t1/t2의 의미 (clockSync.js와 짝을 이룸):
+  //   rtt    = (t3 - t0) - (t2 - t1)        ← 서버 체류 시간을 왕복에서 뺀다
+  //   offset = ((t1 - t0) + (t2 - t3)) / 2  ← 남은 왕복이 대칭이라 가정
+  // 따라서 t2 - t1은 "서버가 이 요청을 붙들고 있던 시간"이어야 한다.
+  // 이전 구현은 t1과 t2를 연속 두 줄에서 찍어 t2 - t1이 항상 0이었고, 서버 체류
+  // 시간이 통째로 네트워크 지연으로 오인되어 그 절반이 offset 오차로 들어갔다.
+  // 지금은 t1을 engine.io 패킷 수신 시각(없으면 핸들러 진입 시각)으로, t2를 응답
+  // 직전으로 잡아 소켓 디코딩·디스패치·rate limit 처리 시간이 t2 - t1에 포함된다.
+  //
+  // 한계 — 패킷이 NIC에 도착한 뒤 libuv가 JS 콜백을 부르기까지의 대기는 JS에서
+  // 관측할 수 없어 여전히 RTT로 계산된다. 이 핸들러로 줄일 수 있는 부분이 아니다.
   @SubscribeMessage('time:ping')
   handleTimePing(
     @ConnectedSocket() client: Socket,
   ): { utc: number; t1: number; t2: number } | null {
+    const enteredAt = Date.now();
+    const t1 = this.packetReceivedAt.get(client) ?? enteredAt;
     if (!this.rateLimit.check(client.id, 'time:ping', 30, 60_000)) return null;
-    const t1 = Date.now();
     const t2 = Date.now();
     return { utc: t2, t1, t2 };
   }
@@ -183,13 +228,26 @@ export class RealtimeGateway
       };
     }
 
-    // 단계 5: probe 라운드트립으로 모든 클라이언트의 maxRTT 측정 후 startedAt 결정.
-    // → 모든 디바이스가 정확히 같은 절대 시각에 TTS 발화 시작 (±30ms 보장).
-    // SFC가 클릭 후 0.5~1초 대기 비용 — UX 트레이드오프.
+    // 단계 5: probe 라운드트립으로 클라이언트 RTT 분포(p95)를 재고 startedAt을 정한다.
+    //
+    // 보장하는 것 — 느린 클라이언트도 첫 슬롯 시각 전에 스케줄을 끝낼 여유(grace).
+    //   즉 "느린 사용자만 첫 숫자를 통째로 놓치는" 것을 막는다.
+    // 보장하지 못하는 것 — 디바이스 간 발화 정렬 정확도. 각 클라이언트는 서버
+    //   절대시각을 자기 시계 추정(timeOffset)으로 환산해 발화하므로, 모두에게 값이
+    //   같은 startedAt은 상대 정렬 계산에서 소거된다. 실제 정렬 오차는 시계 offset
+    //   추정 오차 + 타이머 지터 + 오디오 출력 지연이 결정하며 본 협상으로 줄지 않는다.
+    //   (과거 주석의 "±30ms 보장"은 사실이 아니었다.)
+    //
+    // onlineMap 키를 넘겨 인증된 소켓만 probe 한다 — 미인증 소켓은 클라이언트가
+    // 'time:probe' 핸들러를 아직 등록하지 않아 구조적으로 ack하지 않는다.
+    // SFC가 클릭 후 대기하는 비용 — UX 트레이드오프.
     // probe 실패 시 lock leak 방지 — 자동 release 후 재throw.
     let startedAt: number;
     try {
-      startedAt = await this.readyNegotiation.negotiateStartedAt(this.server);
+      startedAt = await this.readyNegotiation.negotiateStartedAt(
+        this.server,
+        new Set(this.onlineMap.keys()),
+      );
     } catch (err) {
       this.busyLock.release({ type: 'countdown' });
       this.server.emit('busy:state', { holder: null });
