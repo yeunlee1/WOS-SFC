@@ -5,9 +5,13 @@
 //
 // 핵심 기능:
 // - SNTP 5샘플 + NTP 4-timestamp(t0/t1/t2/t3) 알고리즘 — 서버 처리시간을 RTT에서 분리
-// - 임계값 계층화: <50ms 무시 / 50~500ms EMA 스무딩 / >=500ms 즉시 채택(클럭 점프)
-// - BroadcastChannel 멀티탭 offset 공유 — 동일 사용자 N탭이 1번만 fetch
-// - System clock 점프 감지 — 1초마다 Date.now()와 performance.now() 비교, 200ms+ drift 시 즉시 재동기화
+// - RTT 최소 샘플 채택(Cristian) + RTT 편차가 크면 추가 샘플 3개를 더 모아 합산
+// - 임계값 계층화: <500ms EMA 스무딩(50/50) / >=500ms 즉시 채택(클럭 점프)
+//   데드밴드는 두지 않는다 — 첫 샘플의 편향이 영구 고정되는 것을 막기 위함
+// - BroadcastChannel 멀티탭 offset 전파 — 다른 탭이 측정한 값을 즉시 반영(각 탭의 주기
+//   동기화를 대체하지는 않는다)
+// - System clock 점프 감지 — DRIFT_CHECK_MS마다 Date.now()와 performance.now() 비교
+// - startup() 첫 동기화 실패 시 백오프 재시도, 그동안 store.timeSyncState로 미동기화 노출
 // - getServerNow() 단일 진입점 — Date.now() + timeOffset + personalOffsetMs 자동 합산
 //
 // 사용처: web/src/timeSync.js는 본 모듈의 thin wrapper (백워드 호환).
@@ -16,26 +20,41 @@
 import { api, getSocket } from './api';
 import { useStore } from './store';
 
-const SAMPLE_COUNT = 3; // 3샘플로 충분 — 한도 절약
+// LTE/5G의 RTT 지터(50~300ms)에서는 3샘플로 최소 RTT를 뽑기에 부족해 5샘플로 늘렸다.
+// 서버 한도 대비 계산: ws time:ping 30회/분, 주기 동기화 30초(=2회/분).
+// 최악(추가 샘플까지) 2 × (5+3) = 16회/분 → drift·재접속 트리거분을 더해도 한도 안.
+const SAMPLE_COUNT = 5;
 const SAMPLE_INTERVAL_MS = 100;
-// RTT 표준편차가 이 값 이상이면 네트워크가 불안정한 것으로 간주 — 1회 추가 재샘플 실행
+// RTT 표준편차가 이 값 이상이면 지터가 큰 것으로 보고 아래 개수만큼 샘플을 더 모은다.
+// 기존 구현은 모은 샘플을 전량 폐기하고 처음부터 다시 모았으나, 버린 쪽에도 최소 RTT
+// 후보가 들어 있어 한도만 쓰고 정확도는 나아지지 않았다. 이제 이어 모아 합쳐서 판단한다.
 const RTT_STDDEV_RESAMPLE_THRESHOLD_MS = 100;
+const EXTRA_SAMPLE_COUNT = 3;
 /**
  * TTS 슬롯 리스케줄 임계값(ms).
- * Web Audio API 스케줄은 AudioContext.currentTime(모노토닉) 기반이라
- * 한 번 예약된 발화는 Date.now() drift와 무관하게 정확히 재생됨.
- * 따라서 일반적인 RTT 변동(수백 ms 이내)으로 인한 재스케줄은 불필요.
- * 시스템 클록이 실제로 1초 이상 점프한 경우에만 재스케줄.
+ * timeOffset 변동이 이 값 이상일 때만 이미 예약된 발화를 다시 잡는다.
+ * 잦은 리스케줄은 그 자체로 발화 누락·중복을 만들므로 임계값을 둔다.
  * personalOffsetMs 변경은 별도 effect에서 임계값 무관 즉시 처리.
+ *
+ * 주의 — 이 값보다 작은 offset 변동은 이미 예약된 발화에 반영되지 않는다.
+ * 예약이 실제로 얼마나 정확히 재생되는지는 재생 측(countdownPlayer/rallyGroupPlayer)
+ * 구현에 달려 있고, 본 모듈은 그것을 보증하지 않는다.
  */
 export const RESCHEDULE_THRESHOLD_MS = 1000;
-const SMOOTH_THRESHOLD_MS = 50; // 이 미만 변동은 noise로 무시
 const JUMP_THRESHOLD_MS = 500; // 이 이상은 클럭 점프 — 즉시 채택
-const SMOOTH_OLD_WEIGHT = 0.3;
-const SMOOTH_NEW_WEIGHT = 0.7;
+// 데드밴드(변동 무시 구간)를 두지 않는 이유:
+// 첫 동기화는 100% 채택이라 그때의 비대칭 편향이 그대로 offset이 된다. 이후 재동기화의
+// 차이가 데드밴드보다 작으면 값이 전혀 갱신되지 않아 그 편향이 영구히 남았다.
+// 대신 EMA를 절반씩 섞어 noise를 흡수한다 — 정상상태 분산이 측정 분산의 1/3로 줄고
+// 반복 동기화는 실측값으로 수렴한다. 리스케줄은 RESCHEDULE_THRESHOLD_MS가 따로 막는다.
+const SMOOTH_OLD_WEIGHT = 0.5;
+const SMOOTH_NEW_WEIGHT = 0.5;
+// 첫 동기화 실패 시 재시도 간격(ms). 끝값에 도달하면 그 값으로 반복한다.
+const STARTUP_RETRY_BACKOFF_MS = [1000, 2000, 5000, 10_000, 30_000];
 // ws ping은 keep-alive 연결 위에서 동작 — REST(HTTP overhead 5~20ms)보다 가벼움.
-// BroadcastChannel 멀티탭 흡수 덕에 단일 사용자 N탭은 1번만 보내므로 5초 주기도 서버 부담 미미.
-const PERIODIC_SYNC_MS = 30_000; // 30초로 늘림 — backend throttle 30/분 한도 대비 여유 확보
+// 주의 — BroadcastChannel은 결과를 다른 탭에 전파할 뿐 그 탭의 주기 동기화를 막지 않는다.
+// 즉 N탭이면 서버 호출도 N배다. 한도 계산은 탭 하나(=소켓 하나) 기준이다.
+const PERIODIC_SYNC_MS = 30_000; // ws time:ping 30회/분 한도 대비 여유 확보
 const DRIFT_CHECK_MS = 5000; // 5초 간격 — 검사 빈도 완화
 const DRIFT_THRESHOLD_MS = 1000; // 1000ms — main thread blocking 오탐 방지
 const WS_PING_TIMEOUT_MS = 1500; // 1.5초로 단축 — ack 미도달 시 빠르게 REST fallback
@@ -139,39 +158,42 @@ function calcRttStddev(samples) {
   return Math.sqrt(variance);
 }
 
+/** 샘플을 count개 수집해 samples 배열에 밀어 넣는다. 각 샘플 사이에 SAMPLE_INTERVAL_MS 대기. */
+async function collectSamples(samples, count, waitBeforeFirst) {
+  for (let i = 0; i < count; i++) {
+    if (i > 0 || waitBeforeFirst) {
+      await new Promise((r) => setTimeout(r, SAMPLE_INTERVAL_MS));
+    }
+    const sample = await fetchOneSample();
+    if (sample) samples.push(sample);
+  }
+}
+
 /**
  * SNTP 다중 샘플 동기화.
  * - SAMPLE_COUNT 번 ws ping(또는 REST fallback)으로 RTT·offset 측정
  * - NTP 4-timestamp(서버 처리시간 분리) — fetchOneSample 참고
- * - 최소 RTT 샘플 채택 후 임계값 계층화
- * - RTT 표준편차 100ms+ 시 1회 추가 재샘플 (단계 2 명세)
- * @param {boolean} [_isResample=false] — 재귀 방지용 내부 플래그
+ * - RTT 편차가 크면 EXTRA_SAMPLE_COUNT개를 더 모아 같은 풀에 합침
+ * - 최소 RTT 샘플 채택 후 EMA 스무딩(클럭 점프는 즉시 채택)
  * @returns {Promise<{offset:number, rtt:number, samples:Array}>}
  */
-export async function syncTime(_isResample = false) {
+export async function syncTime() {
   const samples = [];
-  for (let i = 0; i < SAMPLE_COUNT; i++) {
-    const sample = await fetchOneSample();
-    if (sample) samples.push(sample);
-    if (i < SAMPLE_COUNT - 1) {
-      await new Promise((r) => setTimeout(r, SAMPLE_INTERVAL_MS));
-    }
-  }
+  await collectSamples(samples, SAMPLE_COUNT, false);
 
   if (samples.length === 0) {
     throw new Error('시간 동기화 실패 — 모든 샘플이 실패했습니다');
   }
 
-  // RTT 표준편차 100ms+ → 네트워크 불안정 → 1회 추가 재샘플 (무한 재귀 방지: _isResample 플래그)
-  if (
-    !_isResample &&
-    calcRttStddev(samples) >= RTT_STDDEV_RESAMPLE_THRESHOLD_MS
-  ) {
+  // RTT 편차가 크면(지터 큰 모바일 회선) 추가 샘플로 최소 RTT 후보를 늘린다.
+  // 모은 샘플을 버리지 않으므로 서버 호출은 최대 SAMPLE_COUNT + EXTRA_SAMPLE_COUNT 번.
+  if (calcRttStddev(samples) >= RTT_STDDEV_RESAMPLE_THRESHOLD_MS) {
     console.warn(
-      '[clockSync] RTT 표준편차 과다 (%dms), 재샘플 실행',
+      '[clockSync] RTT 표준편차 과다 (%dms), 샘플 %d개 추가 수집',
       Math.round(calcRttStddev(samples)),
+      EXTRA_SAMPLE_COUNT,
     );
-    return syncTime(true);
+    await collectSamples(samples, EXTRA_SAMPLE_COUNT, true);
   }
 
   // 최소 RTT 샘플 채택 (Cristian's algorithm — 네트워크 지연 적은 샘플이 가장 정확)
@@ -186,11 +208,8 @@ export async function syncTime(_isResample = false) {
   if (!_hasSynced || Math.abs(delta) >= JUMP_THRESHOLD_MS) {
     // 첫 동기화 또는 클럭 점프 → 즉시 100% 채택
     finalOffset = best.offset;
-  } else if (Math.abs(delta) < SMOOTH_THRESHOLD_MS) {
-    // 작은 변동은 noise로 간주, 기존 offset 유지 (시각적 튐 방지)
-    finalOffset = prevOffset;
   } else {
-    // 50~500ms 범위는 EMA 스무딩 — 카운트다운이 시각적으로 튀지 않도록
+    // 그 밖의 모든 변동은 EMA 스무딩 — 무시 구간을 두지 않아 편향이 남지 않는다
     finalOffset =
       prevOffset * SMOOTH_OLD_WEIGHT + best.offset * SMOOTH_NEW_WEIGHT;
   }
@@ -198,8 +217,9 @@ export async function syncTime(_isResample = false) {
 
   store.setTimeOffset(finalOffset);
   store.setTimeSyncRtt(best.rtt);
+  store.setTimeSyncState('synced');
 
-  // 멀티탭 공유 — 다른 탭들이 자기 fetch 안 하고 이 결과 사용
+  // 멀티탭 전파 — 다른 탭이 자기 주기 동기화를 기다리지 않고 최신 값을 바로 반영
   if (_broadcastChannel) {
     try {
       _broadcastChannel.postMessage({
@@ -288,6 +308,7 @@ export function startup() {
           const store = useStore.getState();
           store.setTimeOffset(e.data.offset);
           if (Number.isFinite(e.data.rtt)) store.setTimeSyncRtt(e.data.rtt);
+          store.setTimeSyncState('synced');
           _hasSynced = true;
         }
       });
@@ -296,7 +317,29 @@ export function startup() {
     }
   }
   const pending = (async () => {
-    await syncTime();
+    // 첫 동기화가 실패하면 예전에는 그대로 끝나 영구 미동기화 상태가 됐다(주기 타이머도
+    // 시작되지 않음). 성공하거나 shutdown()이 불릴 때까지 백오프로 재시도한다.
+    for (let attempt = 0; ; attempt++) {
+      if (lifecycleToken !== _lifecycleToken) return;
+      useStore.getState().setTimeSyncState('syncing');
+      try {
+        await syncTime();
+        break;
+      } catch {
+        if (lifecycleToken !== _lifecycleToken) return;
+        useStore.getState().setTimeSyncState('failed');
+        const waitMs =
+          STARTUP_RETRY_BACKOFF_MS[
+            Math.min(attempt, STARTUP_RETRY_BACKOFF_MS.length - 1)
+          ];
+        console.warn(
+          '[clockSync] 첫 동기화 실패 (%d회차) — %dms 뒤 재시도',
+          attempt + 1,
+          waitMs,
+        );
+        await new Promise((r) => setTimeout(r, waitMs));
+      }
+    }
     if (lifecycleToken !== _lifecycleToken) return;
     startPeriodicSync();
     startDriftCheck();
@@ -312,11 +355,17 @@ export function startup() {
 
 /**
  * 언마운트 시 호출 — 모든 timer 및 채널 정리.
+ * _hasSynced도 되돌려 재로그인 시 첫 동기화가 다시 100% 채택되도록 한다
+ * (남겨 두면 이전 세션의 offset에 EMA로 끌려가 첫 추정이 느려진다).
+ * timeOffset 값 자체는 유지한다 — 같은 기기·같은 서버라 직전 추정이 0보다 낫다.
+ * 다만 최신 여부를 보증할 수 없으므로 상태는 'unsynced'로 되돌린다.
  */
 export function shutdown() {
   _lifecycleToken += 1;
   _started = false;
   _startupPromise = null;
+  _hasSynced = false;
+  useStore.getState().setTimeSyncState('unsynced');
   stopPeriodicSync();
   stopDriftCheck();
   if (_broadcastChannel) {

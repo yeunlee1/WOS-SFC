@@ -94,6 +94,10 @@ export const useStore = create((set) => ({
   user: null,
   timeOffset: 0,
   timeSyncRtt: 0, // 진단용 — 마지막 동기화 RTT(ms)
+  // 시계 동기화 진행 상태. timeOffset 초기값 0은 "오차 0"이 아니라 "아직 모름"이므로
+  // 두 상태를 반드시 이 필드로 구분한다. UI는 'synced'가 아닐 때 성공 표시를 하면 안 된다.
+  // 'unsynced' 시작 전/정리 후 · 'syncing' 시도 중 · 'failed' 실패(재시도 대기) · 'synced' 성공
+  timeSyncState: 'unsynced',
   personalOffsetMs: _initPersonalOffsetMs(), // 사용자 디바이스별 미세 보정 (-1000~+1000ms)
 
   // 실시간 데이터
@@ -130,6 +134,7 @@ export const useStore = create((set) => ({
   clearUser: () => set({ user: null, chatMessages: [], onlineUsers: [] }),
   setTimeOffset: (timeOffset) => set({ timeOffset }),
   setTimeSyncRtt: (timeSyncRtt) => set({ timeSyncRtt }),
+  setTimeSyncState: (timeSyncState) => set({ timeSyncState }),
   setPersonalOffsetMs: (ms) => {
     const n = Number(ms);
     const clamped = Number.isFinite(n)

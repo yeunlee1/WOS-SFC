@@ -11,6 +11,41 @@ function _rttIcon(rtt) {
   return '🟢';
 }
 
+/**
+ * 시간 동기화 배지 표시값.
+ * timeSyncRtt 초기값 0은 "왕복 0ms"가 아니라 "아직 측정 안 됨"이다.
+ * 그래서 상태가 'synced'가 아닐 때는 RTT 수치를 절대 보여주지 않는다.
+ * (과거에는 미동기화 상태에서도 "🟢 ±0ms"로 표시돼 성공처럼 읽혔다.)
+ */
+function _syncBadge(state, rtt) {
+  if (state === 'synced') {
+    return {
+      text: `${_rttIcon(rtt)} ±${Math.round(rtt)}ms`,
+      title: `시간 동기화 RTT: ${Math.round(rtt)}ms`,
+      label: `시간 동기화 RTT ${Math.round(rtt)}밀리초`,
+    };
+  }
+  if (state === 'syncing') {
+    return {
+      text: '⏳ 동기화 중',
+      title: '서버 시간 동기화 중 — 아직 서버 시각을 모릅니다',
+      label: '시간 동기화 중',
+    };
+  }
+  if (state === 'failed') {
+    return {
+      text: '⚠️ 동기화 실패',
+      title: '서버 시간 동기화 실패 — 재시도 중입니다',
+      label: '시간 동기화 실패, 재시도 중',
+    };
+  }
+  return {
+    text: '⚪ 미동기화',
+    title: '서버 시간 미동기화 — 기기 시계 기준으로 표시 중',
+    label: '시간 미동기화',
+  };
+}
+
 const TAB_KEYS = [
   { id: 'battle',    key: 'tabBattle' },
   { id: 'operation', key: 'tabOperation' },
@@ -36,7 +71,7 @@ export default function Header({
   onOpenCmdk,
 }) {
   const {
-    timeOffset, timeSyncRtt, onlineUsers,
+    timeOffset, timeSyncRtt, timeSyncState, onlineUsers,
     ttsVolume, setTtsVolume, ttsMuted, setTtsMuted,
   } = useStore();
   const { t, lang, changeLang } = useI18n();
@@ -54,6 +89,9 @@ export default function Header({
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, [timeOffset]);
+
+  const syncBadge = _syncBadge(timeSyncState, timeSyncRtt);
+  const clockSynced = timeSyncState === 'synced';
 
   const currentTabLabel = (() => {
     const tb = TAB_KEYS.find((k) => k.id === activeTab);
@@ -88,7 +126,11 @@ export default function Header({
 
       <span
         className="world-clock"
-        title={`서버 시간 동기화 ±${Math.round(timeSyncRtt)}ms`}
+        title={
+          clockSynced
+            ? `서버 시간 동기화 ±${Math.round(timeSyncRtt)}ms`
+            : '미동기화 — 기기 시계 기준 시각입니다'
+        }
       >
         {utcTime}
       </span>
@@ -151,10 +193,10 @@ export default function Header({
 
       <span
         className="time-sync-badge"
-        title={`시간 동기화 RTT: ${Math.round(timeSyncRtt)}ms`}
-        aria-label={`시간 동기화 RTT ${Math.round(timeSyncRtt)}밀리초`}
+        title={syncBadge.title}
+        aria-label={syncBadge.label}
       >
-        {_rttIcon(timeSyncRtt)} ±{Math.round(timeSyncRtt)}ms
+        {syncBadge.text}
       </span>
 
       <button
