@@ -5,7 +5,6 @@ import {
   Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createHash } from 'crypto';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as fsPromises from 'fs/promises';
@@ -13,12 +12,14 @@ import axios from 'axios';
 import {
   LANGS,
   GOOGLE_VOICES,
+  MIN_MP3_BYTES,
   PHRASES,
   TTS_KEYS,
   TTS_PREGEN_MAX,
   SPEAKING_RATE,
   getTtsText,
 } from './tts.constants';
+import { buildSsmlInput, reconcileCache } from './tts.cache-meta';
 
 // ── 동시 Google TTS 호출 수 제한 ─────────────────────────────────────────
 class Semaphore {
@@ -75,19 +76,24 @@ export class TtsService implements OnModuleInit {
       return;
     }
 
-    // speakingRate / GOOGLE_VOICES / PHRASES 변경 시 자동 캐시 정리 (수동 rm 불필요)
+    // 바뀐 설정에 해당하는 mp3만 정리한다 (전량 삭제는 전역 설정이 바뀐 경우로 한정)
     await this.validateAndCleanCache();
 
-    // 핵심 파일(숫자 1~10 + 문구)이 모두 있으면 사전 생성 스킵
-    // npm run tts:generate 로 미리 생성한 경우
-    const alreadyReady = LANGS.every(lang =>
-      [...Array.from({ length: 10 }, (_, i) => String(i + 1)),
-       ...Object.keys(PHRASES)].every(k => this.fileExists(lang, k))
-    );
-    if (alreadyReady) {
-      this.logger.log('TTS 캐시 확인 완료 — 사전 생성 스킵 (API 호출 없음)');
+    // 준비 판정 집합은 실제 사전 생성 집합(문구 + 1~TTS_PREGEN_MAX)과 같다.
+    // 예전에는 1~10 + 문구만 보고 '완료'로 판정해 부분 캐시가 완료로 반올림됐다.
+    const status = await this.collectCacheStatus();
+    if (status.ready) {
+      this.logger.log(
+        `TTS 캐시 확인 완료 — ${status.total}개 모두 존재, 사전 생성 스킵 (API 호출 없음)`,
+      );
       return;
     }
+
+    this.logger.warn(
+      `TTS 캐시 부분 준비 — ${status.total - status.missing.length}/${status.total} 존재, ` +
+      `${status.missing.length}개 누락. 사전 생성 시작 ` +
+      `(누락 예: ${status.missing.slice(0, 5).join(', ')})`,
+    );
     this.preGenerateAll().catch(e => this.logger.error('preGenerateAll 실패', e));
   }
 
@@ -131,56 +137,57 @@ export class TtsService implements OnModuleInit {
   }
 
   // ── 캐시 메타 자동 무효화 ────────────────────────────────────────────────
-  // speakingRate / GOOGLE_VOICES / PHRASES 중 어느 하나라도 변경되면 기존 mp3는
-  // 옛 설정으로 만들어졌으므로 그대로 재사용 시 변경이 반영되지 않는다. 부팅 시
-  // cache.meta.json 과 현재 설정을 비교해 불일치하면 모든 mp3 삭제 + 새 메타 기록.
-  private get metaPath(): string {
-    return path.join(this.cacheDir, 'cache.meta.json');
-  }
-
-  private buildCurrentMeta() {
-    return {
-      speakingRate: SPEAKING_RATE,
-      voices: GOOGLE_VOICES,
-      phrasesHash: createHash('sha256')
-        .update(JSON.stringify(PHRASES))
-        .digest('hex')
-        .slice(0, 12),
-    };
-  }
-
+  // 판정과 삭제 규칙은 tts.cache-meta.ts 에 있다 (사전 생성 스크립트와 공용).
+  // 전역 설정(speakingRate·SSML 템플릿)이 바뀌었을 때만 전량 삭제하고,
+  // 음성 변경은 그 언어만, 문구 변경은 그 파일 하나만 무효화한다.
   private async validateAndCleanCache(): Promise<void> {
-    const current = this.buildCurrentMeta();
-    let saved: ReturnType<TtsService['buildCurrentMeta']> | null = null;
-    try {
-      const raw = await fsPromises.readFile(this.metaPath, 'utf8');
-      saved = JSON.parse(raw);
-    } catch {
-      saved = null; // 메타 없거나 파싱 실패 → 정리 트리거
+    const result = await reconcileCache(this.cacheDir);
+    if (result.deleted === 0 && !result.metaChanged) return;
+
+    const reason = result.reasons.join(', ') || '메타 형식 갱신';
+    if (result.deleted === 0) {
+      this.logger.log(`TTS 캐시 메타 갱신 — 삭제 없음 (${reason})`);
+      return;
+    }
+    this.logger.log(
+      `TTS 캐시 정리 — ${result.deleted}개 mp3 삭제` +
+      `${result.fullWipe ? ' (전량 무효화)' : ' (부분 무효화)'} / 사유: ${reason}`,
+    );
+  }
+
+  // 사전 생성 집합(문구 + 1~TTS_PREGEN_MAX, 전 언어)의 키 목록.
+  private pregenKeys(): string[] {
+    return [
+      ...Object.keys(PHRASES),
+      ...Array.from({ length: TTS_PREGEN_MAX }, (_, i) => String(i + 1)),
+    ];
+  }
+
+  // 캐시 준비 상태 — 판정 집합이 실제 생성 집합과 같아야 부분 캐시가 '완료'로 새지 않는다.
+  // 존재 여부만 본다. 무음·손상 파일은 요청 시 ensureFile 이 크기(MIN_MP3_BYTES)로 다시 거른다.
+  private async collectCacheStatus(): Promise<{
+    ready: boolean;
+    total: number;
+    missing: string[];
+  }> {
+    const present = new Set(
+      (await fsPromises.readdir(this.cacheDir).catch(() => [] as string[]))
+        .filter((f) => f.endsWith('.mp3')),
+    );
+
+    const keys = this.pregenKeys();
+    const missing: string[] = [];
+    for (const lang of LANGS) {
+      for (const key of keys) {
+        if (!present.has(`${lang}-${key}.mp3`)) missing.push(`${lang}/${key}`);
+      }
     }
 
-    if (saved && JSON.stringify(saved) === JSON.stringify(current)) return;
-
-    this.logger.log(
-      saved
-        ? 'TTS 캐시 메타 불일치 — 캐시 정리 진행'
-        : 'TTS 캐시 메타 없음 — 첫 부팅 또는 마이그레이션, 캐시 정리',
-    );
-
-    const files = await fsPromises.readdir(this.cacheDir).catch(() => [] as string[]);
-    const mp3s = files.filter((f) => f.endsWith('.mp3'));
-    await Promise.all(
-      mp3s.map((f) =>
-        fsPromises.unlink(path.join(this.cacheDir, f)).catch(() => {}),
-      ),
-    );
-
-    await fsPromises.writeFile(
-      this.metaPath,
-      JSON.stringify(current, null, 2),
-      'utf8',
-    );
-    this.logger.log(`TTS 캐시 정리 완료 — ${mp3s.length}개 mp3 삭제, 새 메타 기록`);
+    return {
+      ready: missing.length === 0,
+      total: LANGS.length * keys.length,
+      missing,
+    };
   }
 
   // 파일 반환 — 없거나 손상(< MIN_MP3_BYTES) 파일이면 재생성.
@@ -195,7 +202,7 @@ export class TtsService implements OnModuleInit {
   async ensureFile(lang: string, key: string, text: string): Promise<void> {
     const fp = this.filePath(lang, key);
     const healthy = await fsPromises.lstat(fp)
-      .then((st) => st.isFile() && st.size >= TtsService.MIN_MP3_BYTES)
+      .then((st) => st.isFile() && st.size >= MIN_MP3_BYTES)
       .catch(() => false);
     if (healthy) return;
     // 손상 파일이 있으면 삭제 (재생성 경로로 진입) — race-safe: ENOENT 무시
@@ -232,10 +239,7 @@ export class TtsService implements OnModuleInit {
     return fs.createReadStream(this.filePath(lang, key));
   }
 
-  // Google TTS가 간혹 거의 빈 MP3(무음)를 반환하는 것을 감지하기 위한 최소 바이트.
-  // 관찰값: 손상 파일 ≤900 bytes / 정상 파일 ≥1600 bytes.
-  // 짧은 한국어 1음절(예: "오", "팔") 정상 발화도 최소 2KB 이상이므로 1000 bytes 미만은 손상으로 간주.
-  private static readonly MIN_MP3_BYTES = 1000;
+  // 손상(무음) 판정 기준은 tts.constants.ts 의 MIN_MP3_BYTES — 사전 생성 스크립트와 공용.
 
   // Google TTS 무음 반환에 대한 최대 재시도 횟수.
   // 관찰된 결함: Chirp3-HD/Wavenet 모델이 짧은 1음절 cardinal SSML 합성에서
@@ -251,7 +255,7 @@ export class TtsService implements OnModuleInit {
     for (let attempt = 1; attempt <= TtsService.MAX_TTS_RETRIES; attempt++) {
       try {
         const buf = await this.fetchFromGoogleTts(lang, key, text);
-        if (buf.length < TtsService.MIN_MP3_BYTES) {
+        if (buf.length < MIN_MP3_BYTES) {
           lastError = new Error(
             `TTS 응답 ${buf.length} bytes — 무음 가능성 (attempt ${attempt}/${TtsService.MAX_TTS_RETRIES})`,
           );
@@ -279,10 +283,6 @@ export class TtsService implements OnModuleInit {
     throw lastError ?? new Error(`[${lang}/${key}] 생성 실패 (${TtsService.MAX_TTS_RETRIES}회 재시도 소진)`);
   }
 
-  fileExists(lang: string, key: string): boolean {
-    return fs.existsSync(this.filePath(lang, key));
-  }
-
   // Google Cloud TTS REST API 호출
   // 숫자: SSML <say-as interpret-as="cardinal"> — "180" → "백팔십" (한국어 기준)
   // 문구: 일반 텍스트
@@ -290,14 +290,10 @@ export class TtsService implements OnModuleInit {
     if (!this.apiKey) throw new Error('GOOGLE_TTS_API_KEY 없음');
 
     const voice = GOOGLE_VOICES[lang] ?? GOOGLE_VOICES['ko'];
-    const isNumber = /^\d+$/.test(key);
 
-    // <prosody pitch="0st"> — Wavenet의 음정을 baseline으로 고정.
-    // 같은 톤·볼륨·발음속도로 발화되어 숫자별 길이 편차와 음정 요동이 최소화된다.
-    // Chirp3-HD에서는 무시되던 태그이며 Wavenet에서만 유효하다.
-    const input = isNumber
-      ? { ssml: `<speak><prosody pitch="0st" rate="1.0" volume="medium"><say-as interpret-as="cardinal">${text}</say-as></prosody></speak>` }
-      : { ssml: `<speak><prosody pitch="0st" rate="1.0" volume="medium">${text}</prosody></speak>` };
+    // SSML 템플릿은 tts.cache-meta.ts 에 있다 — 사전 생성 스크립트와 반드시 같은 문자열을 쓰고,
+    // 템플릿이 바뀌면 캐시 전역 지문이 바뀌어 전량 무효화된다.
+    const input = buildSsmlInput(key, text);
 
     try {
       const res = await axios.post(
@@ -316,43 +312,63 @@ export class TtsService implements OnModuleInit {
     }
   }
 
-  // 전체 사전 생성 — 1~10 순차, 문구+11~30 병렬, 31~600 백그라운드
+  // 전체 사전 생성 — 1~10 순차, 문구+11~30 병렬, 31~TTS_PREGEN_MAX 백그라운드
+  //
+  // 실패를 삼키지 않는다: 개별 실패는 warn 으로 남기고, 끝나면 실제 캐시를 다시 세어
+  // 누락이 있으면 error 로 요약한다. 예전에는 실패 건수와 무관하게 '완료' 로그를 찍어
+  // Google TTS 분당 할당량 초과로 수백 개가 유실돼도 정상으로 보였다.
   async preGenerateAll() {
+    const failures: string[] = [];
+    const generate = async (lang: string, key: string, text: string) => {
+      try {
+        await this.ensureFile(lang, key, text);
+      } catch (e) {
+        failures.push(`${lang}/${key}`);
+        this.logger.warn(`사전 생성 실패 [${lang}/${key}]: ${(e as Error).message}`);
+      }
+    };
+
     for (const lang of LANGS) {
       // 1단계: 1~10 순차 (즉시 필요)
       for (let i = 1; i <= 10; i++) {
-        await this.ensureFile(lang, String(i), String(i)).catch(e =>
-          this.logger.warn(`사전 생성 실패 [${lang}/${i}]: ${e.message}`)
-        );
+        await generate(lang, String(i), String(i));
       }
       // 2단계: 문구 + 11~30 병렬 완료 보장
       const batch2 = [
         ...Object.entries(PHRASES).map(([key, map]) => ({ key, text: map[lang] || map['en'] })),
         ...Array.from({ length: 20 }, (_, i) => ({ key: String(i + 11), text: String(i + 11) })),
       ];
-      await Promise.allSettled(
-        batch2.map(({ key, text }) =>
-          this.ensureFile(lang, key, text).catch(e =>
-            this.logger.warn(`사전 생성 실패 [${lang}/${key}]: ${e.message}`)
-          )
-        )
-      );
+      await Promise.all(batch2.map(({ key, text }) => generate(lang, key, text)));
     }
 
-    // 3단계: 31~600 백그라운드 (Google TTS 무료 티어 월 1,000,000자 — 7,000자 이내로 전부 가능)
+    // 3단계: 31~TTS_PREGEN_MAX 백그라운드 (Google TTS 무료 티어 월 1,000,000자 — 7,000자 이내로 전부 가능)
     const batch3: Array<{ lang: string; key: string; text: string }> = [];
     for (const lang of LANGS) {
       for (let i = 31; i <= TTS_PREGEN_MAX; i++) {
         batch3.push({ lang, key: String(i), text: String(i) });
       }
     }
-    Promise.allSettled(
-      batch3.map(({ lang, key, text }) =>
-        this.ensureFile(lang, key, text).catch(e =>
-          this.logger.warn(`백그라운드 생성 실패 [${lang}/${key}]: ${e.message}`)
-        )
-      )
-    ).then(() => this.logger.log(`TTS 사전 생성 완료 (1~${TTS_PREGEN_MAX}, 전 언어)`))
-     .catch(() => {});
+    void Promise.all(
+      batch3.map(({ lang, key, text }) => generate(lang, key, text)),
+    )
+      .then(() => this.reportPreGenerateResult(failures))
+      .catch(() => {});
+  }
+
+  // 사전 생성 결과 요약 — 카운터가 아니라 실제 캐시 파일을 다시 세어 보고한다.
+  private async reportPreGenerateResult(failures: readonly string[]): Promise<void> {
+    const status = await this.collectCacheStatus();
+    if (failures.length === 0 && status.ready) {
+      this.logger.log(
+        `TTS 사전 생성 완료 — ${status.total}개 전부 준비됨 (1~${TTS_PREGEN_MAX}, 전 언어)`,
+      );
+      return;
+    }
+    this.logger.error(
+      `TTS 사전 생성 미완료 — 생성 실패 ${failures.length}건, ` +
+      `캐시 누락 ${status.missing.length}/${status.total}개. ` +
+      `누락 예: ${status.missing.slice(0, 10).join(', ')}. ` +
+      `분당 할당량 초과가 반복되면 배포 전에 npm run tts:generate 로 사전 생성하라.`,
+    );
   }
 }
