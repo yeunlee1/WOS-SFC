@@ -299,3 +299,196 @@ describe('rallyGroupPlayer — scheduleRallyCountdown 청취 충돌 회귀', () 
     expect(counts['3']).toBe(1);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 동기화 정밀도 수치 검증 (절대 예약 시각 / past-due / 출력 지연 보정 / 캐시 정책)
+//
+// 위 describe들이 쓰는 setupAudioMocks 는 src.start(when) 인자를 기록하지 않고
+// ctx 인스턴스도 노출하지 않는다. 여기서는 예약 시각 자체를 assert 해야 하므로
+// 별도의 정밀 mock 을 쓴다. Date.now 는 고정해 앵커 계산을 결정적으로 만든다.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const RALLY_FIXED_NOW = 1_700_000_000_000;
+
+describe('rallyGroupPlayer — 동기화 정밀도', () => {
+  let started;   // { key?, when }
+  let lastCtx;
+
+  function setupPreciseMocks({ currentTime = 100, outputLatency, baseLatency } = {}) {
+    started = [];
+    lastCtx = null;
+    const decodedBuffer = { numberOfChannels: 1, duration: 0.84 };
+
+    global.fetch = vi.fn(() => Promise.resolve({
+      ok: true,
+      arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)),
+    }));
+
+    class PreciseAudioContext {
+      constructor() {
+        this.currentTime = currentTime;
+        this.state = 'running';
+        this.destination = {};
+        // 미지원 브라우저 재현 — undefined 면 속성 자체를 만들지 않는다.
+        if (outputLatency !== undefined) this.outputLatency = outputLatency;
+        if (baseLatency !== undefined) this.baseLatency = baseLatency;
+        lastCtx = this;
+      }
+      createGain() {
+        return {
+          gain: { value: 0.3, cancelScheduledValues: vi.fn(), setTargetAtTime: vi.fn() },
+          connect: vi.fn(),
+        };
+      }
+      createAnalyser() { return { fftSize: 0, connect: vi.fn() }; }
+      createBuffer() { return {}; }
+      createBufferSource() {
+        return {
+          buffer: null,
+          connect: vi.fn(),
+          disconnect: vi.fn(),
+          stop: vi.fn(),
+          onended: null,
+          start: vi.fn((when) => { started.push({ when }); }),
+        };
+      }
+      decodeAudioData = vi.fn(() => Promise.resolve(decodedBuffer));
+      resume = vi.fn(() => Promise.resolve());
+    }
+
+    window.AudioContext = PreciseAudioContext;
+    delete window.webkitAudioContext;
+  }
+
+  async function flush(times = 8) {
+    for (let i = 0; i < times; i++) await Promise.resolve();
+    await new Promise((r) => setTimeout(r, 0));
+  }
+
+  function whens() {
+    return started.map((s) => s.when).sort((a, b) => a - b);
+  }
+
+  beforeEach(() => {
+    vi.resetModules();
+    vi.spyOn(Date, 'now').mockReturnValue(RALLY_FIXED_NOW);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const BASE_PARAMS = {
+    fireOffsets: [{ orderIndex: 1, offsetMs: 5000, userId: 1 }],
+    timeOffset: 0,
+    lang: 'ko',
+    volume: 0.3,
+    muted: false,
+    displayOrder: 1,
+  };
+
+  it('모든 슬롯이 서버 절대시각 기준 ctx 시각으로 예약된다', async () => {
+    setupPreciseMocks({ currentTime: 100 });
+    const { scheduleRallyCountdown } = await import('../rallyGroupPlayer');
+
+    // anchor = 100 + (10000 - 0)/1000 = 110
+    await scheduleRallyCountdown({ ...BASE_PARAMS, startedAtServerMs: RALLY_FIXED_NOW + 10000 });
+    await flush();
+
+    // rally_start_1 @ anchor-6, 프리카운트 @ anchor-3/-2/-1,
+    // numeric "4" @ anchor+4, captain_1 @ anchor+5 (numeric "5"는 captain이 점유)
+    expect(whens()).toEqual([104, 107, 108, 109, 114, 115]);
+  });
+
+  it('timeOffset 이 음수여도 서버 절대시각과 일치한다 (부호 뒤집기 검출)', async () => {
+    setupPreciseMocks({ currentTime: 100 });
+    const { scheduleRallyCountdown } = await import('../rallyGroupPlayer');
+
+    // serverNow = FIXED - 1500 → anchor = 100 + (10000 + 1500)/1000 = 111.5
+    await scheduleRallyCountdown({
+      ...BASE_PARAMS,
+      timeOffset: -1500,
+      startedAtServerMs: RALLY_FIXED_NOW + 10000,
+    });
+    await flush();
+
+    const w = whens();
+    expect(w.length).toBe(6);
+    expect(w[0]).toBeCloseTo(105.5, 6);   // rally_start_1 @ anchor-6
+    expect(w[w.length - 1]).toBeCloseTo(116.5, 6); // captain_1 @ anchor+5
+  });
+
+  it('예정 시각이 이미 지난 슬롯은 재생하지 않는다', async () => {
+    setupPreciseMocks({ currentTime: 100 });
+    const { scheduleRallyCountdown } = await import('../rallyGroupPlayer');
+
+    // anchor = 100 - 4 = 96 → rally_start_1@90, 3@93, 2@94, 1@95, 4@100, captain_1@101
+    // now=100, 허용 하한 99.8 → 앞의 4개는 스킵
+    await scheduleRallyCountdown({ ...BASE_PARAMS, startedAtServerMs: RALLY_FIXED_NOW - 4000 });
+    await flush();
+
+    expect(whens()).toEqual([100, 101]);
+  });
+
+  it('outputLatency(0.25s) 만큼 예약 시각을 앞당긴다 — 블루투스 이어버드', async () => {
+    setupPreciseMocks({ currentTime: 100, outputLatency: 0.25 });
+    const { scheduleRallyCountdown } = await import('../rallyGroupPlayer');
+
+    await scheduleRallyCountdown({ ...BASE_PARAMS, startedAtServerMs: RALLY_FIXED_NOW + 10000 });
+    await flush();
+
+    const w = whens();
+    expect(w.length).toBe(6);
+    expect(w[0]).toBeCloseTo(103.75, 6);
+    expect(w[w.length - 1]).toBeCloseTo(114.75, 6);
+  });
+
+  it('outputLatency 미지원 시 baseLatency 로 보정한다', async () => {
+    setupPreciseMocks({ currentTime: 100, baseLatency: 0.02 });
+    const { scheduleRallyCountdown } = await import('../rallyGroupPlayer');
+
+    await scheduleRallyCountdown({ ...BASE_PARAMS, startedAtServerMs: RALLY_FIXED_NOW + 10000 });
+    await flush();
+
+    expect(whens()[0]).toBeCloseTo(103.98, 6);
+  });
+
+  it('비정상 outputLatency(음수/NaN)는 무시하고, 과대값은 상한(0.5s)으로 잘라낸다', async () => {
+    setupPreciseMocks({ currentTime: 100, outputLatency: -0.4 });
+    let mod = await import('../rallyGroupPlayer');
+    await mod.scheduleRallyCountdown({ ...BASE_PARAMS, startedAtServerMs: RALLY_FIXED_NOW + 10000 });
+    await flush();
+    expect(whens()[0]).toBeCloseTo(104, 6);
+
+    vi.resetModules();
+    setupPreciseMocks({ currentTime: 100, outputLatency: Number.NaN });
+    mod = await import('../rallyGroupPlayer');
+    await mod.scheduleRallyCountdown({ ...BASE_PARAMS, startedAtServerMs: RALLY_FIXED_NOW + 10000 });
+    await flush();
+    expect(whens()[0]).toBeCloseTo(104, 6);
+
+    vi.resetModules();
+    setupPreciseMocks({ currentTime: 100, outputLatency: 5 });
+    mod = await import('../rallyGroupPlayer');
+    await mod.scheduleRallyCountdown({ ...BASE_PARAMS, startedAtServerMs: RALLY_FIXED_NOW + 10000 });
+    await flush();
+    expect(whens()[0]).toBeCloseTo(103.5, 6);
+  });
+
+  it("fetch 가 cache:'no-cache' 로 매번 재검증을 강제하지 않는다", async () => {
+    // 서버는 Cache-Control: public, max-age=3600 을 준다
+    // (server/src/tts/tts.controller.ts). no-cache 는 이를 무력화해
+    // 워밍업 192건이 매 로그인마다 조건부 GET 으로 서버에 도달한다.
+    setupPreciseMocks({ currentTime: 0 });
+    const { primeRallyAudio } = await import('../rallyGroupPlayer');
+    await primeRallyAudio([{ orderIndex: 1, offsetMs: 3000, userId: 1 }], 'ko', 1);
+
+    expect(global.fetch).toHaveBeenCalled();
+    for (const [, opts] of global.fetch.mock.calls) {
+      expect(opts?.cache).not.toBe('no-cache');
+      expect(opts?.cache).not.toBe('no-store');
+      expect(opts?.cache).not.toBe('reload');
+      expect(opts?.credentials).toBe('same-origin');
+    }
+  });
+});

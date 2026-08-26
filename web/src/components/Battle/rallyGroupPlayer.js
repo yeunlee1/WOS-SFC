@@ -20,6 +20,14 @@
 //   세 경우 모두 `ctxTimeAtPlay`가 이미 과거면(> 200ms 지남) skip, 약간 지났으면
 //   `Math.max(ctxTimeAtPlay, ctx.currentTime)`로 즉시 재생.
 //
+// 출력 지연 보정:
+//   `start(when)`은 샘플이 출력 파이프라인에 들어가는 시각이고, 실제로 스피커에서
+//   소리가 나는 시각은 그보다 뒤다. 앵커에서 ctx.outputLatency(미지원 시 baseLatency)를
+//   한 번 빼 기기별(유선 수십 ms vs 블루투스 수백 ms) 편차를 흡수한다.
+//   ※ 보증하지 못하는 것 — 보고값이 실제 지연과 일치하는지는 플랫폼에 달렸고,
+//     과소 보고 시 잔차가 남는다. 잔차는 개인 수동 보정(personalOffsetMs)의 몫이다.
+//     값은 스케줄 시점에 한 번만 읽으므로 도중 기기 교체는 반영되지 않는다.
+//
 // ⚠️ 싱글톤 가정: 이 모듈은 한 번에 하나의 집결 그룹만 스케줄링한다.
 //   scheduleRallyCountdown 호출 시 이전 스케줄을 즉시 취소한다.
 //   다중 그룹 동시 지원이 필요하면 인스턴스 기반으로 리팩토링 필요.
@@ -51,6 +59,10 @@ const bufferCache = new Map();
 
 // 재생 예약/중인 SourceNode 추적 (stop 시 일괄 중단 — 미래 시각 예약도 src.stop()으로 취소 가능)
 const activeSources = new Set();
+
+// 출력 지연 보정 상한. 블루투스 최악값(약 300ms)보다는 크고, 브라우저가 비정상적으로 큰
+// 값을 보고했을 때 앵커가 통째로 과거로 밀려 전 슬롯이 past-due로 사라지는 것은 막는 선.
+const MAX_OUTPUT_LATENCY_SEC = 0.5;
 
 // 스케줄 호출 식별자 — 늦게 도착한 버퍼 완료 콜백이 이전 스케줄의 결과를 재생하는 것 방지
 let latestScheduleId = 0;
@@ -89,6 +101,19 @@ function ensureContext() {
   return ctx;
 }
 
+/**
+ * 스피커에서 실제로 소리가 나기까지의 출력 지연(초).
+ * outputLatency 우선, 미지원(Safari 등)이면 baseLatency, 둘 다 없으면 0.
+ * 음수·NaN 같은 비정상 값은 0으로, 과대값은 MAX_OUTPUT_LATENCY_SEC 으로 잘라낸다.
+ */
+function outputLatencySec(c) {
+  if (!c) return 0;
+  const pick = (v) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : 0);
+  const raw = pick(c.outputLatency) || pick(c.baseLatency);
+  if (raw <= 0) return 0;
+  return Math.min(raw, MAX_OUTPUT_LATENCY_SEC);
+}
+
 function loadBuffer(lang, key) {
   const cacheKey = `${lang}:${key}`;
   const cached = bufferCache.get(cacheKey);
@@ -98,7 +123,11 @@ function loadBuffer(lang, key) {
 
   const promise = (async () => {
     try {
-      const resp = await fetch(ttsUrl(lang, key), { cache: 'no-cache', credentials: 'same-origin' });
+      // 캐시 옵션은 기본값(default)을 쓴다. 서버가 Cache-Control: public, max-age=3600 +
+      // ETag 를 주므로(server/src/tts/tts.controller.ts) 브라우저가 신선한 응답을
+      // 재검증 없이 재사용한다. 과거의 `cache: 'no-cache'` 는 이 헤더를 무력화해
+      // 워밍업 192건이 접속마다 조건부 GET 으로 서버에 도달했다.
+      const resp = await fetch(ttsUrl(lang, key), { credentials: 'same-origin' });
       if (!resp.ok) throw new Error('fetch status ' + resp.status);
       const arrBuf = await resp.arrayBuffer();
       const audioBuf = await c.decodeAudioData(arrBuf);
@@ -278,9 +307,14 @@ export async function scheduleRallyCountdown({ startedAtServerMs, fireOffsets, t
   if (myId !== latestScheduleId) return;
 
   // 앵커: startedAtServerMs 순간의 ctx.currentTime
-  // 이후 모든 슬롯은 ctxAnchor + offsetSec로 절대 시각 계산
+  // 이후 모든 슬롯은 ctxAnchor + offsetSec로 절대 시각 계산.
+  // start(when)은 샘플이 출력 파이프라인에 들어가는 시각이고 실제로 스피커에서 소리가
+  // 나는 시각은 그보다 outputLatency 만큼 뒤다. 블루투스 이어버드는 이 값이 100~300ms,
+  // 유선은 10~40ms 라 보정하지 않으면 기기 종류만으로 수백 ms 가 벌어진다.
+  // 개인 수동 보정(personalOffsetMs)은 호출자가 timeOffset 에 합산해 넘기므로 이중 적용 아님.
   const serverNow = Date.now() + timeOffset;
-  const ctxAnchor = c.currentTime + (startedAtServerMs - serverNow) / 1000;
+  const latencySec = outputLatencySec(c);
+  const ctxAnchor = c.currentTime + (startedAtServerMs - serverNow) / 1000 - latencySec;
 
   // 시작 안내: T-6 ("N번 집결그룹 집결 시작합니다" — 한국어 약 3초, T-3 프리카운트 시작 전 여유)
   // 서버 COUNTDOWN_LEAD_MS=7000ms가 이 타이밍을 전제로 설정됨.
@@ -316,6 +350,7 @@ export async function scheduleRallyCountdown({ startedAtServerMs, fireOffsets, t
       captainCount: fireOffsets.length,
       scheduledSlots: scheduleLog.items.length,
       ctxAnchor,
+      latencySec,
     });
   }
 }
