@@ -8,13 +8,13 @@ import {
   Body,
   Req,
   UseGuards,
-  ForbiddenException,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { Request } from 'express';
 import { User } from '../users/users.entity';
 import { RallyGroupsService } from './rally-groups.service';
 import { RallyAdminGuard } from './guards/rally-admin.guard';
+import { RallyMemberSelfOrAdminGuard } from './guards/rally-member-self-or-admin.guard';
 import { CreateRallyGroupDto } from './dto/create-rally-group.dto';
 import { AddMemberDto } from './dto/add-member.dto';
 import { UpdateMarchOverrideDto } from './dto/update-march-override.dto';
@@ -59,18 +59,15 @@ export class RallyGroupsController {
     return this.service.removeMember(id, memberId);
   }
 
+  // 유일하게 관리자 전용이 아닌 라우트 — 본인 것은 스스로 고칠 수 있어야 한다.
+  // 권한 검사는 컨트롤러 본문이 아니라 다른 라우트와 같은 자리(가드)에서 한다.
+  // 진행 중(running) 그룹인지는 서비스가 막는다(409).
   @Patch(':id/members/:memberId/march-override')
-  async updateMarchOverride(
-    @Param('id') _id: string,
+  @UseGuards(RallyMemberSelfOrAdminGuard)
+  updateMarchOverride(
     @Param('memberId') memberId: string,
     @Body() dto: UpdateMarchOverrideDto,
-    @Req() req: Request & { user: User },
   ) {
-    const role = req.user.role;
-    if (role !== 'admin' && role !== 'developer') {
-      const memberUserId = await this.service.getMemberUserId(memberId);
-      if (memberUserId !== req.user.id) throw new ForbiddenException();
-    }
     return this.service.updateMarchOverride(memberId, dto.marchSecondsOverride ?? null);
   }
 

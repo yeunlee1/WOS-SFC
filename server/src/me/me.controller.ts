@@ -30,7 +30,9 @@ export class MeController {
     const normalized = value ?? null;
     await this.usersService.updateMarchSeconds(req.user.id, normalized);
 
-    // marchSeconds 변경 → 해당 유저가 속한 모든 그룹의 순서 재계산
+    // marchSeconds 변경 → 해당 유저가 속한 그룹 중 진행 중이 아닌 것만 순서 재계산.
+    // 진행 중인 그룹은 reorderAllForUser가 건너뛴다 — 개인 설정 저장이 남의 카운트다운
+    // 발사 시각과 호명 순서를 흔들면 안 된다. 건너뛴 그룹은 다음 시작 때 다시 정렬된다.
     await this.rallyGroupsService.reorderAllForUser(req.user.id);
 
     return { marchSeconds: normalized };

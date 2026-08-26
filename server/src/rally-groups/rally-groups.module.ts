@@ -9,6 +9,7 @@ import { RallyGroupsService } from './rally-groups.service';
 import { RallyGroupsController } from './rally-groups.controller';
 import { RallyGroupsGateway } from './rally-groups.gateway';
 import { RallyAdminGuard } from './guards/rally-admin.guard';
+import { RallyMemberSelfOrAdminGuard } from './guards/rally-member-self-or-admin.guard';
 import { RealtimeModule } from '../realtime/realtime.module';
 
 @Module({
@@ -27,7 +28,12 @@ import { RealtimeModule } from '../realtime/realtime.module';
       }),
     }),
   ],
-  providers: [RallyGroupsService, RallyGroupsGateway, RallyAdminGuard],
+  providers: [
+    RallyGroupsService,
+    RallyGroupsGateway,
+    RallyAdminGuard,
+    RallyMemberSelfOrAdminGuard,
+  ],
   controllers: [RallyGroupsController],
   exports: [RallyGroupsService],
 })

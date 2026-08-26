@@ -9,7 +9,7 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, MoreThan, Repository } from 'typeorm';
+import { DataSource, EntityManager, In, MoreThan, Repository } from 'typeorm';
 import { RallyGroup } from './rally-group.entity';
 import { RallyGroupMember } from './rally-group-member.entity';
 import { User } from '../users/users.entity';
@@ -280,6 +280,25 @@ export class RallyGroupsService implements OnModuleInit {
   ): Promise<RallyGroup> {
     const member = await this.memberRepo.findOne({ where: { id: memberId } });
     if (!member) throw new NotFoundException('Member not found');
+
+    // 진행 중에는 본인 것이든 관리자든 거절한다.
+    // offsetMs = (maxMarch - march) * 1000 이라 한 명이 행군 시간을 올리면 maxMarch가 커지고,
+    // startedAtServerMs는 그대로라 아직 출발 안 한 전원의 절대 발사 시각이 그만큼 밀린다.
+    // 게다가 재정렬로 orderIndex가 바뀌면 음성이 captain_${orderIndex} 키라 같은 사람이
+    // 다른 번호로 다시 호명되거나 번호 하나가 통째로 건너뛴다.
+    // 잘못 입력한 값은 정지 → 수정 → 재시작으로 전원을 같은 스케줄에 다시 맞춰야 한다.
+    const group = await this.groupRepo.findOne({
+      where: { id: member.groupId },
+    });
+    if (!group) throw new NotFoundException('RallyGroup not found');
+    if (group.state === 'running') {
+      throw new ConflictException({
+        reason: 'countdown_running',
+        message:
+          '카운트다운 진행 중에는 행군 시간을 바꿀 수 없습니다. 정지 후 변경하세요.',
+      });
+    }
+
     await this.memberRepo.update(memberId, { marchSecondsOverride: seconds });
 
     // override 변경 후 marchSeconds 기준 재정렬
@@ -287,8 +306,6 @@ export class RallyGroupsService implements OnModuleInit {
 
     const full = await this.getFullGroup(member.groupId);
     this.gateway.emitGroupUpdated(full);
-
-    if (full.state === 'running') await this.recomputeIfRunning(member.groupId);
 
     return full;
   }
@@ -431,11 +448,28 @@ export class RallyGroupsService implements OnModuleInit {
     }
   }
 
-  async getMemberUserId(memberId: string): Promise<number | null> {
-    const member = await this.memberRepo.findOne({ where: { id: memberId } });
+  /**
+   * URL의 그룹에 실제로 속한 멤버인지까지 확인하고 소유자 userId를 돌려준다.
+   * 멤버가 없거나 다른 그룹 소속이면 null — 호출자(가드)가 403으로 막는다.
+   */
+  async getMemberUserIdInGroup(
+    groupId: string,
+    memberId: string,
+  ): Promise<number | null> {
+    const member = await this.memberRepo.findOne({
+      where: { id: memberId, groupId },
+    });
     return member?.userId ?? null;
   }
 
+  /**
+   * 진행 중인 그룹의 발사 스케줄을 다시 계산해 전 접속자에게 재방송한다.
+   *
+   * ⚠️ 현재 호출자 없음. updateMarchOverride와 reorderAllForUser가 진행 중 그룹을
+   * 각각 거절/건너뛰기로 바꾸면서 도달 경로가 사라졌다. 재방송은 아직 출발하지 않은
+   * 전원의 절대 발사 시각을 바꾸고 orderIndex 기반 음성 호명을 어긋나게 하므로,
+   * 다시 연결하려면 "이미 발사된 멤버 고정"과 "maxMarch 단조 증가 금지"를 먼저 설계해야 한다.
+   */
   async recomputeIfRunning(groupId: string): Promise<{
     payload?: {
       groupId: string;
@@ -529,28 +563,36 @@ export class RallyGroupsService implements OnModuleInit {
   }
 
   /**
-   * 특정 유저가 속한 모든 그룹을 일괄 재정렬.
+   * 특정 유저가 속한 그룹 중 진행 중이 아닌 것만 일괄 재정렬.
    * saveBattleSettings(me.controller)에서 marchSeconds 변경 후 호출.
+   *
+   * 진행 중(running) 그룹은 건드리지 않는다 — 개인 설정 화면에서 자기 행군 시간을 고쳤을 뿐인데
+   * 남이 진행 중인 집결의 orderIndex와 발사 시각이 밀리면 안 된다.
+   * 건너뛴 그룹도 startCountdown이 시작 직전 reorderByMarchSeconds를 먼저 부르므로
+   * 다음 시작 때 새 값으로 정렬된다.
    */
   async reorderAllForUser(userId: number): Promise<void> {
     const memberships = await this.memberRepo.find({ where: { userId } });
     const groupIds = Array.from(new Set(memberships.map((m) => m.groupId)));
     if (groupIds.length === 0) return;
 
-    // 1단계: 모든 그룹 재정렬을 단일 트랜잭션으로 — 중간 예외 시 partial state 방지
+    const groups = await this.groupRepo.find({ where: { id: In(groupIds) } });
+    const targetIds = groups
+      .filter((g) => g.state !== 'running')
+      .map((g) => g.id);
+    if (targetIds.length === 0) return;
+
+    // 1단계: 대상 그룹 재정렬을 단일 트랜잭션으로 — 중간 예외 시 partial state 방지
     await this.dataSource.transaction(async (mgr) => {
-      for (const gid of groupIds) {
+      for (const gid of targetIds) {
         await this.reorderByMarchSeconds(gid, mgr);
       }
     });
 
     // emit은 트랜잭션 커밋 이후에만 — 롤백 시 유령 방송 방지
-    for (const gid of groupIds) {
+    for (const gid of targetIds) {
       const full = await this.getFullGroup(gid);
       this.gateway.emitGroupUpdated(full);
-      if (full.state === 'running') {
-        await this.recomputeIfRunning(gid);
-      }
     }
   }
 }
