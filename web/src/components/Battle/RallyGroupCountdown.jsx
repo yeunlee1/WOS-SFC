@@ -28,6 +28,24 @@ export default function RallyGroupCountdown({ group, countdown }) {
   const [saving, setSaving] = useState(false);
   const lastOffsetRef = useRef(timeOffset);
 
+  // 스케줄 effect 의 deps 로 쓸 원시값 키.
+  // countdown 객체를 그대로 deps 에 두면 값이 같아도 참조가 바뀔 때마다 effect 가 재실행된다.
+  // 재접속 스냅샷은 같은 페이로드를 "새 객체"로 다시 보내므로, 그때마다
+  // scheduleRallyCountdown → stopRallyCountdown 이 울리던 단어를 자르고
+  // 재예약 때 past-due 가드가 그 슬롯을 버려 본인 순번 안내를 통째로 놓쳤다.
+  // 절대예약은 소켓 상태와 무관하게 정확히 재생되므로 값이 같으면 아무 것도 하지 않는다.
+  const countdownKey = useMemo(() => {
+    if (!countdown) return null;
+    const offsets = (countdown.fireOffsets ?? [])
+      .map((f) => `${f.orderIndex}:${f.offsetMs}`)
+      .join(',');
+    return `${countdown.startedAtServerMs}|${offsets}`;
+  }, [countdown]);
+
+  // effect 안에서 최신 countdown 객체를 읽기 위한 ref — effect 자체는 countdownKey 로만 돈다.
+  const countdownRef = useRef(countdown);
+  countdownRef.current = countdown;
+
   // 언마운트(정지 버튼 등으로 컴포넌트 제거) 시 오디오 즉시 정리
   useEffect(() => () => stopRallyCountdown(), []);
 
@@ -38,15 +56,16 @@ export default function RallyGroupCountdown({ group, countdown }) {
   // 완전 미동작하는 버그를 일으켜 제거. scheduleRallyCountdown 내부에서 기존 스케줄을
   // stopRallyCountdown()으로 취소하므로 재호출은 idempotent.
   useEffect(() => {
-    if (!countdown) {
+    const cd = countdownRef.current;
+    if (!cd) {
       stopRallyCountdown();
       return;
     }
     const { ttsVolume: vol, ttsMuted: mut } = useStore.getState();
-    primeRallyAudio(countdown.fireOffsets, lang, group.displayOrder).catch(() => {});
+    primeRallyAudio(cd.fireOffsets, lang, group.displayOrder).catch(() => {});
     scheduleRallyCountdown({
-      startedAtServerMs: countdown.startedAtServerMs,
-      fireOffsets: countdown.fireOffsets,
+      startedAtServerMs: cd.startedAtServerMs,
+      fireOffsets: cd.fireOffsets,
       timeOffset,
       lang,
       volume: vol,
@@ -55,7 +74,7 @@ export default function RallyGroupCountdown({ group, countdown }) {
     });
     lastOffsetRef.current = timeOffset;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [countdown, lang, group.displayOrder]);
+  }, [countdownKey, lang, group.displayOrder]);
 
   // clockOffset 급변(RESCHEDULE_THRESHOLD_MS 이상) 시 리스케줄 — RESCHEDULE_THRESHOLD_MS 상수 사용 (Q1-a)
   useEffect(() => {
@@ -192,10 +211,14 @@ export default function RallyGroupCountdown({ group, countdown }) {
                   <span className="rally-member-march">
                     {effective != null ? `${effective}초` : '미설정'}
                   </span>
+                  {/* 진행 중에는 비활성 — 저장하면 전원의 발사 시각과 호명 번호가 밀린다.
+                      서버도 409로 거절한다(rally-groups.service.updateMarchOverride). */}
                   {isMe && (
                     <button
                       type="button"
                       className="rally-btn"
+                      disabled={group.state === 'running'}
+                      title={group.state === 'running' ? '카운트다운 진행 중에는 바꿀 수 없습니다' : undefined}
                       onClick={() => setEditingOverride({ memberId: m.id, value: String(effective ?? '') })}
                     >
                       수정

@@ -33,6 +33,8 @@ export default function Countdown() {
   const timeOffset       = clockOffset + personalOffsetMs;
   const user             = useStore((s) => s.user);
   const busyHolder       = useStore((s) => s.busyHolder);
+  // 개인 출발 시점 — countdownPlayer 의 절대예약에 함께 실린다 (PersonalPanel 이 저장)
+  const myMarchSeconds   = useStore((s) => s.myMarchSeconds);
   const { t, lang } = useI18n();
 
   const [remaining, setRemaining]   = useState(null);
@@ -44,6 +46,8 @@ export default function Countdown() {
   const initializedRef = useRef(false);
   // 마지막으로 적용된 timeOffset — 리스케줄 필요 여부 판단
   const lastOffsetRef  = useRef(timeOffset);
+  // 마지막으로 예약에 반영된 marchSeconds — 값이 바뀔 때만 리스케줄
+  const lastMarchRef   = useRef(myMarchSeconds);
 
   // 마운트 / 언어 변경 시 비카운트다운 문구만 prefetch (카운트다운 숫자는 countdownPlayer가 decode 캐시)
   useEffect(() => {
@@ -89,7 +93,9 @@ export default function Countdown() {
     for (let n = 1; n < totalSeconds; n++) neededKeys.push(n);
     primeCountdownAudio(neededKeys, lang).catch(() => { /* 무시 */ });
 
-    const { ttsVolume, ttsMuted } = useStore.getState();
+    // marchSeconds 는 getState 로 읽는다 — 이 effect 의 deps 에 넣으면 값이 바뀔 때마다
+    // 전체 스케줄이 재시작된다. 값 변경은 아래 전용 effect 가 처리한다.
+    const { ttsVolume, ttsMuted, myMarchSeconds: march } = useStore.getState();
     scheduleCountdown({
       totalSeconds,
       startedAt,
@@ -97,6 +103,7 @@ export default function Countdown() {
       lang,
       volume: ttsVolume,
       muted: ttsMuted,
+      marchSeconds: march,
     });
     lastOffsetRef.current = timeOffset;
 
@@ -138,7 +145,7 @@ export default function Countdown() {
     if (deltaMs <= RESCHEDULE_THRESHOLD_MS) return; // 1초 이내의 변동은 무시 (AudioContext가 이미 정확히 스케줄함)
 
     if (import.meta.env.DEV) console.info('[Countdown] reschedule due to large offset jump', deltaMs, 'ms');
-    const { ttsVolume, ttsMuted } = useStore.getState();
+    const { ttsVolume, ttsMuted, myMarchSeconds: march } = useStore.getState();
     scheduleCountdown({
       totalSeconds,
       startedAt,
@@ -146,6 +153,7 @@ export default function Countdown() {
       lang,
       volume: ttsVolume,
       muted: ttsMuted,
+      marchSeconds: march,
     });
     lastOffsetRef.current = effectiveOffset;
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -160,7 +168,7 @@ export default function Countdown() {
     const effectiveOffset = clockOffset + personalOffsetMs;
     if (lastOffsetRef.current === effectiveOffset) return; // 첫 렌더 또는 변경 없음 — skip
     if (import.meta.env.DEV) console.info('[Countdown] reschedule due to personalOffset change', personalOffsetMs, 'ms');
-    const { ttsVolume, ttsMuted } = useStore.getState();
+    const { ttsVolume, ttsMuted, myMarchSeconds: march } = useStore.getState();
     scheduleCountdown({
       totalSeconds,
       startedAt,
@@ -168,10 +176,34 @@ export default function Countdown() {
       lang,
       volume: ttsVolume,
       muted: ttsMuted,
+      marchSeconds: march,
     });
     lastOffsetRef.current = effectiveOffset;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [personalOffsetMs, active, startedAt]);
+
+  // myMarchSeconds 변경 시 재예약 — 개인 '출발' 슬롯이 숫자와 같은 ctx 절대예약에 실려
+  // 있으므로 값이 바뀌면 스케줄 전체를 다시 잡아야 반영된다. 이미 발화된 슬롯은
+  // countdownPlayer 의 past-due 가드가 거른다.
+  // 첫 렌더와 active 전환 직후에는 메인 effect 가 이미 최신값으로 예약했으므로 건너뛴다.
+  useEffect(() => {
+    const prev = lastMarchRef.current;
+    lastMarchRef.current = myMarchSeconds;
+    if (!active || !startedAt || !totalSeconds) return;
+    if (prev === myMarchSeconds) return;
+    if (import.meta.env.DEV) console.info('[Countdown] reschedule due to marchSeconds change', myMarchSeconds);
+    const { ttsVolume, ttsMuted } = useStore.getState();
+    scheduleCountdown({
+      totalSeconds,
+      startedAt,
+      timeOffset,
+      lang,
+      volume: ttsVolume,
+      muted: ttsMuted,
+      marchSeconds: myMarchSeconds,
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myMarchSeconds, active, startedAt]);
 
   // start/stop 멘트
   // stop 멘트만 재생. start 멘트("준비해주세요")는 제거 —

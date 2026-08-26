@@ -27,6 +27,17 @@
 //   ※ 보증하지 못하는 것 — 보고값이 실제 지연과 일치하는지는 플랫폼에 달렸고,
 //     과소 보고 시 잔차가 남는다. 잔차는 개인 수동 보정(personalOffsetMs)의 몫이다.
 //     값은 스케줄 시점에 한 번만 읽으므로 도중 기기 교체는 반영되지 않는다.
+//     자동/수동 합산 표시는 countdownPlayer.getAutoLatencyMs() 를 쓴다(같은 출력 장치).
+//
+// AudioContext 가 멈췄다 다시 흐를 때:
+//   ctx 클럭은 suspended/interrupted 동안 멈춘다. 그 상태에서 앵커를 잡으면 재개 이후
+//   남은 예약 전부가 멈춰 있던 시간만큼 통째로 밀린다. 그래서
+//     (a) resume 이 200ms 안에 running 이 되지 않으면 예약하지 않고 물러나고,
+//     (b) statechange 로 running 이 되는 시점마다 그때의 클럭·벽시계로 다시 예약한다.
+//   재예약된 슬롯 중 이미 지난 것은 past-due 가드가 거른다.
+//   iOS Safari 는 전화·알람 중 'suspended' 가 아니라 'interrupted' 로 가므로 같이 다룬다.
+//   (상한을 두기 전에는 자동재생 차단 환경에서 `await c.resume()` 이 무기한 멈춰
+//    스케줄 함수 자체가 끝나지 않았다.)
 //
 // ⚠️ 싱글톤 가정: 이 모듈은 한 번에 하나의 집결 그룹만 스케줄링한다.
 //   scheduleRallyCountdown 호출 시 이전 스케줄을 즉시 취소한다.
@@ -67,6 +78,10 @@ const MAX_OUTPUT_LATENCY_SEC = 0.5;
 // 스케줄 호출 식별자 — 늦게 도착한 버퍼 완료 콜백이 이전 스케줄의 결과를 재생하는 것 방지
 let latestScheduleId = 0;
 
+// 마지막 스케줄 파라미터. ctx 가 running 으로 돌아왔을 때 이 값으로 다시 예약한다.
+// stopRallyCountdown() 에서 비우므로 정지된 카운트다운은 재개돼도 되살아나지 않는다.
+let pendingSchedule = null;
+
 // DEV 감독관용 텔레메트리
 const dispatchedCount = { value: 0 };
 const scheduleLog = { items: [] };
@@ -87,6 +102,16 @@ function ensureContext() {
   analyser.fftSize = 2048;
   masterGain.connect(analyser);
   analyser.connect(ctx.destination);
+  // 멈췄던 클럭이 다시 흐르면 남은 슬롯의 절대시각이 통째로 밀린다 —
+  // running 으로 돌아온 시점의 클럭으로 다시 예약한다.
+  try {
+    ctx.addEventListener('statechange', () => {
+      if (!ctx || ctx.state !== 'running') return;
+      const p = pendingSchedule;
+      if (!p) return;
+      scheduleRallyCountdown(p);
+    });
+  } catch { /* addEventListener 미지원 환경 — 재예약 없이 진행 */ }
   if (import.meta.env.DEV) {
     window.__rallyAnalyser = analyser;
     window.__rallyDispatchedCount = dispatchedCount;
@@ -112,6 +137,11 @@ function outputLatencySec(c) {
   const raw = pick(c.outputLatency) || pick(c.baseLatency);
   if (raw <= 0) return 0;
   return Math.min(raw, MAX_OUTPUT_LATENCY_SEC);
+}
+
+/** iOS Safari 는 전화·알람 중 'interrupted' 로 간다. 'suspended' 와 동일하게 다뤄야 한다. */
+function isClockStopped(c) {
+  return !!c && (c.state === 'suspended' || c.state === 'interrupted');
 }
 
 function loadBuffer(lang, key) {
@@ -168,7 +198,7 @@ export async function warmupRallyAudio(opts = {}) {
   const safeLang = SUPPORTED_TTS_LANGS.has(lang) ? lang : 'ko';
   const c = ensureContext();
   if (!c) return;
-  if (c.state === 'suspended') {
+  if (isClockStopped(c)) {
     try { await c.resume(); } catch { /* noop */ }
   }
 
@@ -203,7 +233,7 @@ export async function primeRallyAudio(fireOffsets, lang = 'ko', displayOrder) {
   const safeLang = SUPPORTED_TTS_LANGS.has(lang) ? lang : 'ko';
   const c = ensureContext();
   if (!c) return;
-  if (c.state === 'suspended') {
+  if (isClockStopped(c)) {
     try { await c.resume(); } catch { /* noop */ }
   }
   // iOS Safari 언락: 무음 버퍼 1회 재생
@@ -255,11 +285,14 @@ export async function scheduleRallyCountdown({ startedAtServerMs, fireOffsets, t
   if (!c) return;
   if (!startedAtServerMs || !Array.isArray(fireOffsets)) return;
 
-  stopRallyCountdown();  // 기존 스케줄 정리 (latestScheduleId는 stop 내에서 증가)
+  stopRallyCountdown();  // 기존 스케줄 정리 (latestScheduleId는 stop 내에서 증가, pendingSchedule 비움)
   const myId = ++latestScheduleId;
 
-  if (c.state === 'suspended') {
-    try { await c.resume(); } catch { /* noop */ }
+  // 재개 시 다시 예약할 파라미터. timeOffset 만 보관하고 serverNow 는 그때 다시 계산한다.
+  pendingSchedule = { startedAtServerMs, fireOffsets, timeOffset, lang, volume, muted, displayOrder };
+
+  if (isClockStopped(c)) {
+    c.resume().catch(() => { /* noop */ });
   }
   setRallyVolume(volume, muted);
 
@@ -301,10 +334,24 @@ export async function scheduleRallyCountdown({ startedAtServerMs, fireOffsets, t
   ]);
   if (myId !== latestScheduleId) return;
 
-  if (c.state === 'suspended') {
-    try { await c.resume(); } catch { /* noop */ }
+  // 앵커는 ctx 클럭 기준이라 멈춘 상태에서 잡으면 안 된다. 다만 자동재생이 차단된
+  // 환경에서는 resume() 프라미스가 사용자 제스처 전까지 pending 으로 남을 수 있어
+  // 무기한 await 는 스케줄 함수 자체를 멈춘다. 200ms 상한을 둔다.
+  if (isClockStopped(c)) {
+    await Promise.race([
+      c.resume().catch(() => { /* noop */ }),
+      new Promise((r) => setTimeout(r, 200)),
+    ]);
+    if (myId !== latestScheduleId) return;
   }
-  if (myId !== latestScheduleId) return;
+  // 상한에 걸려 아직 클럭이 멈춰 있으면 예약하지 않고 물러난다.
+  // statechange 가 running 을 알리면 그때의 클럭으로 pendingSchedule 을 다시 예약한다.
+  if (c.state !== 'running') {
+    if (import.meta.env.DEV) {
+      console.info('[RallyGroupPlayer] clock stopped — 재개 시 재예약', c.state);
+    }
+    return;
+  }
 
   // 앵커: startedAtServerMs 순간의 ctx.currentTime
   // 이후 모든 슬롯은 ctxAnchor + offsetSec로 절대 시각 계산.
@@ -402,6 +449,8 @@ function schedulePlay(lang, key, ctxTimeAtPlay, myId) {
 
 export function stopRallyCountdown() {
   latestScheduleId++;
+  // 재개 시 재예약 대상에서 제외 — 정지된 카운트다운이 되살아나면 안 된다.
+  pendingSchedule = null;
   // src.stop()은 이미 시작된 것은 중단, 미래 시각으로 예약된 것은 취소
   for (const src of activeSources) {
     try { src.stop(); } catch { /* already stopped or not started */ }
@@ -426,7 +475,7 @@ export function setRallyVolume(volume, muted) {
 if (typeof document !== 'undefined') {
   const unlock = () => {
     const c = ensureContext();
-    if (c && c.state === 'suspended') c.resume().catch(() => { /* noop */ });
+    if (isClockStopped(c)) c.resume().catch(() => { /* noop */ });
   };
   document.addEventListener('click', unlock, { passive: true });
   document.addEventListener('keydown', unlock, { passive: true });

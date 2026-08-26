@@ -1,20 +1,21 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useStore } from '../../store';
-import { useI18n } from '../../i18n';
 import { api } from '../../api';
-import { speak } from './tts';
 import PersonalSyncOffset from './PersonalSyncOffset';
 import { formatUser } from '../../utils/formatUser';
 
 // PersonalPanel — 개인 현황판
-// 유저 본인의 행군 시간(marchSeconds)을 저장하고,
-// 카운트다운이 해당 시점에 도달하면 'march' TTS를 로컬에서 재생한다.
+// 유저 본인의 행군 시간(marchSeconds)을 저장하고 store(myMarchSeconds)에 올린다.
+// 'march' 음성 재생은 여기서 하지 않는다 — Countdown.jsx 가 countdownPlayer 의
+// Web Audio 절대예약에 실어 보내므로 숫자 슬롯과 같은 클럭·같은 출력지연 보정을 받는다.
+// (과거에는 이 파일의 setInterval(tick, 200) 안에서 speak('march') 를 불러
+//  숫자 트랙과 기기별로 수백 ms 어긋났다.)
+// 아래 tick 은 "내 출발까지 N초" 화면 표시만 담당한다.
 export default function PersonalPanel() {
   const countdown          = useStore((s) => s.countdown);
   // timeOffset에 personalOffsetMs 합산 — march TTS 슬롯 시각도 디바이스별 보정 반영.
   const timeOffset         = useStore((s) => s.timeOffset + s.personalOffsetMs);
   const setMyMarchSeconds  = useStore((s) => s.setMyMarchSeconds);
-  const { lang }           = useI18n();
 
   // 내가 가입한 공격 카운트 그룹 목록 — primitive/refs만 구독하고 파생값은 useMemo로 산출.
   // (인라인 selector에서 .filter()를 쓰면 매 호출 새 배열 참조라 zustand가 불필요한 리렌더 트리거)
@@ -106,9 +107,8 @@ export default function PersonalPanel() {
     }
   }
 
-  // ── 통합 tick: TTS 트리거 + "내 출발까지 N초" 표시 ───────────
+  // ── tick: "내 출발까지 N초" 화면 표시 전용 (음성 트리거 없음) ───────────
   const intervalRef  = useRef(null);
-  const lastFiredRef = useRef(-1);
 
   const { active, startedAt, totalSeconds } = countdown;
 
@@ -117,9 +117,6 @@ export default function PersonalPanel() {
   useEffect(() => {
     clearInterval(intervalRef.current);
     setMyRemaining(null);
-
-    // active 상태 변경 시 lastFiredRef 리셋 (새 카운트다운 시작)
-    lastFiredRef.current = -1;
 
     // marchSeconds 유효 범위(1~180) + active 상태일 때만 interval 가동
     if (!active || marchSeconds === null || marchSeconds < 1 || marchSeconds > 180) {
@@ -134,13 +131,6 @@ export default function PersonalPanel() {
         return;
       }
 
-      // TTS 트리거
-      const sec = Math.ceil(rem);
-      if (sec === marchSeconds && lastFiredRef.current !== marchSeconds) {
-        lastFiredRef.current = marchSeconds;
-        speak('march', lang);
-      }
-
       // 내 출발까지 남은 시간 = rem - marchSeconds
       setMyRemaining(rem - marchSeconds);
     }
@@ -148,7 +138,7 @@ export default function PersonalPanel() {
     tick();
     intervalRef.current = setInterval(tick, 200);
     return () => clearInterval(intervalRef.current);
-  }, [active, startedAt, totalSeconds, marchSeconds, lang]);
+  }, [active, startedAt, totalSeconds, marchSeconds]);
 
   // ── UI 렌더 ─────────────────────────────────────────────────
   const parsedInput  = parseInt(inputVal, 10);
@@ -229,7 +219,7 @@ export default function PersonalPanel() {
         <p className="march-status">
           {myRemaining > 0
             ? `내 출발까지 ${Math.ceil(myRemaining)}초`
-            : '출발! (march TTS 발송됨)'}
+            : '출발!'}
         </p>
       )}
 
