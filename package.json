@@ -17,5 +17,9 @@
   "workspaces": [
     "web",
     "server"
-  ]
+  ],
+  "allowScripts": {
+    "bcrypt@6.0.0": true,
+    "unrs-resolver@1.12.2": true
+  }
 }
