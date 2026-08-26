@@ -260,6 +260,114 @@ body.theme-frost {
   --topbar-h:  56px;
 }
 
+/* ─── 테마 Daylight (백야 / POLAR DAY — 눈부신 설원의 한낮) ─── */
+/* 설계 근거: web/DESIGN.md(Linear 추출본)의 라이트 값 적용.
+ *  - Linear가 #010102 near-black + 얇은 헤어라인 + 단일 액센트로 위계를 만든 것을
+ *    그대로 뒤집어, near-white 캔버스 + 헤어라인 + 단일 글레이셔 블루로 구성한다.
+ *  - 액센트는 하나(글레이셔 블루)만 크로마틱으로 쓴다. 선골드(--accent-2)는
+ *    장식이 아니라 경고/강조 시맨틱에만 쓴다.
+ *  - 명암비: text-1/2·시맨틱색은 배경 대비 4.5:1 이상, 액센트 위 흰 글자도 4.5:1 이상.
+ *    (daylightTheme.spec.js가 수치로 감시한다.)
+ *  - radius는 Linear 스케일(6/8/12/16)로 좁힌다 — frost의 8/14/22/32보다 단단한 인상. */
+body.theme-daylight {
+  /* 배경 계층 — rail(가장 틴트 짙음) < page < card(순백) */
+  --bg-page:    #f7fafd;
+  --bg-card:    #ffffff;
+  --bg-card-strong: #ffffff;
+  --bg-hover:   rgba(31,111,196,0.06);
+  --bg-subtle:  #eef4fb;
+  --bg-input:   #ffffff;
+  --bg-glass:   rgba(255,255,255,0.78);
+  --bg-glass-strong: rgba(255,255,255,0.96);
+  --bg-rail:    #eef3f9;
+
+  /* 액센트 — 글레이셔 블루 단일 */
+  --accent:       #1f6fc4;
+  --accent-hover: #17579b;
+  --accent-soft:  rgba(31,111,196,0.10);
+  --accent-dim:   rgba(31,111,196,0.06);
+  --accent-glow:  rgba(31,111,196,0.22);
+  --accent-2:     #e8a23c;  /* 선골드 — 시맨틱 강조 전용 (면 채움) */
+
+  /* 시맨틱 상태 색 — 밝은 배경 위 AA 확보를 위해 톤 다운 */
+  --green:      #0f7a45;
+  --green-soft: rgba(15,122,69,0.12);
+  --orange:     #a05f0d;
+  --orange-soft:rgba(232,162,60,0.18);
+  --red:        #c0392b;
+  --red-soft:   rgba(192,57,43,0.10);
+  --danger:     #c0392b;
+  --warn:       #a05f0d;
+
+  /* 텍스트 — 딥 네이비 */
+  --text-1: #0c1a2b;
+  --text-2: #46617e;
+  --text-3: #5b7186;
+  /* 구 이름 alias — 베이스 CSS 일부가 아직 이 이름을 참조한다 (admin 표 등) */
+  --text-primary:   #0c1a2b;
+  --text-secondary: #46617e;
+  --bg-secondary:   #eef4fb;
+  --bg-tertiary:    #e6eef8;
+  --panel-2:        rgba(31,111,196,0.08);
+
+  /* 보더 — 헤어라인 */
+  --border:  #dfe8f2;
+  --border2: #c4d5e6;
+  --line:    #dfe8f2;
+  --line-2:  #c4d5e6;
+
+  /* 그림자 — 배경 색조에 맞춰 네이비로 틴트, 순검정 금지 */
+  --shadow-sm: 0 1px 2px rgba(16,42,72,0.05);
+  --shadow-md: 0 4px 16px rgba(16,42,72,0.08), 0 0 0 1px rgba(16,42,72,0.04);
+  --shadow-lg: 0 16px 48px rgba(16,42,72,0.12), 0 0 0 1px rgba(16,42,72,0.05);
+
+  /* 그라데이션 (토큰 이름은 frost/spring과 공유 — 의미는 "브랜드 그라데이션") */
+  --grad-sakura: linear-gradient(135deg,#2b7fd9 0%,#1f6fc4 55%,#134f92 100%);
+  --grad-spring: linear-gradient(180deg,#ffffff 0%,#eef4fb 100%);
+  --grad-title:  linear-gradient(135deg,#0c1a2b 0%,#1f6fc4 100%);
+  --grad-cd-normal: linear-gradient(135deg,#2b7fd9 0%,#134f92 100%);
+  --body-bg:
+    radial-gradient(ellipse at 72% -12%, #ffffff 0%, transparent 58%),
+    radial-gradient(ellipse at 12% 108%, #e3edf8 0%, transparent 55%),
+    linear-gradient(180deg, #fbfdff 0%, #eef4fb 100%);
+
+  /* Countdown SVG 링 */
+  --cd-grad-1: #2b7fd9;
+  --cd-grad-2: #134f92;
+  --cd-ring-bg:  rgba(16,42,72,0.06);
+  --cd-ring-idle: rgba(16,42,72,0.13);
+
+  /* Glacier 5단계 — frost의 --ice-* 자리를 그대로 쓰되 밝기 방향을 뒤집는다.
+   * frost: ice-0이 가장 밝은 "강조 텍스트". daylight: ice-0이 가장 어두운 "강조 텍스트". */
+  --ice-0: #0c1a2b;  /* 강조 텍스트 — 가장 진함 */
+  --ice-1: #134f92;  /* 진한 글레이셔 — 보조 강조 */
+  --ice-2: #2b7fd9;  /* 시그니처 글레이셔 블루 (장식/글로우) */
+  --ice-3: #5aa0e8;  /* 밝은 하늘 — 그라데이션 끝 */
+  --ice-4: #a8cbee;  /* 가장 옅음 — 깊이감 */
+
+  /* 동맹 컬러 — 밝은 배경 위 흰 글자 배지용, 모두 AA 확보 */
+  --kor: #1f6fc4;   /* 글레이셔 블루 */
+  --nsl: #0f7a45;   /* 딥 그린 */
+  --jky: #6d43b8;   /* 바이올렛 */
+  --gpx: #a05f0d;   /* 선골드 딥 */
+  --ufo: #b03060;   /* 로즈 */
+
+  /* Radius — Linear 스케일 */
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-xl: 16px;
+
+  /* Rail 치수 (frost와 동일) */
+  --rail-w:    72px;
+  --topbar-h:  56px;
+
+  /* 작전판 SVG 캔버스 — OperationBoardCanvas.jsx가 style prop으로 참조한다.
+   * 다른 테마는 이 토큰을 정의하지 않아 JSX의 기본값(원래 다크 값)을 그대로 쓴다. */
+  --op-canvas-bg: #ffffff;
+  --op-grid: rgba(31,111,196,0.10);
+}
+
 /* 벚꽃 애니메이션: Spring 테마에서만 — Frost에서 숨김. */
 body.theme-frost .petals-bg { display: none !important; }
 
@@ -327,6 +435,43 @@ body.theme-spring .app-container {
 }
 /* spring: petals-bg는 z-index:0, blossom-canvas도 z-index:1 — 레이어 겹침 허용 */
 body.theme-spring .petals-bg { display: block; }
+
+/* ─── Daylight 전역 배경 효과 (햇빛 입자 캔버스 + 미세 그리드 + 태양 블룸) ─── */
+/* z-index: body bg(:0) → .daylight-canvas(:1) → ::before/::after(:2) → .app-container(:5) */
+body.theme-daylight .petals-bg { display: none !important; }
+.daylight-canvas {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+body.theme-daylight::before {
+  content: '';
+  position: fixed; inset: 0;
+  background-image:
+    linear-gradient(to right, rgba(31,111,196,0.045) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(31,111,196,0.045) 1px, transparent 1px);
+  background-size: 56px 56px;
+  pointer-events: none;
+  z-index: 2;
+  -webkit-mask-image: radial-gradient(ellipse at center, black 0%, transparent 72%);
+          mask-image: radial-gradient(ellipse at center, black 0%, transparent 72%);
+}
+/* 다크 테마의 vignette를 뒤집은 "태양 블룸" — 가장자리를 어둡게가 아니라
+ * 위쪽을 하얗게 태워 백야의 눈부심을 만든다. */
+body.theme-daylight::after {
+  content: '';
+  position: fixed; inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  background:
+    radial-gradient(ellipse 120% 60% at 70% -10%, rgba(255,255,255,0.85) 0%, transparent 60%),
+    radial-gradient(ellipse at center, transparent 45%, rgba(31,111,196,0.05) 100%);
+}
+body.theme-daylight .app-container {
+  position: relative;
+  z-index: 5;
+}
 
 /* ════════════════════════════════════════════════════════════
    Phase 2 — Layout Shell
@@ -5960,4 +6105,1464 @@ body.theme-spring .chat-dock-input-row .btn-primary:hover {
   .operation-canvas {
     min-height: 430px;
   }
+}
+
+/* ════════════════════════════════════════════════════════════
+   Phase 9 — Daylight(백야) 테마 컴포넌트 override
+   frost 수준 시각 품질. body.theme-daylight 스코프로 완전 격리.
+
+   왜 이 섹션이 필요한가:
+     chat/community/countdown 계열 클래스 상당수는 베이스(:root) 규칙이 없고
+     frost·spring 스코프에만 존재한다. 토큰만 갈아끼우면 그 화면들은
+     아무 스타일 없이 렌더된다. daylightTheme.spec.js가 이 커버리지를 감시한다.
+
+   frost 대비 의도적으로 다르게 한 것:
+     - 네온 글로우(text-shadow/drop-shadow) 제거. 밝은 캔버스에서는 뿌연 얼룩이 된다.
+     - 그림자는 순검정이 아니라 배경 색조(네이비)로 틴트하고 깊이를 얕게.
+     - 포커스 링은 오히려 강화 — 밝은 배경에서 흐릿한 링은 안 보인다.
+     - --ice-* 사다리는 밝기 방향이 뒤집혀 있다(0=가장 진함). 토큰 블록 주석 참조.
+   ════════════════════════════════════════════════════════════ */
+
+body.theme-daylight .rail {
+  background: var(--bg-rail);
+  border-right: 1px solid var(--line);
+  padding: 14px 0 10px;
+  gap: 8px;
+}
+body.theme-daylight .rail-logo {
+  width: 44px; height: 44px;
+  background: linear-gradient(135deg, rgba(31,111,196,0.15), rgba(43,127,217,0.15));
+  border: 1px solid var(--line-2);
+  box-shadow: inset 0 0 16px rgba(31,111,196,0.2);
+  color: var(--ice-1);
+}
+body.theme-daylight .rail-divider {
+  width: 30px;
+  background: var(--line);
+  margin: 4px 0 6px;
+}
+body.theme-daylight .rail-btn {
+  width: 44px; height: 44px;
+  background: rgba(31,111,196,0.04);
+  color: var(--text-2);
+  font-size: 18px;
+  transition: all 0.2s cubic-bezier(.22,1,.36,1);
+}
+body.theme-daylight .rail-btn:hover {
+  background: rgba(31,111,196,0.12);
+  color: var(--ice-1);
+}
+body.theme-daylight .rail-btn.active {
+  background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+  color: #ffffff;
+  box-shadow: 0 4px 16px rgba(43,127,217,0.4);
+}
+body.theme-daylight .rail-btn.active::before {
+  width: 4px; height: 28px;
+  background: var(--ice-2);
+}
+body.theme-daylight .rail-btn-tooltip {
+  background: var(--bg-glass-strong);
+  border: 1px solid var(--line-2);
+  font-weight: 600;
+  color: var(--ice-0);
+}
+body.theme-daylight .rail-user {
+  width: 44px; height: 44px;
+  font-size: 14px;
+}
+body.theme-daylight .rail-user:hover { border-color: var(--accent);
+}
+body.theme-daylight .rail-user-leader::after {
+  background: var(--orange);
+  color: #ffffff;
+  width: 16px; height: 16px;
+  font-size: 10px;
+  border: 2px solid var(--bg-rail);
+}
+body.theme-daylight .topbar {
+  height: 56px;
+  padding: 0 20px;
+  gap: 14px;
+  background: rgba(16,42,72,0.18);
+  border-bottom: 1px solid var(--line);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+body.theme-daylight .topbar-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  color: var(--ice-0);
+}
+body.theme-daylight .topbar-breadcrumb {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--text-3);
+}
+body.theme-daylight .topbar-breadcrumb-current { color: var(--ice-1);
+}
+body.theme-daylight .world-clock {
+  padding: 5px 12px;
+  border: 1px solid var(--line);
+  background: rgba(31,111,196,0.04);
+  color: var(--ice-1);
+}
+body.theme-daylight .world-clock::before {
+  background: var(--ice-2);
+}
+body.theme-daylight .kbd-hint {
+  background: rgba(255,255,255,0.6);
+  border: 1px solid var(--line);
+  color: var(--text-2);
+}
+body.theme-daylight .kbd-hint:hover {
+  border-color: var(--line-2);
+  color: var(--ice-1);
+}
+body.theme-daylight .kbd-hint kbd {
+  background: rgba(31,111,196,0.1);
+  border: 1px solid var(--line-2);
+  color: var(--ice-1);
+}
+body.theme-daylight .topbar-icon-btn {
+  background: rgba(255,255,255,0.6);
+  border: 1px solid var(--line);
+  color: var(--text-1);
+}
+body.theme-daylight .topbar-icon-btn:hover { border-color: var(--line-2);
+}
+body.theme-daylight .topbar-icon-btn.active {
+  background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+  color: #ffffff;
+  border-color: transparent;
+}
+body.theme-daylight .lang-select {
+  padding: 5px 10px;
+  background: rgba(255,255,255,0.6);
+  border: 1px solid var(--line);
+  color: var(--text-1);
+  font-size: 12px;
+}
+body.theme-daylight .lang-select:hover { border-color: var(--line-2);
+}
+body.theme-daylight .btn-primary {
+  background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+  color: #ffffff;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  border: none;
+  box-shadow:
+    0 1px 2px rgba(16,42,72,0.12),
+    inset 0 1px 0 rgba(255,255,255,0.18);
+  transition: box-shadow 0.18s ease, transform 0.1s;
+}
+body.theme-daylight .btn-primary:hover {
+  box-shadow:
+    0 2px 8px rgba(16,42,72,0.16),
+    inset 0 1px 0 rgba(255,255,255,0.18);
+}
+body.theme-daylight .btn-primary:active { transform: translateY(1px);
+}
+body.theme-daylight .btn-primary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+body.theme-daylight .btn-ghost {
+  background: rgba(31,111,196,0.05);
+  border: 1px solid var(--line-2);
+  color: var(--ice-1);
+  font-weight: 600;
+}
+body.theme-daylight .btn-ghost:hover { background: rgba(31,111,196,0.12);
+}
+body.theme-daylight .btn-danger {
+  background: rgba(192,57,43,0.12);
+  border: 1px solid rgba(192,57,43,0.4);
+  color: var(--red);
+  font-weight: 600;
+}
+body.theme-daylight .btn-danger:hover { background: rgba(192,57,43,0.2);
+}
+body.theme-daylight .input {
+  background: var(--bg-input);
+  border: 1px solid var(--line);
+  color: var(--text-1);
+}
+body.theme-daylight .input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(31,111,196,0.24);
+}
+body.theme-daylight .input::placeholder { color: var(--text-3);
+}
+body.theme-daylight .auth-modal {
+  background: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(255,255,255,0.95));
+  border: 1px solid var(--line-2);
+  box-shadow: var(--shadow-lg);
+}
+body.theme-daylight .auth-modal::before {
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+}
+body.theme-daylight .auth-modal-mark {
+  background: linear-gradient(135deg, rgba(31,111,196,0.15), rgba(43,127,217,0.15));
+  border: 1px solid var(--line-2);
+  color: var(--ice-1);
+  box-shadow: 0 1px 2px rgba(16,42,72,0.06);
+}
+body.theme-daylight .auth-modal h2 {
+  background: linear-gradient(180deg, var(--ice-0), var(--ice-2));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+body.theme-daylight .auth-subtitle {
+  letter-spacing: 0.2em;
+  color: var(--ice-1);
+}
+body.theme-daylight .auth-tabs {
+  background: rgba(255,255,255,0.5);
+  border: 1px solid var(--line);
+}
+body.theme-daylight .auth-tab.active {
+  background: rgba(31,111,196,0.12);
+  color: var(--ice-0);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+}
+body.theme-daylight .auth-field label {
+  letter-spacing: 0.15em;
+  color: var(--text-2);
+}
+body.theme-daylight .auth-error {
+  background: rgba(192,57,43,0.1);
+  border: 1px solid rgba(192,57,43,0.3);
+  color: var(--red);
+}
+body.theme-daylight .auth-switch a { color: var(--accent);
+}
+body.theme-daylight .cmdk-overlay {
+  background: rgba(16,42,72,0.21);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+body.theme-daylight .cmdk {
+  background: linear-gradient(180deg, rgba(255,255,255,0.95), rgba(255,255,255,0.95));
+  border: 1px solid var(--line-2);
+  box-shadow: var(--shadow-lg);
+}
+body.theme-daylight .cmdk-input {
+  border-bottom: 1px solid var(--line);
+  font-size: 16px;
+  color: var(--text-1);
+}
+body.theme-daylight .cmdk-input::placeholder { color: var(--text-3);
+}
+body.theme-daylight .cmdk-section {
+  letter-spacing: 0.18em;
+  color: var(--text-3);
+}
+body.theme-daylight .cmdk-item:hover,
+body.theme-daylight .cmdk-item.active {
+  background: rgba(31,111,196,0.1);
+}
+body.theme-daylight .cmdk-item-icon {
+  background: rgba(31,111,196,0.06);
+}
+body.theme-daylight .cmdk-item-label { color: var(--ice-0);
+}
+body.theme-daylight .cmdk-item-shortcut kbd {
+  background: rgba(31,111,196,0.06);
+  border: 1px solid var(--line);
+  color: var(--ice-1);
+}
+body.theme-daylight .user-popover {
+  background: var(--bg-glass-strong);
+  border: 1px solid var(--line-2);
+  box-shadow: var(--shadow-lg);
+}
+body.theme-daylight .user-pop-name { color: var(--ice-0);
+}
+body.theme-daylight .user-pop-sub { color: var(--text-2);
+}
+body.theme-daylight .user-pop-row + .user-pop-row { border-top: 1px solid var(--line);
+}
+body.theme-daylight .user-pop-actions { border-top: 1px solid var(--line);
+}
+body.theme-daylight .user-pop-value { color: var(--ice-1);
+}
+body.theme-daylight .time-sync-badge {
+  color: var(--ice-1);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+}
+body.theme-daylight .tts-volume-control {
+  background: rgba(255,255,255,0.6);
+  border: 1px solid var(--line);
+}
+body.theme-daylight .tts-mute-btn {
+  background: transparent;
+  border: none;
+  color: var(--ice-1);
+}
+body.theme-daylight .tts-volume-control input[type=range] { accent-color: var(--accent);
+}
+body.theme-daylight .tab-content {
+  background: transparent;
+}
+body.theme-daylight .battle-slot,
+body.theme-daylight .personal-panel,
+body.theme-daylight .rally-group-panel,
+body.theme-daylight .rally-group-card,
+body.theme-daylight .my-rally-card,
+body.theme-daylight .member-card,
+body.theme-daylight .board-post-card,
+body.theme-daylight .board-write-form,
+body.theme-daylight .compose-card,
+body.theme-daylight .post-card,
+body.theme-daylight .admin-card,
+body.theme-daylight .admin-table,
+body.theme-daylight .dashboard-panel,
+body.theme-daylight .notice-row {
+  background: rgba(255,255,255,0.55);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: var(--text-1);
+  box-shadow: var(--shadow-md);
+}
+body.theme-daylight .battle-slot:hover,
+body.theme-daylight .board-post-card:hover,
+body.theme-daylight .post-card:hover,
+body.theme-daylight .admin-card:hover {
+  border-color: var(--line-2);
+}
+body.theme-daylight .admin-table th {
+  background: rgba(255,255,255,0.7);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  color: var(--text-2);
+  text-transform: uppercase;
+  font-weight: 700;
+}
+body.theme-daylight .admin-table th,
+body.theme-daylight .admin-table td {
+  border-bottom: 1px solid var(--line);
+}
+body.theme-daylight .admin-table tbody tr:hover {
+  background: var(--bg-hover);
+}
+body.theme-daylight .online-panel {
+  background: rgba(255,255,255,0.55);
+  border-left: 1px solid var(--line);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+body.theme-daylight .online-user-item {
+  color: var(--text-1);
+}
+body.theme-daylight .online-user-item:hover {
+  background: var(--accent-soft);
+}
+body.theme-daylight .board-write-form input,
+body.theme-daylight .board-write-form textarea,
+body.theme-daylight .board-write-form select {
+  background: var(--bg-input);
+  border: 1px solid var(--line);
+  color: var(--text-1);
+}
+body.theme-daylight .board-write-form input:focus,
+body.theme-daylight .board-write-form textarea:focus,
+body.theme-daylight .board-write-form select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(31,111,196,0.24);
+}
+body.theme-daylight h1,
+body.theme-daylight h2,
+body.theme-daylight h3,
+body.theme-daylight h4,
+body.theme-daylight h5 {
+  color: var(--ice-0);
+}
+body.theme-daylight .cd-section,
+body.theme-daylight .admin-header h2 {
+  color: var(--ice-0);
+}
+body.theme-daylight .sub-tab-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-2);
+}
+body.theme-daylight .sub-tab-btn:hover {
+  color: var(--ice-1);
+  border-color: var(--line);
+}
+body.theme-daylight .sub-tab-btn.active {
+  background: rgba(31,111,196,0.1);
+  border-color: var(--line-2);
+  color: var(--ice-0);
+}
+body.theme-daylight .notice-row { padding: 12px 14px;
+}
+body.theme-daylight .admin-tab {
+  background: transparent;
+  color: var(--text-1);
+}
+body.theme-daylight .admin-loading {
+  background: rgba(255,255,255,0.55);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  color: var(--text-2);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+body.theme-daylight .admin-error {
+  background: rgba(192,57,43,0.08);
+  border: 1px solid rgba(192,57,43,0.35);
+  border-radius: var(--r-md);
+  color: var(--danger, #c0392b);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+body.theme-daylight .admin-table {
+  border-radius: var(--r-md);
+  border-collapse: separate;
+  border-spacing: 0;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+body.theme-daylight .admin-table tbody tr:nth-child(even) {
+  background: rgba(31,111,196,0.03);
+}
+body.theme-daylight .admin-table tr:last-child td {
+  border-bottom: none;
+}
+body.theme-daylight .admin-cell-nick {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+  color: var(--ice-0);
+}
+body.theme-daylight .role-badge--developer {
+  background: rgba(31,111,196,0.15);
+  border: 1px solid rgba(31,111,196,0.4);
+  color: var(--ice-0);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+body.theme-daylight .role-badge--admin {
+  background: rgba(43,127,217,0.18);
+  border: 1px solid rgba(43,127,217,0.4);
+  color: var(--ice-1);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+body.theme-daylight .role-badge--member {
+  background: rgba(31,111,196,0.05);
+  border: 1px solid var(--line);
+  color: var(--text-2);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+body.theme-daylight .leader-badge {
+  background: rgba(232,162,60,0.15);
+  border: 1px solid rgba(232,162,60,0.4);
+  border-radius: 4px;
+  color: var(--warn, #a05f0d);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 2px 6px;
+}
+body.theme-daylight .user-alliance-badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  border-radius: 5px;
+  padding: 3px 8px;
+  color: #fff;
+  /* KOR/NSL/JKY/GPX/UFO 외의 연맹(예: 관리자 계정의 SFC)은 --kor 같은 전용 규칙이 없다.
+   * 다크 테마에서는 흰 글자가 어두운 배경에 얹혀 우연히 읽혔지만, 밝은 배경에서는
+   * 배경 없는 흰 글자가 그대로 사라진다. 기본 채움색을 줘서 어떤 연맹이든 읽히게 한다. */
+  background: #5b7186;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+body.theme-daylight .user-alliance-badge--kor { background: var(--kor, #1f6fc4);
+}
+body.theme-daylight .user-alliance-badge--nsl { background: var(--nsl, #0f7a45);
+}
+body.theme-daylight .user-alliance-badge--jky { background: var(--jky, #6d43b8);
+}
+body.theme-daylight .user-alliance-badge--gpx { background: var(--gpx, #a05f0d);
+}
+body.theme-daylight .user-alliance-badge--ufo { background: var(--ufo, #b03060);
+}
+body.theme-daylight .user-alliance-badge:not([class*="--"]) {
+  background: rgba(31,111,196,0.15);
+  border: 1px solid var(--line);
+  color: var(--ice-1);
+}
+body.theme-daylight .admin-action-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-family: inherit;
+  font-weight: 600;
+  border-radius: 6px;
+  background: rgba(31,111,196,0.06);
+  border: 1px solid var(--line-2);
+  color: var(--ice-1);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+  white-space: nowrap;
+}
+body.theme-daylight .admin-action-btn:hover:not(:disabled) {
+  background: rgba(31,111,196,0.14);
+  border-color: var(--accent);
+  box-shadow: none;
+}
+body.theme-daylight .admin-action-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+body.theme-daylight .admin-action-btn--danger {
+  background: rgba(192,57,43,0.08);
+  border-color: rgba(192,57,43,0.35);
+  color: var(--danger, #c0392b);
+}
+body.theme-daylight .admin-action-btn--danger:hover:not(:disabled) {
+  background: rgba(192,57,43,0.18);
+  border-color: rgba(192,57,43,0.6);
+  box-shadow: 0 0 8px rgba(192,57,43,0.25);
+}
+body.theme-daylight .admin-leader-toggle {
+  border-color: rgba(15,122,69,0.4);
+  color: var(--green, #0f7a45);
+  background: rgba(15,122,69,0.06);
+}
+body.theme-daylight .admin-leader-toggle:hover:not(:disabled) {
+  background: rgba(15,122,69,0.14);
+  border-color: rgba(15,122,69,0.6);
+  box-shadow: 0 0 8px rgba(15,122,69,0.2);
+}
+body.theme-daylight .admin-leader-toggle.is-leader {
+  background: rgba(15,122,69,0.12);
+  border-color: rgba(15,122,69,0.5);
+  color: var(--green, #0f7a45);
+}
+body.theme-daylight .admin-leader-toggle.is-leader:hover:not(:disabled) {
+  background: rgba(15,122,69,0.2);
+}
+body.theme-daylight .admin-card-nickname {
+  font-weight: 700;
+  color: var(--ice-0);
+  font-size: 14px;
+}
+body.theme-daylight .admin-card-info {
+  color: var(--text-2);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+}
+body.theme-daylight .post-card {
+  padding: 16px 18px;
+  border-radius: var(--r-md, 10px);
+  margin-bottom: 10px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: border 0.2s, box-shadow 0.2s;
+}
+body.theme-daylight .post-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+body.theme-daylight .post-icon {
+  /* frost는 어두운 배경 위 옅은 시안이라 읽혔지만, 밝은 배경에서는 워시가 사라진다.
+   * daylight에서는 액센트 본색으로 올려 아이콘이 실제로 보이게 한다. */
+  color: var(--accent);
+}
+body.theme-daylight .post-author {
+  font-weight: 700;
+  font-size: 13px;
+}
+body.theme-daylight .post-meta {
+  font-size: 11px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+body.theme-daylight .post-title {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+body.theme-daylight .post-body {
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+body.theme-daylight .compose-card {
+  padding: 14px 16px;
+  border-radius: var(--r-md, 10px);
+  margin-bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+body.theme-daylight .compose-card .input { margin-bottom: 0;
+}
+body.theme-daylight .post-card {
+  background: rgba(255,255,255,0.55);
+  border: 1px solid var(--line);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+body.theme-daylight .post-card:hover { border-color: var(--line-2);
+}
+body.theme-daylight .post-author { color: var(--ice-1);
+}
+body.theme-daylight .post-meta { color: var(--text-2);
+}
+body.theme-daylight .post-title { color: var(--ice-0);
+}
+body.theme-daylight .post-body { color: var(--text-2);
+}
+body.theme-daylight .compose-card {
+  background: rgba(255,255,255,0.5);
+  border: 1px solid var(--line);
+}
+body.theme-daylight .compose-card input,
+body.theme-daylight .compose-card textarea,
+body.theme-daylight .compose-card select {
+  background: var(--bg-input);
+  border: 1px solid var(--line);
+  color: var(--text-1);
+}
+body.theme-daylight .compose-card input:focus,
+body.theme-daylight .compose-card textarea:focus,
+body.theme-daylight .compose-card select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(31,111,196,0.24);
+}
+body.theme-daylight .notice-row.post-card {
+  border-radius: 10px;
+  margin-bottom: 6px;
+  padding: 12px 16px;
+}
+body.theme-daylight .sub-tab-nav--secondary {
+  background: rgba(255,255,255,0.3);
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 10px;
+  margin-bottom: 14px;
+  border-top: none;
+}
+body.theme-daylight .chat-tab-layout {
+  display: grid;
+  grid-template-columns: 1fr 220px;
+  gap: 14px;
+  height: 100%;
+  padding: 20px 24px;
+  min-height: 0;
+  box-sizing: border-box;
+}
+body.theme-daylight .chat-tab-main {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: rgba(255,255,255,0.5);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+body.theme-daylight .chat-tab-topbar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(16,42,72,0.09);
+}
+body.theme-daylight .chat-tab-channel {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  color: var(--ice-1);
+  font-weight: 700;
+}
+body.theme-daylight .chat-tab-spacer { flex: 1;
+}
+body.theme-daylight .chat-autotranslate-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--text-2);
+  cursor: pointer;
+  user-select: none;
+}
+body.theme-daylight .chat-autotranslate-toggle input {
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+body.theme-daylight .chat-tab-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
+}
+body.theme-daylight .chat-tab-messages::-webkit-scrollbar { width: 6px;
+}
+body.theme-daylight .chat-tab-messages::-webkit-scrollbar-thumb {
+  background: rgba(31,111,196,0.2);
+  border-radius: 3px;
+}
+body.theme-daylight .chat-tab-system-msg {
+  text-align: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  color: var(--text-3);
+  padding: 4px;
+}
+body.theme-daylight .chat-tab-msg {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  animation: chat-in 0.3s cubic-bezier(.22, 1, .36, 1);
+}
+body.theme-daylight .chat-tab-msg:hover {
+  background: rgba(31,111,196,0.04);
+}
+body.theme-daylight .chat-tab-msg-avatar {
+  width: 28px; height: 28px;
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 800;
+  color: white;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+}
+body.theme-daylight .chat-tab-msg-body { min-width: 0;
+}
+body.theme-daylight .chat-tab-msg-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 2px;
+  flex-wrap: wrap;
+}
+body.theme-daylight .chat-tab-msg-nick {
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--ice-0);
+}
+body.theme-daylight .chat-tab-msg-alliance {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+}
+body.theme-daylight .chat-tab-msg-time {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  color: var(--text-3);
+}
+body.theme-daylight .chat-tab-msg-text {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-1);
+  word-wrap: break-word;
+  margin: 0;
+}
+body.theme-daylight .chat-tab-toggle-original {
+  font-size: 11px;
+  color: var(--accent);
+  cursor: pointer;
+  font-style: italic;
+  margin-top: 2px;
+  display: block;
+}
+body.theme-daylight .chat-tab-toggle-original:hover {
+  color: var(--ice-1);
+  text-decoration: underline;
+}
+body.theme-daylight .chat-tab-input-row {
+  flex-shrink: 0;
+  display: flex;
+  gap: 6px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--line);
+  background: rgba(16,42,72,0.15);
+}
+body.theme-daylight .chat-tab-input {
+  flex: 1;
+  padding: 9px 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text-1);
+  font-size: 13px;
+  font-family: inherit;
+  transition: border 0.2s, box-shadow 0.2s;
+  min-width: 0;
+}
+body.theme-daylight .chat-tab-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(31,111,196,0.24);
+}
+body.theme-daylight .chat-tab-input::placeholder { color: var(--text-3);
+}
+body.theme-daylight .chat-tab-send-btn {
+  flex-shrink: 0;
+  padding: 8px 14px;
+}
+body.theme-daylight .chat-tab-sidebar {
+  display: flex;
+  flex-direction: column;
+  background: rgba(255,255,255,0.5);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  min-height: 0;
+}
+body.theme-daylight .chat-tab-sidebar-header {
+  flex-shrink: 0;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(16,42,72,0.09);
+}
+body.theme-daylight .chat-tab-sidebar-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  color: var(--ice-1);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+body.theme-daylight .chat-tab-sidebar-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 12px;
+}
+body.theme-daylight .chat-tab-sidebar-body::-webkit-scrollbar { width: 4px;
+}
+body.theme-daylight .chat-tab-sidebar-body::-webkit-scrollbar-thumb {
+  background: rgba(31,111,196,0.15);
+  border-radius: 2px;
+}
+body.theme-daylight .chat-tab-sidebar-empty {
+  font-size: 12px;
+  color: var(--text-3);
+  font-style: italic;
+}
+body.theme-daylight .chat-tab-alliance-group {
+  margin-bottom: 12px;
+}
+body.theme-daylight .chat-tab-alliance-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  color: var(--text-2);
+  margin-bottom: 4px;
+}
+body.theme-daylight .chat-tab-alliance-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+body.theme-daylight .chat-tab-alliance-name {
+  font-weight: 700;
+}
+body.theme-daylight .chat-tab-alliance-count {
+  margin-left: auto;
+  color: var(--text-3);
+}
+body.theme-daylight .chat-tab-user-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--ice-0);
+}
+body.theme-daylight .chat-tab-user-row:hover {
+  background: rgba(31,111,196,0.05);
+}
+body.theme-daylight .chat-tab-user-dot {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 4px var(--green);
+  flex-shrink: 0;
+}
+body.theme-daylight .chat-tab-user-nick {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+body.theme-daylight .chat-tab-user-you {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  color: var(--accent);
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+}
+body.theme-daylight .chat-dock {
+  display: flex;
+  flex-direction: column;
+  background: rgba(255,255,255,0.55);
+  border-left: 1px solid var(--line);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  min-width: var(--chat-dock-w);
+  max-width: var(--chat-dock-w);
+  height: 100%;
+  overflow: hidden;
+}
+body.theme-daylight .chat-dock-head {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+}
+body.theme-daylight .chat-dock-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  letter-spacing: 0.15em;
+  color: var(--ice-1);
+  font-weight: 700;
+}
+body.theme-daylight .chat-online-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  background: rgba(15,122,69,0.12);
+  border: 1px solid rgba(15,122,69,0.3);
+  border-radius: 999px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--green);
+}
+body.theme-daylight .chat-online-pill::before {
+  content: '';
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 5px var(--green);
+}
+body.theme-daylight .chat-dock-close {
+  margin-left: auto;
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--text-2);
+  width: 28px; height: 28px;
+  border-radius: 6px;
+  font-size: 18px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  padding: 0;
+  line-height: 1;
+}
+body.theme-daylight .chat-dock-close:hover {
+  color: var(--ice-1);
+  border-color: var(--line-2);
+}
+body.theme-daylight .chat-online-strip {
+  flex-shrink: 0;
+  display: flex;
+  gap: 4px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+  background: rgba(16,42,72,0.12);
+  scrollbar-width: none;
+}
+body.theme-daylight .chat-online-strip::-webkit-scrollbar { display: none;
+}
+body.theme-daylight .chat-online-avatar {
+  flex-shrink: 0;
+  width: 26px; height: 26px;
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 800;
+  color: white;
+  letter-spacing: 0.05em;
+  position: relative;
+  cursor: default;
+}
+body.theme-daylight .chat-online-avatar::after {
+  content: '';
+  position: absolute;
+  right: -2px; bottom: -2px;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+  border: 2px solid rgba(16,42,72,0.3);
+}
+body.theme-daylight .chat-dock-msgs {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+}
+body.theme-daylight .chat-dock-msgs::-webkit-scrollbar { width: 6px;
+}
+body.theme-daylight .chat-dock-msgs::-webkit-scrollbar-thumb {
+  background: rgba(31,111,196,0.2);
+  border-radius: 3px;
+}
+body.theme-daylight .chat-dock-msg {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  animation: chat-in 0.3s cubic-bezier(.22, 1, .36, 1);
+}
+body.theme-daylight .chat-dock-msg:hover {
+  background: rgba(31,111,196,0.04);
+}
+body.theme-daylight .chat-dock-msg-avatar {
+  width: 28px; height: 28px;
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 800;
+  color: white;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+}
+body.theme-daylight .chat-dock-msg-body { min-width: 0;
+}
+body.theme-daylight .chat-dock-msg-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+body.theme-daylight .chat-dock-msg-nick {
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--ice-0);
+}
+body.theme-daylight .chat-dock-msg-time {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  color: var(--text-3);
+}
+body.theme-daylight .chat-dock-msg-text {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-1);
+  word-wrap: break-word;
+  margin: 0;
+}
+body.theme-daylight .chat-dock-msg-tr {
+  font-size: 11px;
+  color: var(--text-2);
+  font-style: italic;
+  margin-top: 2px;
+  padding-left: 6px;
+  border-left: 2px solid var(--line);
+}
+body.theme-daylight .chat-dock-system {
+  text-align: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--text-3);
+  letter-spacing: 0.15em;
+  padding: 4px;
+}
+body.theme-daylight .chat-dock-translate-bar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  height: 32px;
+  border-top: 1px solid var(--line);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--text-2);
+  background: rgba(16,42,72,0.09);
+}
+body.theme-daylight .chat-dock-translate-bar input {
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+body.theme-daylight .chat-dock-translate-bar label {
+  cursor: pointer;
+  user-select: none;
+}
+body.theme-daylight .chat-dock-input-row {
+  flex-shrink: 0;
+  display: flex;
+  gap: 6px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--line);
+  background: rgba(16,42,72,0.18);
+}
+body.theme-daylight .chat-dock-input-row .input {
+  flex: 1;
+  padding: 9px 12px;
+  font-size: 13px;
+  min-width: 0;
+  background: var(--bg-input);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text-1);
+  font-family: inherit;
+  transition: border 0.2s, box-shadow 0.2s;
+}
+body.theme-daylight .chat-dock-input-row .input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(31,111,196,0.24);
+}
+body.theme-daylight .chat-dock-input-row .input::placeholder { color: var(--text-3);
+}
+body.theme-daylight .chat-dock-input-row .btn-primary {
+  flex-shrink: 0;
+  padding: 8px 14px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+  border: none;
+  border-radius: 6px;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(43,127,217,0.4);
+  transition: box-shadow 0.15s;
+}
+body.theme-daylight .chat-dock-input-row .btn-primary:hover {
+  box-shadow: 0 6px 24px rgba(43,127,217,0.55);
+}
+body.theme-daylight .cd-section {
+  background: transparent;
+  padding: 0;
+}
+body.theme-daylight .cd-hero {
+  /* frost는 베이스 레이아웃 그대로 사용. 색/배경만 별도 오버라이드 없음 */
+}
+body.theme-daylight .cd-hero-head {
+  position: absolute;
+  top: 18px;
+  left: 24px;
+  right: 24px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  color: var(--text-3);
+  text-transform: uppercase;
+  pointer-events: none; /* mega 클릭 영역 침범 방지 */
+}
+body.theme-daylight .cd-hero-head > * {
+  pointer-events: auto;
+}
+body.theme-daylight .cd-hero-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ice-1);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+}
+body.theme-daylight .cd-hero-tag.active {
+  background: rgba(15,122,69,0.12);
+  border-color: rgba(15,122,69,0.4);
+  color: var(--green);
+}
+body.theme-daylight .cd-hero-tag.active::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 6px var(--green);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+body.theme-daylight .cd-hero-tag.danger {
+  background: rgba(192,57,43,0.09);
+  border-color: rgba(192,57,43,0.4);
+  color: var(--danger, #c0392b);
+}
+body.theme-daylight .cd-mega {
+  position: relative;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 800;
+  font-size: clamp(96px, 50cqw, 220px);
+  line-height: 0.85;
+  letter-spacing: -0.06em;
+  color: var(--ice-0);
+  font-variant-numeric: tabular-nums;
+  /* 라이트 캔버스에서 네온 글로우는 뿌연 얼룩이 된다 — Linear 라이트처럼 글로우 없이
+   * 자간과 무게만으로 존재감을 만든다. */
+  text-shadow: none;
+}
+body.theme-daylight .cd-mega.warn {
+  color: var(--warn, #a05f0d);
+  text-shadow: none;
+}
+body.theme-daylight .cd-mega.danger {
+  color: var(--danger, #c0392b);
+  text-shadow: none;
+  animation: cd-shake 0.4s ease-in-out infinite;
+}
+body.theme-daylight .cd-controls {
+  width: 100%;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: stretch;
+}
+body.theme-daylight .cd-presets {
+  display: flex;
+  gap: 6px;
+}
+body.theme-daylight .cd-preset-btn {
+  flex: 1;
+  padding: 10px;
+  background: rgba(255,255,255,0.6);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text-1);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+body.theme-daylight .cd-preset-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+body.theme-daylight .cd-preset-btn.selected {
+  background: rgba(31,111,196,0.1);
+  border-color: var(--accent);
+  color: var(--ice-0);
+}
+body.theme-daylight .cd-preset-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+body.theme-daylight .cd-key-hint {
+  position: absolute;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  color: var(--text-3);
+  display: flex;
+  gap: 12px;
+  white-space: nowrap;
+}
+body.theme-daylight .cd-key-hint kbd {
+  padding: 2px 6px;
+  background: rgba(31,111,196,0.06);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  color: var(--ice-1);
+}
+
+@media (max-width: 768px) {
+  body.theme-daylight .rail.is-open {
+      box-shadow: 16px 0 48px rgba(0, 0, 0, 0.5);
+      border-right: 1px solid var(--line-2);
+  }
+  body.theme-daylight .admin-table { display: none;
+  }
+  body.theme-daylight .admin-card-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+  }
+  body.theme-daylight .cd-hero {
+      padding: 16px 14px 52px;
+      min-height: 360px;
+      gap: 14px;
+  }
+  body.theme-daylight .cd-mega {
+      font-size: clamp(80px, 50cqw, 180px);
+  }
+  body.theme-daylight .cd-controls {
+      max-width: 100%;
+  }
+  body.theme-daylight .chat-tab-layout {
+      grid-template-columns: 1fr;
+      grid-template-rows: 1fr auto;
+      padding: 12px;
+      gap: 10px;
+  }
+  body.theme-daylight .chat-tab-sidebar {
+      max-height: 180px;
+      grid-row: 2;
+  }
+  body.theme-daylight .chat-tab-sidebar-body {
+      overflow-x: auto;
+      overflow-y: hidden;
+      display: flex;
+      flex-direction: row;
+      gap: 12px;
+      padding: 8px 10px;
+  }
+  body.theme-daylight .chat-tab-alliance-group {
+      margin-bottom: 0;
+      flex-shrink: 0;
+  }
+}
+
+@media (max-width: 480px) {
+  body.theme-daylight .admin-tab { padding: 10px;
+  }
+  body.theme-daylight .admin-card { padding: 10px 12px;
+  }
+  body.theme-daylight .cd-hero {
+      padding: 14px 10px 48px;
+      min-height: 0;
+  }
+  body.theme-daylight .cd-mega {
+      font-size: clamp(72px, 50cqw, 140px);
+  }
+  body.theme-daylight .cd-hero-head {
+      font-size: 9px;
+  }
+}
+
+@media (max-width: 1180px) {
+  body.theme-daylight .console--with-dock {
+      grid-template-columns: var(--rail-w) 1fr;
+  }
+  body.theme-daylight .chat-dock {
+      position: fixed;
+      top: 0; right: 0; bottom: 0;
+      min-width: min(360px, 90vw);
+      max-width: min(360px, 90vw);
+      z-index: 95;
+      transform: translateX(0);
+      box-shadow: -16px 0 48px rgba(0, 0, 0, 0.5);
+  }
+}
+
+/* ─── Phase 9 — Daylight: 작전판(Operation Board) ───
+ * 작전판 베이스 CSS는 토큰이 아니라 어두운 리터럴(rgba(8,19,36,.72) 등)로 칠해져 있어
+ * 토큰만 바꾸면 이 탭만 다크로 남는다. daylight 스코프로 표면을 다시 칠한다.
+ * SVG 캔버스 바탕/격자는 OperationBoardCanvas.jsx에서 --op-canvas-bg / --op-grid 로
+ * 빼 두었고, 기본값이 원래 값이라 frost·spring 결과는 그대로다. */
+body.theme-daylight .operation-board-head,
+body.theme-daylight .operation-toolbar,
+body.theme-daylight .operation-canvas-shell,
+body.theme-daylight .operation-side-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+body.theme-daylight .operation-status-pill,
+body.theme-daylight .operation-badge {
+  border-color: var(--line-2);
+  color: var(--text-2);
+  background: var(--bg-subtle);
+}
+body.theme-daylight .operation-status-pill.can-draw {
+  color: var(--accent);
+  border-color: rgba(31,111,196,0.38);
+  background: rgba(31,111,196,0.09);
+}
+body.theme-daylight .operation-tool-btn,
+body.theme-daylight .operation-toolbar button,
+body.theme-daylight .operation-side-toggle,
+body.theme-daylight .operation-chat-toggle,
+body.theme-daylight .operation-saved-row button {
+  background: #ffffff;
+  border-color: var(--line-2);
+  color: var(--text-1);
+}
+body.theme-daylight .operation-tool-btn:hover,
+body.theme-daylight .operation-toolbar button:hover:not(:disabled),
+body.theme-daylight .operation-side-toggle:hover,
+body.theme-daylight .operation-chat-toggle:hover,
+body.theme-daylight .operation-saved-row button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+body.theme-daylight .operation-tool-btn.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(31,111,196,0.10);
+}
+body.theme-daylight .operation-save-btn {
+  border-color: transparent !important;
+  background: linear-gradient(135deg, var(--accent), var(--accent-hover)) !important;
+  color: #ffffff !important;
+}
+body.theme-daylight .operation-control select,
+body.theme-daylight .operation-control input[type="color"] {
+  background: #ffffff;
+  color: var(--text-1);
+  border-color: var(--line-2);
+}
+body.theme-daylight .operation-participant-row,
+body.theme-daylight .operation-saved-row {
+  background: var(--bg-subtle);
+  border-color: var(--line);
+}
+body.theme-daylight .operation-participant-name { color: var(--text-1); }
+body.theme-daylight .operation-draw-toggle { color: var(--text-2); }
+body.theme-daylight .operation-canvas-shell {
+  /* 캔버스는 순백 위에 그린다 — 그림 요소 색이 그대로 보이도록 배경을 비운다 */
+  background: #ffffff;
 }
