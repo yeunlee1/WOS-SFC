@@ -18,6 +18,8 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
+    "migrate": "node --env-file-if-exists=.env dist/database/migrate.js",
+    "migrate:dev": "node --env-file-if-exists=.env -r ts-node/register src/database/migrate.ts",
     "tts:generate": "ts-node -r tsconfig-paths/register src/tts/scripts/tts-generate.ts"
   },
   "dependencies": {
