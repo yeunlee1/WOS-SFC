@@ -11,6 +11,32 @@ import { RenameOperationBoardDto } from './dto/rename-operation-board.dto';
 import { SaveOperationBoardDto } from './dto/save-operation-board.dto';
 import { OperationBoard } from './operation-board.entity';
 import { OperationBoardsService } from './operation-boards.service';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
+import { Logger } from '@nestjs/common';
+import { OperationBoardsGateway } from './operation-boards.gateway';
+import { BoardUploadQuotaService } from '../boards/board-upload-quota.service';
+import { deleteOperationBoardBackgroundByUrl } from './operation-board-background-files';
+
+// 배경 파일 회수는 실제 디스크를 건드린다. 운영 uploads/ 를 절대 만지지 않도록
+// 실구현을 그대로 쓰되 대상 폴더만 테스트용 임시 디렉터리로 바꿔 끼운다.
+// (변수명이 mock 으로 시작해야 jest.mock 호이스팅이 참조를 허용한다.)
+let mockBackgroundDir = '';
+
+jest.mock('./operation-board-background-files', () => {
+  const actual = jest.requireActual('./operation-board-background-files');
+  return {
+    ...actual,
+    deleteOperationBoardBackgroundByUrl: jest.fn(
+      (url: unknown, options: Record<string, unknown> = {}) =>
+        actual.deleteOperationBoardBackgroundByUrl(url, {
+          ...options,
+          directory: mockBackgroundDir,
+        }),
+    ),
+  };
+});
 
 type MockOperationBoard = OperationBoard & {
   id: number;
@@ -45,17 +71,41 @@ function makeRepo() {
       if (index >= 0) rows.splice(index, 1);
       return { affected: index >= 0 ? 1 : 0 };
     }),
+    countBy: jest.fn(
+      async ({ backgroundImageUrl }: { backgroundImageUrl: string }) =>
+        rows.filter((row) => row.backgroundImageUrl === backgroundImageUrl)
+          .length,
+    ),
   };
   return repo;
+}
+
+const deleteBackgroundMock =
+  deleteOperationBoardBackgroundByUrl as unknown as jest.Mock;
+
+// 업로드 사용량 캐시. 회수 뒤 무효화되는지만 본다.
+function makeQuota() {
+  return { invalidate: jest.fn() };
+}
+
+// 라이브 작전판이 지금 그 배경을 띄우고 있는지 알려주는 대역.
+function makeLiveBoard(imageUrl: string | null = null) {
+  return {
+    isLiveBackgroundImage: jest.fn((url: string) => url === imageUrl),
+  };
 }
 
 describe('OperationBoardsService', () => {
   async function setup() {
     const repo = makeRepo();
+    const quota = makeQuota();
+    const liveBoard = makeLiveBoard();
     const moduleRef = await Test.createTestingModule({
       providers: [
         OperationBoardsService,
         { provide: getRepositoryToken(OperationBoard), useValue: repo },
+        { provide: BoardUploadQuotaService, useValue: quota },
+        { provide: OperationBoardsGateway, useValue: liveBoard },
       ],
     }).compile();
     return { service: moduleRef.get(OperationBoardsService), repo };
@@ -429,6 +479,8 @@ describe('OperationBoardsService 목록 조회', () => {
       providers: [
         OperationBoardsService,
         { provide: getRepositoryToken(OperationBoard), useValue: repo },
+        { provide: BoardUploadQuotaService, useValue: makeQuota() },
+        { provide: OperationBoardsGateway, useValue: makeLiveBoard() },
       ],
     }).compile();
     const service: OperationBoardsService = moduleRef.get(
@@ -504,5 +556,190 @@ describe('OperationBoardsService 목록 조회', () => {
     expect(one.title).toBe(list[0].title);
     expect(one.backgroundType).toBe(list[0].backgroundType);
     expect(one.backgroundImageUrl).toBe(list[0].backgroundImageUrl);
+  });
+});
+
+// ─── 저장본 삭제 시 배경 파일 회수 ───
+// 업로드 한도(1GB)는 uploads/ 전체를 합산한다(board-upload-quota.service.ts 가
+// UPLOAD_ROOT 를 재귀로 훑는다). 작전판 배경이 회수되지 않으면 게시판 업로드까지 막힌다.
+describe('OperationBoardsService.remove 배경 파일 회수', () => {
+  const NAME = '1776609627806-4870a517-30cf-4ddf-bd06-45c2a5d9c6eb.jpg';
+  const URL = `/uploads/operation-boards/${NAME}`;
+
+  let root: string;
+  let backgroundFile: string;
+
+  function setupWith(liveImageUrl: string | null = null) {
+    const repo = makeRepo();
+    const quota = makeQuota();
+    const liveBoard = makeLiveBoard(liveImageUrl);
+    const service = new OperationBoardsService(
+      repo as never,
+      quota as never,
+      liveBoard as never,
+    );
+    return { service, repo, quota, liveBoard };
+  }
+
+  async function saveWithBackground(
+    service: OperationBoardsService,
+    title = '배경 있는 작전',
+  ) {
+    return service.saveSnapshot(
+      { id: 1, nickname: 'devKo', role: 'developer' },
+      {
+        title,
+        backgroundType: 'image',
+        backgroundImageUrl: URL,
+        elements: [],
+      },
+    );
+  }
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'op-board-remove-'));
+    mockBackgroundDir = join(root, 'uploads', 'operation-boards');
+    mkdirSync(mockBackgroundDir, { recursive: true });
+    backgroundFile = join(mockBackgroundDir, NAME);
+    writeFileSync(backgroundFile, 'image-bytes');
+    deleteBackgroundMock.mockClear();
+    jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    jest.spyOn(Logger.prototype, 'debug').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it('저장본을 지우면 배경 이미지 파일도 지운다', async () => {
+    const { service } = setupWith();
+    const saved = await saveWithBackground(service);
+
+    await service.remove(saved.id, {
+      id: 1,
+      nickname: 'devKo',
+      role: 'developer',
+    });
+
+    expect(deleteBackgroundMock).toHaveBeenCalledWith(URL, expect.anything());
+    expect(existsSync(backgroundFile)).toBe(false);
+  });
+
+  it('회수 뒤 업로드 사용량 캐시를 무효화한다', async () => {
+    const { service, quota } = setupWith();
+    const saved = await saveWithBackground(service);
+
+    await service.remove(saved.id, {
+      id: 1,
+      nickname: 'devKo',
+      role: 'developer',
+    });
+
+    expect(quota.invalidate).toHaveBeenCalled();
+  });
+
+  // 저장본을 불러와 그대로 다시 저장하면 두 저장본이 같은 배경 파일을 가리킨다
+  // (OperationBoardTab.jsx 의 불러오기→저장 경로). 한쪽을 지울 때 파일을 지우면
+  // 남은 저장본의 배경이 깨진다.
+  it('다른 저장본이 같은 배경을 참조하면 파일을 남긴다', async () => {
+    const { service } = setupWith();
+    const first = await saveWithBackground(service, '원본');
+    const second = await saveWithBackground(service, '복제본');
+
+    await service.remove(first.id, {
+      id: 1,
+      nickname: 'devKo',
+      role: 'developer',
+    });
+
+    expect(existsSync(backgroundFile)).toBe(true);
+    expect(deleteBackgroundMock).not.toHaveBeenCalled();
+    await expect(service.getOne(second.id)).resolves.toMatchObject({
+      backgroundImageUrl: URL,
+    });
+  });
+
+  // 라이브 작전판은 서버 메모리에 있고 저장본과 같은 URL 을 띄울 수 있다.
+  // 지금 화면을 보고 있는 인원의 배경이 깨지지 않도록 파일을 남긴다.
+  it('라이브 작전판이 같은 배경을 띄우고 있으면 파일을 남긴다', async () => {
+    const { service, liveBoard } = setupWith(URL);
+    const saved = await saveWithBackground(service);
+
+    await service.remove(saved.id, {
+      id: 1,
+      nickname: 'devKo',
+      role: 'developer',
+    });
+
+    expect(liveBoard.isLiveBackgroundImage).toHaveBeenCalledWith(URL);
+    expect(existsSync(backgroundFile)).toBe(true);
+    expect(deleteBackgroundMock).not.toHaveBeenCalled();
+  });
+
+  it('배경 파일이 이미 없어도 DB 삭제는 성공한다', async () => {
+    const { service } = setupWith();
+    const saved = await saveWithBackground(service);
+    rmSync(backgroundFile);
+
+    await expect(
+      service.remove(saved.id, {
+        id: 1,
+        nickname: 'devKo',
+        role: 'developer',
+      }),
+    ).resolves.toBeUndefined();
+    await expect(service.getOne(saved.id)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+
+  it('파일 회수가 예외를 던져도 DB 삭제를 되돌리지 않는다', async () => {
+    const { service } = setupWith();
+    const saved = await saveWithBackground(service);
+    deleteBackgroundMock.mockRejectedValueOnce(new Error('EACCES'));
+
+    await expect(
+      service.remove(saved.id, {
+        id: 1,
+        nickname: 'devKo',
+        role: 'developer',
+      }),
+    ).resolves.toBeUndefined();
+    await expect(service.getOne(saved.id)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+
+  it('배경이 없는 격자 저장본은 파일 회수를 시도하지 않는다', async () => {
+    const { service } = setupWith();
+    const saved = await service.saveSnapshot(
+      { id: 1, nickname: 'devKo', role: 'developer' },
+      {
+        title: '격자',
+        backgroundType: 'grid',
+        backgroundImageUrl: null,
+        elements: [],
+      },
+    );
+
+    await service.remove(saved.id, {
+      id: 1,
+      nickname: 'devKo',
+      role: 'developer',
+    });
+
+    expect(deleteBackgroundMock).not.toHaveBeenCalled();
+    expect(existsSync(backgroundFile)).toBe(true);
+  });
+
+  it('없는 저장본을 지우면 파일을 건드리지 않고 404 를 던진다', async () => {
+    const { service } = setupWith();
+
+    await expect(
+      service.remove(999, { id: 1, nickname: 'devKo', role: 'developer' }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(deleteBackgroundMock).not.toHaveBeenCalled();
+    expect(existsSync(backgroundFile)).toBe(true);
   });
 });

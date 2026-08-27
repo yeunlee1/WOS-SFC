@@ -2,6 +2,7 @@
 import {
   HttpException,
   Injectable,
+  Logger,
   RequestTimeoutException,
 } from '@nestjs/common';
 import type { Dirent } from 'fs';
@@ -15,6 +16,10 @@ export const BOARD_UPLOAD_TOTAL_QUOTA_BYTES = 1024 * 1024 * 1024;
 const BOARD_UPLOAD_QUOTA_SCAN_INTERVAL_MS = 5000;
 export const BOARD_UPLOAD_RESERVATION = Symbol('board-upload-reservation');
 export const BOARD_UPLOAD_CLEANUP = Symbol('board-upload-cleanup');
+
+function toMegabytes(bytes: number): string {
+  return (bytes / (1024 * 1024)).toFixed(1);
+}
 
 export type BoardUploadRequest = {
   [BOARD_UPLOAD_RESERVATION]?: symbol;
@@ -73,6 +78,7 @@ export async function reserveUploadQuotaForRequest(
 
 @Injectable()
 export class BoardUploadQuotaService {
+  private readonly logger = new Logger(BoardUploadQuotaService.name);
   private diskBytes = 0;
   private reservedBytes = 0;
   private lastScanAt = 0;
@@ -87,7 +93,15 @@ export class BoardUploadQuotaService {
       this.diskBytes + this.reservedBytes + bytes >
       BOARD_UPLOAD_TOTAL_QUOTA_BYTES
     ) {
-      throw new HttpException('이미지 저장 공간이 가득 찼습니다', 507);
+      // 507만 던지면 관리자가 언제 얼마나 찼는지 알 수 없다.
+      // 사용자별 업로드는 하루 12건으로 제한돼 있어 이 경고가 폭주하지 않는다.
+      this.logger.warn(
+        `이미지 저장 공간 초과로 업로드를 거부했다 — 디스크 ${toMegabytes(this.diskBytes)}MB + 진행 중 예약 ${toMegabytes(this.reservedBytes)}MB + 요청 ${toMegabytes(bytes)}MB > 한도 ${toMegabytes(BOARD_UPLOAD_TOTAL_QUOTA_BYTES)}MB. 관리자 회수(GET/DELETE /admin/uploads/orphans)가 필요하다.`,
+      );
+      throw new HttpException(
+        `이미지 저장 공간이 가득 찼습니다 (${toMegabytes(this.diskBytes + this.reservedBytes)}MB / ${toMegabytes(BOARD_UPLOAD_TOTAL_QUOTA_BYTES)}MB 사용)`,
+        507,
+      );
     }
 
     const token = Symbol('upload');
@@ -103,6 +117,12 @@ export class BoardUploadQuotaService {
     this.reservations.delete(token);
     this.reservedBytes = Math.max(0, this.reservedBytes - bytes);
     // 성공·실패 어느 쪽이든 부분 파일이 남을 수 있어 다음 요청에서 다시 실측한다.
+    this.invalidate();
+  }
+
+  // 디스크 내용이 코드 밖에서 바뀌었을 때(게시물 삭제, 고아 회수) 캐시된
+  // 사용량을 버리고 다음 예약에서 다시 실측하게 한다.
+  invalidate(): void {
     this.invalidationVersion += 1;
     this.lastScanAt = 0;
   }

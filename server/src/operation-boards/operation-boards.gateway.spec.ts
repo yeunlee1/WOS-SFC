@@ -8,6 +8,7 @@ import {
   PRESENCE_COALESCE_MS,
 } from './operation-boards.gateway';
 import { UsersService } from '../users/users.service';
+import { SocketAuthService } from '../realtime/socket-auth.service';
 import { WsRateLimitService } from '../realtime/ws-rate-limit.service';
 import { MAX_OPERATION_ELEMENTS } from './operation-board-elements';
 
@@ -157,8 +158,10 @@ describe('OperationBoardsGateway', () => {
     };
     rateLimit = new WsRateLimitService();
     gateway = new OperationBoardsGateway(
-      jwtService as unknown as JwtService,
-      usersService as unknown as UsersService,
+      new SocketAuthService(
+        jwtService as unknown as JwtService,
+        usersService as unknown as UsersService,
+      ),
       rateLimit,
     );
     server = makeServer();
@@ -983,8 +986,10 @@ describe('OperationBoardsGateway', () => {
       expect(lastState(other).sessionId).toBe(first.sessionId);
 
       const restarted = new OperationBoardsGateway(
-        jwtService as unknown as JwtService,
-        usersService as unknown as UsersService,
+        new SocketAuthService(
+          jwtService as unknown as JwtService,
+          usersService as unknown as UsersService,
+        ),
         new WsRateLimitService(),
       );
       restarted.server = makeServer();

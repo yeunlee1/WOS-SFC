@@ -3,6 +3,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -11,6 +12,9 @@ import { RenameOperationBoardDto } from './dto/rename-operation-board.dto';
 import { SaveOperationBoardDto } from './dto/save-operation-board.dto';
 import { OperationBoard } from './operation-board.entity';
 import { isOperationBoardBackgroundUrl } from './operation-board-upload.options';
+import { deleteOperationBoardBackgroundByUrl } from './operation-board-background-files';
+import { OperationBoardsGateway } from './operation-boards.gateway';
+import { BoardUploadQuotaService } from '../boards/board-upload-quota.service';
 import {
   MAX_OPERATION_ELEMENTS,
   MAX_OPERATION_ELEMENTS_BYTES,
@@ -93,9 +97,16 @@ function normalizeBackgroundImageUrl(
 
 @Injectable()
 export class OperationBoardsService {
+  private readonly logger = new Logger(OperationBoardsService.name);
+
   constructor(
     @InjectRepository(OperationBoard)
     private readonly repo: Repository<OperationBoard>,
+    // 업로드 한도는 uploads/ 전체를 합산한다. 배경을 회수하면 캐시를 버려
+    // 다음 업로드 판정에 곧바로 반영되게 한다.
+    private readonly quota: BoardUploadQuotaService,
+    // 라이브 작전판이 지금 그 배경을 띄우고 있는지 확인하는 용도로만 쓴다.
+    private readonly liveBoard: OperationBoardsGateway,
   ) {}
 
   /**
@@ -167,10 +178,58 @@ export class OperationBoardsService {
   async remove(id: number, user: ActingUser): Promise<void> {
     assertAdmin(user);
 
+    // 삭제 전에 배경 URL 을 확보한다. 행이 사라진 뒤에는 읽을 수 없다.
+    const row = await this.repo.findOneBy({ id });
+    if (!row) {
+      throw new NotFoundException('작전판 저장본을 찾을 수 없습니다.');
+    }
+    const backgroundImageUrl = row.backgroundImageUrl;
+
+    // DB 를 먼저 지운다. 파일을 먼저 지우면 DB 삭제가 실패했을 때 저장본은 남고
+    // 배경만 사라져 되돌릴 수 없다. 이 순서면 최악이 고아 파일이다.
     const result = await this.repo.delete(id);
     if (!result.affected) {
       throw new NotFoundException('작전판 저장본을 찾을 수 없습니다.');
     }
+
+    await this.removeBackgroundFile(backgroundImageUrl);
+  }
+
+  /**
+   * 저장본이 들고 있던 배경 파일을 회수한다.
+   *
+   * 회수하지 않는 경우가 있다 — 같은 배경 URL 을 다른 저장본이나 라이브 작전판이
+   * 아직 참조하면 지우지 않는다. 저장본을 불러와 그대로 다시 저장하면 두 저장본이
+   * 같은 파일을 가리키므로(web/src/components/OperationBoard/OperationBoardTab.jsx
+   * 의 불러오기→저장 경로) 실제로 일어나는 상황이다.
+   *
+   * 파일 회수 실패가 이미 끝난 DB 삭제를 되돌리지 않도록 여기서 끊고 로그만 남긴다.
+   */
+  private async removeBackgroundFile(url: string | null): Promise<void> {
+    if (!url) return;
+    try {
+      if (await this.isBackgroundStillReferenced(url)) {
+        this.logger.debug(
+          `다른 작전판이 같은 배경을 참조해 파일을 남긴다: ${url}`,
+        );
+        return;
+      }
+      const result = await deleteOperationBoardBackgroundByUrl(url, {
+        logger: this.logger,
+      });
+      if (result === 'deleted') this.quota.invalidate();
+    } catch (error) {
+      this.logger.error(
+        `작전판 배경 회수 중 예외: ${(error as Error).message} — 고아로 남으므로 관리자 확인이 필요하다`,
+      );
+    }
+  }
+
+  private async isBackgroundStillReferenced(url: string): Promise<boolean> {
+    // 이 시점에는 대상 행이 이미 지워져 있으므로 남은 저장본만 세어진다.
+    if ((await this.repo.countBy({ backgroundImageUrl: url })) > 0) return true;
+    // 라이브 작전판이 그 배경을 띄우고 있으면 지금 보고 있는 인원의 화면이 깨진다.
+    return this.liveBoard.isLiveBackgroundImage(url);
   }
 
   private format(row: OperationBoard) {

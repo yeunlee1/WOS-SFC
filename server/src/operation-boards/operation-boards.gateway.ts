@@ -10,9 +10,8 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import { OnModuleDestroy } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
 import { Server, Socket } from 'socket.io';
-import { UsersService } from '../users/users.service';
+import { SocketAuthService } from '../realtime/socket-auth.service';
 import { SOCKET_CORS_OPTIONS } from '../realtime/socket-cors.options';
 import { WsRateLimitService } from '../realtime/ws-rate-limit.service';
 import { isOperationBoardBackgroundUrl } from './operation-board-upload.options';
@@ -125,8 +124,7 @@ export class OperationBoardsGateway
   private readonly sessionId = randomUUID();
 
   constructor(
-    private readonly jwtService: JwtService,
-    private readonly usersService: UsersService,
+    private readonly socketAuth: SocketAuthService,
     private readonly rateLimit: WsRateLimitService,
   ) {}
 
@@ -180,6 +178,30 @@ export class OperationBoardsGateway
     });
     this.broadcastPresence();
     return { ok: true };
+  }
+
+  /**
+   * 라이브 작전판이 지금 그 배경 이미지를 띄우고 있는지 알려준다.
+   *
+   * 저장본을 지울 때 배경 파일을 회수해도 되는지 판단하는 데 쓴다. 라이브 보드가
+   * 같은 파일을 가리키는 동안 지우면 작전판을 보고 있는 인원 전원의 배경이 깨진다.
+   */
+  isLiveBackgroundImage(url: string): boolean {
+    return this.background.type === 'image' && this.background.imageUrl === url;
+  }
+
+  /**
+   * 라이브 작전판이 지금 띄우고 있는 배경 이미지 URL. 격자 배경이면 null.
+   *
+   * 고아 회수가 참조 집합을 만들 때 쓴다. 저장본이 하나도 없어도 관리자가
+   * 배경만 올려 라이브로 띄운 파일은 살아 있는 파일이다.
+   *
+   * 이 값은 이 프로세스의 메모리에만 있다 — 앱을 여러 인스턴스로 늘리면 다른
+   * 인스턴스의 라이브 배경은 보이지 않는다. 현재 배포는 단일 앱 컨테이너이고
+   * socket.io 어댑터도 인메모리라 다중 인스턴스는 애초에 지원 구성이 아니다.
+   */
+  liveBackgroundImageUrl(): string | null {
+    return this.background.type === 'image' ? this.background.imageUrl : null;
   }
 
   @SubscribeMessage('operation:permission:update')
@@ -390,26 +412,20 @@ export class OperationBoardsGateway
     else this.server.to(OPERATION_BOARD_ROOM).emit(event, payload);
   }
 
+  /**
+   * 인증은 SocketAuthService 가 소켓당 한 번만 수행한다 — 같은 소켓에 붙는 다른
+   * 게이트웨이들과 조회 결과를 나눠 쓴다. 실패는 예전처럼 null 이다.
+   */
   private async getUserFromSocket(
     client: Socket,
   ): Promise<OperationUser | null> {
-    try {
-      const cookieStr = client.handshake.headers.cookie || '';
-      const match = cookieStr.match(/(?:^|;\s*)access_token=([^;]+)/);
-      if (!match) return null;
-      const token = decodeURIComponent(match[1]);
-      const payload = this.jwtService.verify<{ sub?: number }>(token);
-      if (!Number.isInteger(payload.sub)) return null;
-      const currentUser = await this.usersService.findById(payload.sub!);
-      if (!currentUser) return null;
-      return {
-        nickname: currentUser.nickname,
-        alliance: currentUser.allianceName || '',
-        role: currentUser.role,
-      };
-    } catch {
-      return null;
-    }
+    const currentUser = await this.socketAuth.resolveUser(client);
+    if (!currentUser) return null;
+    return {
+      nickname: currentUser.nickname,
+      alliance: currentUser.allianceName || '',
+      role: currentUser.role,
+    };
   }
 
   private async ensureUser(client: Socket): Promise<OperationUser | null> {
