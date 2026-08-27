@@ -27,6 +27,7 @@ import { NoticesService } from '../notices/notices.service';
 import { RalliesService } from '../rallies/rallies.service';
 import { BusyLockService } from './busy-lock.service';
 import { ReadyNegotiationService } from './ready-negotiation.service';
+import { SocketAuthService } from './socket-auth.service';
 import { RealtimeGateway } from './realtime.gateway';
 import { WsRateLimitService } from './ws-rate-limit.service';
 import { UsersService } from '../users/users.service';
@@ -70,6 +71,10 @@ describe('RealtimeGateway — BusyLock 통합 단위 테스트', () => {
   let server: ServerMock;
   let negotiate: jest.Mock;
   let rateLimit: WsRateLimitService;
+  // 인증 조회는 SocketAuthService를 거치므로 게이트웨이의 private 필드가 아니라
+  // DI로 넣은 mock을 직접 잡는다.
+  let usersServiceMock: { findById: jest.Mock };
+  let jwtServiceMock: { verify: jest.Mock };
 
   beforeEach(async () => {
     const moduleRef: TestingModule = await Test.createTestingModule({
@@ -77,6 +82,8 @@ describe('RealtimeGateway — BusyLock 통합 단위 테스트', () => {
         RealtimeGateway,
         BusyLockService,
         WsRateLimitService,
+        // 실제 구현을 쓴다 — 소켓 인증 공유가 깨지면 여기서도 드러나야 한다.
+        SocketAuthService,
         {
           provide: JwtService,
           useValue: { verify: jest.fn().mockReturnValue(ADMIN_JWT) },
@@ -130,6 +137,8 @@ describe('RealtimeGateway — BusyLock 통합 단위 테스트', () => {
     }).compile();
 
     gateway = moduleRef.get(RealtimeGateway);
+    usersServiceMock = moduleRef.get(UsersService);
+    jwtServiceMock = moduleRef.get(JwtService);
     busyLock = moduleRef.get(BusyLockService);
     rateLimit = moduleRef.get(WsRateLimitService);
     server = makeServerMock();
@@ -214,8 +223,7 @@ describe('RealtimeGateway — BusyLock 통합 단위 테스트', () => {
     it('권한 없음 (member) → { ok: false } (reason 노출 안 함)', async () => {
       // JwtService.verify를 member role로 override.
       const memberSock = makeAdminSocket('s2');
-      const jwt = (gateway as unknown as { jwtService: JwtService }).jwtService;
-      (jwt.verify as jest.Mock).mockReturnValueOnce({
+      jwtServiceMock.verify.mockReturnValueOnce({
         sub: 2,
         nickname: 'm',
         allianceName: 'KOR',
@@ -275,8 +283,7 @@ describe('RealtimeGateway — BusyLock 통합 단위 테스트', () => {
 
     it('권한 없음 (member) → { ok: false }', async () => {
       const sock = makeAdminSocket();
-      const jwt = (gateway as unknown as { jwtService: JwtService }).jwtService;
-      (jwt.verify as jest.Mock).mockReturnValueOnce({
+      jwtServiceMock.verify.mockReturnValueOnce({
         sub: 2,
         nickname: 'm',
         allianceName: 'KOR',
@@ -478,11 +485,7 @@ describe('RealtimeGateway — BusyLock 통합 단위 테스트', () => {
   describe('연결 인증 race', () => {
     it('DB 조회 중 disconnect되면 유령 온라인 사용자를 등록하지 않는다', async () => {
       const sock = makeAdminSocket('socket-race');
-      const usersService = (
-        gateway as unknown as {
-          usersService: { findById: jest.Mock };
-        }
-      ).usersService;
+      const usersService = usersServiceMock;
       let resolveUser!: (user: {
         id: number;
         nickname: string;
@@ -520,11 +523,7 @@ describe('RealtimeGateway — BusyLock 통합 단위 테스트', () => {
 
     it('countdown:start fallback 인증 중 disconnect되면 시작하지 않는다', async () => {
       const sock = makeAdminSocket('countdown-start-race');
-      const usersService = (
-        gateway as unknown as {
-          usersService: { findById: jest.Mock };
-        }
-      ).usersService;
+      const usersService = usersServiceMock;
       let resolveUser!: (user: {
         id: number;
         nickname: string;
@@ -557,11 +556,7 @@ describe('RealtimeGateway — BusyLock 통합 단위 테스트', () => {
     it('countdown:stop fallback 인증 중 disconnect되면 잠금을 유지한다', async () => {
       const sock = makeAdminSocket('countdown-stop-race');
       busyLock.tryAcquire({ type: 'countdown' });
-      const usersService = (
-        gateway as unknown as {
-          usersService: { findById: jest.Mock };
-        }
-      ).usersService;
+      const usersService = usersServiceMock;
       let resolveUser!: (user: {
         id: number;
         nickname: string;

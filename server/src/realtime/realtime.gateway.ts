@@ -9,7 +9,6 @@ import {
   ConnectedSocket,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { JwtService } from '@nestjs/jwt';
 import { Inject, Logger, forwardRef } from '@nestjs/common';
 import { NoticesService } from '../notices/notices.service';
 import { RalliesService } from '../rallies/rallies.service';
@@ -19,7 +18,7 @@ import { AllianceNoticesService } from '../alliance-notices/alliance-notices.ser
 import { ReadyNegotiationService } from './ready-negotiation.service';
 import { WsRateLimitService } from './ws-rate-limit.service';
 import { BusyLockService, LockHolder } from './busy-lock.service';
-import { UsersService } from '../users/users.service';
+import { SocketAuthService } from './socket-auth.service';
 import { SOCKET_CORS_OPTIONS } from './socket-cors.options';
 
 interface OnlineUser {
@@ -83,8 +82,7 @@ export class RealtimeGateway
   private readonly packetReceivedAt = new WeakMap<object, number>();
 
   constructor(
-    private jwtService: JwtService,
-    private usersService: UsersService,
+    private socketAuth: SocketAuthService,
     private readyNegotiation: ReadyNegotiationService,
     private rateLimit: WsRateLimitService,
     private busyLock: BusyLockService,
@@ -100,25 +98,16 @@ export class RealtimeGateway
     private allianceNoticesService: AllianceNoticesService,
   ) {}
 
-  // httpOnly 쿠키에서 access_token 파싱 후 JWT 검증
+  // 인증은 SocketAuthService가 소켓당 한 번만 수행한다 — 같은 소켓에 붙는 다른
+  // 게이트웨이들과 조회 결과를 나눠 쓴다. 실패는 예전처럼 null이다.
   private async getUserFromSocket(client: Socket): Promise<OnlineUser | null> {
-    try {
-      const cookieStr = client.handshake.headers.cookie || '';
-      const match = cookieStr.match(/(?:^|;\s*)access_token=([^;]+)/);
-      if (!match) return null;
-      const token = decodeURIComponent(match[1]);
-      const payload = this.jwtService.verify<{ sub?: number }>(token);
-      if (!Number.isInteger(payload.sub)) return null;
-      const currentUser = await this.usersService.findById(payload.sub!);
-      if (!currentUser) return null;
-      return {
-        nickname: currentUser.nickname,
-        alliance: currentUser.allianceName || '',
-        role: currentUser.role,
-      };
-    } catch {
-      return null;
-    }
+    const currentUser = await this.socketAuth.resolveUser(client);
+    if (!currentUser) return null;
+    return {
+      nickname: currentUser.nickname,
+      alliance: currentUser.allianceName || '',
+      role: currentUser.role,
+    };
   }
 
   /**
