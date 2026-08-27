@@ -1,11 +1,15 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { ValidationPipe } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import helmet from 'helmet';
 import * as express from 'express';
 import cookieParser from 'cookie-parser';
-import { resolveTrustProxyHops } from './common/trust-proxy';
+import {
+  createTrustProxyProbe,
+  resolveTrustProxyHops,
+  warnOnTrustProxyConfig,
+} from './common/trust-proxy';
 import {
   OPERATION_BOARD_ROUTE_PREFIX,
   createOperationBoardJsonParser,
@@ -21,7 +25,18 @@ async function bootstrap() {
   // 반대로 true 를 주면 클라이언트가 X-Forwarded-For 를 위조해 버킷을 무한히 만들어낼 수 있으므로
   // resolveTrustProxyHops 는 정수 홉 수만 돌려주고 true 를 절대 돌려주지 않는다.
   // 프록시 단 수가 1이 아닌 배포는 TRUST_PROXY_HOPS 에 실측한 단 수를 넣는다.
-  app.set('trust proxy', resolveTrustProxyHops(process.env));
+  const trustProxyLogger = new Logger('TrustProxy');
+  const trustProxyHops = resolveTrustProxyHops(process.env);
+  app.set('trust proxy', trustProxyHops);
+  // 값이 없거나 잘못돼 조용히 기본값으로 넘어간 상태를 부팅 로그에 드러낸다.
+  // 부팅을 거부하지는 않는다 — 거부하면 재시작 루프가 되어 서비스 전체가 멈추고,
+  // 배포 구성의 리버스 프록시는 1단이라 기본값이 그 구성에서는 맞다.
+  warnOnTrustProxyConfig(process.env, trustProxyLogger);
+  // 부팅 후 첫 몇 건의 실제 요청만 X-Forwarded-For 체인과 req.ip 를 서버 로그에 남긴다.
+  // 응답으로는 아무것도 내보내지 않고, 표본을 다 쓰면 영구히 멈춘다.
+  app.use(
+    createTrustProxyProbe({ hops: trustProxyHops, logger: trustProxyLogger }),
+  );
 
   app.use(helmet());
   app.use(cookieParser());
