@@ -1,0 +1,37 @@
+# 역할 — 이미지 빌드 컨텍스트에서 제외할 경로 목록.
+
+.git
+.gitignore
+.github
+.claude
+.bkit
+.worktrees
+
+# 호스트에서 설치·빌드된 산출물은 절대 넣지 않는다.
+# 이 프로젝트의 유일한 네이티브 모듈 bcrypt 는 설치 시점 플랫폼에 맞는 바이너리를 고른다.
+# 개발 호스트가 Windows 라 여기를 열어 두면 win32-x64 바이너리가 리눅스 이미지로 들어가
+# 런타임에 require 가 실패한다. 이미지 안에서 npm ci 를 새로 돌리는 것이 전제다.
+node_modules
+**/node_modules
+dist
+**/dist
+coverage
+**/coverage
+*.tsbuildinfo
+**/*.tsbuildinfo
+
+# 비밀값은 이미지에 굽지 않고 환경변수로만 주입한다.
+.env
+.env.*
+!.env.example
+
+# 볼륨으로 붙일 운영 데이터. 이미지에 굽으면 볼륨이 생성될 때 통째로 복사되어
+# 컨테이너를 새로 올릴 때마다 낡은 사본이 되살아난다.
+uploads
+server/tts-cache
+
+# 실행에 불필요한 것들
+docs
+server/test
+README.md
+CLAUDE.md
