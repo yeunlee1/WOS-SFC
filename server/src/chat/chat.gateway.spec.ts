@@ -4,6 +4,7 @@ import type { Server, Socket } from 'socket.io';
 import { WsRateLimitService } from '../realtime/ws-rate-limit.service';
 import { User } from '../users/users.entity';
 import { UsersService } from '../users/users.service';
+import { SocketAuthService } from '../realtime/socket-auth.service';
 import { ChatGateway } from './chat.gateway';
 import { ChatService } from './chat.service';
 
@@ -32,8 +33,10 @@ describe('ChatGateway 메시지 보안', () => {
       createdAt: new Date('2026-01-01T00:00:00Z'),
     });
     gateway = new ChatGateway(
-      jwtService as unknown as JwtService,
-      usersService as unknown as UsersService,
+      new SocketAuthService(
+        jwtService as unknown as JwtService,
+        usersService as unknown as UsersService,
+      ),
       chatService as unknown as ChatService,
       rateLimit as unknown as WsRateLimitService,
     );

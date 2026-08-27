@@ -8,9 +8,8 @@ import {
   ConnectedSocket,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { JwtService } from '@nestjs/jwt';
-import { UsersService } from '../users/users.service';
 import { ChatService } from './chat.service';
+import { SocketAuthService } from '../realtime/socket-auth.service';
 import { WsRateLimitService } from '../realtime/ws-rate-limit.service';
 import { User } from '../users/users.entity';
 import { SOCKET_CORS_OPTIONS } from '../realtime/socket-cors.options';
@@ -28,8 +27,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private connectedUsers = new Map<string, { nickname: string; language: string }>();
 
   constructor(
-    private readonly jwtService: JwtService,
-    private readonly usersService: UsersService,
+    private readonly socketAuth: SocketAuthService,
     private readonly chatService: ChatService,
     private readonly rateLimit: WsRateLimitService,
   ) {}
@@ -38,28 +36,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   // 인증 실패만 연결을 끊는다. 이 소켓은 RealtimeGateway(전투 카운트다운)와 같은
   // 기본 네임스페이스를 공유하므로 채팅 내부 오류로 끊으면 전투 기능까지 죽는다.
   async handleConnection(client: Socket) {
-    let user: User | null;
-    try {
-      // httpOnly 쿠키에서 access_token 파싱 (RealtimeGateway와 동일 방식)
-      const cookieStr = client.handshake.headers.cookie || '';
-      const match = cookieStr.match(/(?:^|;\s*)access_token=([^;]+)/);
-      if (!match) {
-        client.disconnect();
-        return;
-      }
-      const token = decodeURIComponent(match[1]);
-
-      // JWT 페이로드 검증
-      const payload = this.jwtService.verify<{ sub?: number }>(token);
-      if (!Number.isInteger(payload.sub)) {
-        client.disconnect();
-        return;
-      }
-      user = await this.usersService.findById(payload.sub!);
-    } catch {
-      client.disconnect();
-      return;
-    }
+    // 쿠키 파싱·서명 검증·사용자 조회는 SocketAuthService가 소켓당 한 번만 한다.
+    // 어느 단계에서 실패하든 null이 오므로, 예전처럼 인증 실패는 곧 disconnect다.
+    const user: User | null = await this.socketAuth.resolveUser(client);
 
     if (!client.connected) return;
     if (!user) {

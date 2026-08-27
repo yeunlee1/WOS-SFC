@@ -4,9 +4,9 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { JwtService } from '@nestjs/jwt';
 import { RallyGroup } from './rally-group.entity';
 import { LockHolder } from '../realtime/busy-lock.service';
+import { SocketAuthService } from '../realtime/socket-auth.service';
 import { SOCKET_CORS_OPTIONS } from '../realtime/socket-cors.options';
 
 /** rallyGroup:countdown:start 페이로드 — 재접속 스냅샷도 같은 형태를 그대로 쓴다. */
@@ -38,7 +38,7 @@ export class RallyGroupsGateway implements OnGatewayConnection {
    */
   private runningGroups = new Map<string, RallyGroup>();
 
-  constructor(private readonly jwtService: JwtService) {}
+  constructor(private readonly socketAuth: SocketAuthService) {}
 
   /**
    * 재접속 복구 — 진행 중인 집결 그룹 카운트다운을 접속한 소켓 하나에만 되돌려준다.
@@ -116,18 +116,12 @@ export class RallyGroupsGateway implements OnGatewayConnection {
     return live;
   }
 
-  /** httpOnly 쿠키의 access_token 서명만 확인 — DB 조회 없음. */
+  /**
+   * httpOnly 쿠키의 access_token 서명만 확인 — DB 조회 없음.
+   * SocketAuthService 가 소켓당 한 번만 검증하므로, 같은 소켓에 붙는 다른
+   * 게이트웨이가 이미 검증했으면 그 결과를 그대로 쓴다(동기, 추가 비용 없음).
+   */
   private hasValidToken(client: Socket): boolean {
-    try {
-      const cookieStr = client.handshake.headers.cookie || '';
-      const match = cookieStr.match(/(?:^|;\s*)access_token=([^;]+)/);
-      if (!match) return false;
-      const payload = this.jwtService.verify<{ sub?: number }>(
-        decodeURIComponent(match[1]),
-      );
-      return Number.isInteger(payload.sub);
-    } catch {
-      return false;
-    }
+    return this.socketAuth.verifyUserId(client) !== null;
   }
 }

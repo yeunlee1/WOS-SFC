@@ -1,6 +1,8 @@
 // 집결 그룹 게이트웨이의 재접속 스냅샷 계약을 검증한다.
 import { JwtService } from '@nestjs/jwt';
 import type { Server, Socket } from 'socket.io';
+import { SocketAuthService } from '../realtime/socket-auth.service';
+import { UsersService } from '../users/users.service';
 import { RallyGroupsGateway } from './rally-groups.gateway';
 import type { RallyGroup } from './rally-group.entity';
 
@@ -71,6 +73,7 @@ function makeGroup(id: string, state: 'idle' | 'running', displayOrder = 1) {
 
 describe('RallyGroupsGateway 재접속 스냅샷', () => {
   let jwtService: { verify: jest.Mock };
+  let findById: jest.Mock;
   let gateway: RallyGroupsGateway;
   let server: ServerMock;
 
@@ -84,7 +87,14 @@ describe('RallyGroupsGateway 재접속 스냅샷', () => {
         throw new Error('invalid token');
       }),
     };
-    gateway = new RallyGroupsGateway(jwtService as unknown as JwtService);
+    // 이 게이트웨이는 서명 검증만 쓴다 — 사용자 조회는 호출되지 않아야 한다.
+    findById = jest.fn();
+    gateway = new RallyGroupsGateway(
+      new SocketAuthService(
+        jwtService as unknown as JwtService,
+        { findById } as unknown as UsersService,
+      ),
+    );
     server = makeServer();
     gateway.server = server;
   });
@@ -270,6 +280,28 @@ describe('RallyGroupsGateway 재접속 스냅샷', () => {
     const badToken = makeSocket('badToken', 'forged');
     gateway.handleConnection(badToken);
     expect(badToken.emit).not.toHaveBeenCalled();
+
+    // 인증 실패 시에도 이 게이트웨이는 소켓을 끊지 않는다 — 끊는 책임은
+    // RealtimeGateway/ChatGateway/OperationBoardsGateway 쪽에 있다.
+    expect(noCookie.disconnect).not.toHaveBeenCalled();
+    expect(badToken.disconnect).not.toHaveBeenCalled();
+  });
+
+  it('접속 처리는 동기로 끝나고 사용자 조회를 하지 않는다', () => {
+    // 100명 동시 재접속 부하를 키우지 않기 위한 계약이다.
+    // 공유 인증 서비스를 쓰더라도 이 경로는 서명 검증(동기)까지만 해야 한다.
+    gateway.emitCountdownStart({
+      groupId: 'g1',
+      startedAtServerMs: Date.now() + LEAD_MS,
+      fireOffsets: [{ orderIndex: 1, offsetMs: 60_000, userId: 11 }],
+    });
+
+    const socket = makeSocket('live');
+    const returned = gateway.handleConnection(socket);
+
+    expect(returned).toBeUndefined();
+    expect(socket.emit).toHaveBeenCalledWith(START_EVENT, expect.anything());
+    expect(findById).not.toHaveBeenCalled();
   });
 
   // 소켓만 끊겼다 붙은 클라이언트는 스토어의 group.state가 'idle'로 남아 있어
