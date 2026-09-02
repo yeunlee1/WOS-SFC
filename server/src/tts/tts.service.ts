@@ -48,6 +48,9 @@ class Semaphore {
   }
 }
 
+/** API 키가 없어 mp3 를 만들 수 없을 때. 컨트롤러는 이것을 404 로 바꾼다. */
+export class TtsUnavailableError extends Error {}
+
 @Injectable()
 export class TtsService implements OnModuleInit {
   private readonly logger = new Logger(TtsService.name);
@@ -205,6 +208,12 @@ export class TtsService implements OnModuleInit {
       .then((st) => st.isFile() && st.size >= MIN_MP3_BYTES)
       .catch(() => false);
     if (healthy) return;
+    // 키가 없으면 생성 경로에 들어가지 않는다 — 들어가면 재시도 3회·1.5초 지연 뒤 500 이 반복된다.
+    if (!this.apiKey) {
+      throw new TtsUnavailableError(
+        `[${lang}/${key}] 캐시에 없고 GOOGLE_TTS_API_KEY 가 없어 생성할 수 없다`,
+      );
+    }
     // 손상 파일이 있으면 삭제 (재생성 경로로 진입) — race-safe: ENOENT 무시
     await fsPromises.unlink(fp).catch(() => {});
 
@@ -368,7 +377,8 @@ export class TtsService implements OnModuleInit {
       `TTS 사전 생성 미완료 — 생성 실패 ${failures.length}건, ` +
       `캐시 누락 ${status.missing.length}/${status.total}개. ` +
       `누락 예: ${status.missing.slice(0, 10).join(', ')}. ` +
-      `분당 할당량 초과가 반복되면 배포 전에 npm run tts:generate 로 사전 생성하라.`,
+      `분당 할당량 초과가 반복되면 개발 PC 에서 npm run tts:generate 로 만든 server/tts-cache 를 볼륨에 옮기거나, ` +
+      `컨테이너에서 npm run tts:generate:prod 를 실행하라.`,
     );
   }
 }

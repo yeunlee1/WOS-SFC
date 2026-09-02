@@ -5,7 +5,7 @@ import { once } from 'events';
 import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { dirname, join, relative } from 'path';
-import { TtsService } from './tts.service';
+import { TtsService, TtsUnavailableError } from './tts.service';
 import {
   buildCacheMeta,
   buildCacheMetaFrom,
@@ -207,5 +207,20 @@ describe('TtsService 캐시 무효화와 준비 판정', () => {
     expect(status.ready).toBe(true);
     expect(status.missing).toEqual([]);
     expect(status.total).toBe(allNames.length);
+  });
+});
+
+describe('TtsService API 키 없음', () => {
+  it('키가 없고 캐시가 비면 재시도 없이 즉시 TtsUnavailableError 를 던진다', async () => {
+    const cacheDir = mkdtempSync(join(tmpdir(), 'wos-tts-nokey-'));
+    const service = new TtsService({
+      get: (key: string) => (key === 'TTS_CACHE_DIR' ? cacheDir : ''),
+    } as unknown as ConfigService);
+    const started = Date.now();
+    await expect(service.ensureFile('ko', '1', '1')).rejects.toBeInstanceOf(
+      TtsUnavailableError,
+    );
+    expect(Date.now() - started).toBeLessThan(300);
+    rmSync(cacheDir, { recursive: true, force: true });
   });
 });
