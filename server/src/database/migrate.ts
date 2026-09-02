@@ -181,6 +181,9 @@ async function applyMigration(
     try {
       await connection.query(statements[index]);
     } catch (error) {
+      // 002 처럼 START TRANSACTION 을 쓰는 파일이 중간에 실패하면 열린 트랜잭션을 되돌린다.
+      // 트랜잭션이 없으면 무해하다. DDL 은 암묵적 커밋이라 이것으로 되돌아가지 않는다.
+      await connection.query('ROLLBACK').catch(() => {});
       const message = (error as Error).message;
       throw new Error(
         `${migration.filename} 의 ${index + 1}번째 문장에서 실패했다: ${message}\n--- 실패한 문장 ---\n${statements[index]}`,
@@ -237,10 +240,15 @@ async function main(): Promise<void> {
       `[migrate] 완료 — 적용 ${appliedCount}개, 건너뜀 ${skippedCount}개, 전체 ${migrations.length}개`,
     );
   } finally {
+    // 잠금 해제나 연결 종료가 실패해도 원래 오류를 덮지 않는다.
     if (lockName) {
-      await connection.query('SELECT RELEASE_LOCK(?)', [lockName]);
+      try {
+        await connection.query('SELECT RELEASE_LOCK(?)', [lockName]);
+      } catch (releaseError) {
+        console.warn(`[migrate] 잠금 해제 실패(무시): ${(releaseError as Error).message}`);
+      }
     }
-    await connection.end();
+    await connection.end().catch(() => {});
   }
 }
 
