@@ -1073,6 +1073,40 @@ select.input {
   opacity: 0.45;
   cursor: not-allowed;
 }
+.rally-group-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.rally-group-card__name {
+  font-family: var(--font-serif);
+  font-weight: 700;
+}
+.rally-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  margin-left: 8px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1.5px solid rgba(63, 58, 74, 0.35);
+  background: rgba(255, 255, 255, 0.7);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.rally-badge--running,
+.rally-badge--countdown {
+  background: var(--peach);
+}
+.rally-badge--done {
+  background: var(--mint);
+}
+input[type='range'],
+input[type='checkbox'],
+input[type='radio'] {
+  accent-color: var(--coral);
+}
 .rally-group-countdown {
   display: flex;
   flex-direction: column;
@@ -1774,9 +1808,7 @@ select.input {
   .cd-mega {
     font-size: clamp(72px, 22vw, 120px);
   }
-  .battle-viz-mobile {
-    display: block;
-  }
+  /* 타임라인은 story-viz-row 카드가 모든 폭에서 보여주므로 카운트다운 안의 모바일 사본은 항상 숨긴다 */
 }
 
 .story-mobile-brand {
