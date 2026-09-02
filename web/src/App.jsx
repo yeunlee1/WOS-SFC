@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+// 기존 앱의 스타일은 여기서만 로드한다 — main.jsx 가 /story 에서는 이 파일을 아예 가져오지 않는다.
+import '../style.css';
 import { useStore } from './store';
 import { useSocket } from './hooks/useSocket';
 import { useReadyProbe } from './hooks/useReadyProbe';
