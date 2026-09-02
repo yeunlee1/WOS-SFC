@@ -155,21 +155,23 @@ cp .env.example .env
 
 `DATABASE_ROOT_PASSWORD`, `DATABASE_USER`, `DATABASE_PASSWORD`, `DATABASE_NAME`, `JWT_SECRET`, `SERVER_CODE`, `WEB_ORIGIN`
 
+값에는 `$` `#` 따옴표 공백을 넣지 마십시오(compose 치환에서 깨집니다). `JWT_SECRET` 은 32자 이상이어야 하며(`openssl rand -hex 32`), 짧거나 `SERVER_CODE` 가 비어 있으면 앱이 부팅을 거부합니다.
+
 `GOOGLE_TTS_API_KEY`(TTS 생성)와 `ANTHROPIC_API_KEY`(번역)는 해당 기능을 쓸 때만 채웁니다.
 
-> `WEB_ORIGIN` 은 **브라우저가 실제로 여는 주소와 정확히 같아야 합니다**(스킴·호스트·포트 모두). 이 값은 HTTP CORS 뿐 아니라 WebSocket 핸드셰이크 검사에도 그대로 쓰이므로, 어긋나면 화면은 떠도 실시간 카운트다운이 붙지 않습니다. `NODE_ENV=production` 에서 값이 비면 앱이 부팅 자체를 거부합니다.
+> `WEB_ORIGIN` 은 **브라우저가 실제로 여는 주소와 정확히 같아야 합니다**(스킴·호스트·포트 모두). 이 값은 HTTP CORS 뿐 아니라 WebSocket 핸드셰이크 검사에도 그대로 쓰이므로, 어긋나면 화면은 떠도 실시간 카운트다운이 붙지 않습니다. `NODE_ENV=production` 에서 값이 비면 앱이 부팅 자체를 거부합니다. 서버가 부팅 시 끝 슬래시와 경로를 잘라내고, 값에 `localhost` 가 남아 있으면 `.env.example` 자리표시자가 그대로 들어온 것으로 보고 경고를 남깁니다 — `docker compose logs app | grep WEB_ORIGIN` 으로 확인하십시오.
 
 ### 2-A. 도메인이 없는 경우
 
-> **먼저 알아야 할 것 — 평문 HTTP 에서는 로그인이 되지 않습니다.**
-> `server/src/auth/auth.controller.ts` 의 `cookieOptions` 가 `NODE_ENV=production` 에서 인증 쿠키에 `secure` 를 붙입니다. 컨테이너는 `production` 으로 강제 실행되므로, `http://<서버 IP>` 로 접속하면 브라우저가 그 쿠키를 저장하지 않고 버립니다. 화면은 뜨지만 로그인이 통과되지 않습니다.
+> **평문 HTTP 로는 쓸 수 없습니다 — 로그인은 물론 화면도 뜨지 않습니다.**
+> `server/src/auth/auth.controller.ts` 의 `cookieOptions` 가 `NODE_ENV=production` 에서 인증 쿠키에 `secure` 를 붙이므로 `http://<서버 IP>` 에서는 브라우저가 쿠키를 버립니다. 그 위에 `server/src/main.ts` 의 `helmet()` 기본 CSP 가 `upgrade-insecure-requests` 를 내보내, 브라우저가 스크립트·API 요청을 https 로 승격하고 443 이 닫혀 있으면 빈 화면만 남습니다.
 > (`http://localhost` 는 브라우저가 보안 컨텍스트로 취급해 예외지만, 원격 IP 는 해당하지 않습니다.)
 
-그래서 도메인이 없어도 **HTTPS 를 켜는 쪽**을 권장합니다. 두 가지 방법이 있습니다.
+그래서 도메인이 없어도 **HTTPS 를 켭니다.** 두 가지 방법이 있습니다.
 
 **방법 1 (권장) — IP 기반 무료 도메인으로 진짜 인증서 받기**
 
-`nip.io` 나 `sslip.io` 는 IP 를 그대로 이름으로 되돌려주는 공개 DNS 입니다. 도메인을 사지 않고도 Let's Encrypt 인증서를 받을 수 있습니다. 설정 방법은 2-B 와 완전히 같고 값만 다릅니다.
+`sslip.io` 와 `nip.io` 는 IP 를 그대로 이름으로 되돌려주는 공개 DNS 입니다. 도메인을 사지 않고도 Let's Encrypt 인증서를 받을 수 있습니다. 설정 방법은 2-B 와 완전히 같고 값만 다릅니다.
 
 ```
 # 서버 IP 가 203.0.113.10 이라면
@@ -177,18 +179,16 @@ SITE_ADDRESS=203.0.113.10.sslip.io
 WEB_ORIGIN=https://203.0.113.10.sslip.io
 ```
 
+- `SITE_ADDRESS` 에 **IP 를 직접 넣지 마십시오.** Caddy 가 공개 인증서 대신 자체서명 인증서를 만들어 브라우저 경고가 뜹니다.
+- Let's Encrypt 발급 한도는 `sslip.io` 도메인 전체가 공유합니다. `docker compose logs proxy` 에 `too many certificates already issued` 가 보이면 `nip.io` 로 바꿔 다시 띄우십시오(`SITE_ADDRESS=203.0.113.10.nip.io`, `WEB_ORIGIN` 도 함께). 연 1만 원대 도메인을 하나 사면 이 문제 자체가 사라집니다.
+
 **방법 2 — Caddy 자체 서명 인증서**
 
 인터넷에서 80·443 이 열리지 않는 폐쇄망이라면 `deploy/Caddyfile` 의 사이트 블록 안에 `tls internal` 한 줄을 넣습니다. 브라우저에 경고가 뜨고 사용자가 매번 예외를 승인해야 하지만, 연결 자체는 HTTPS 라 로그인은 동작합니다.
 
-**평문 HTTP 로 띄우기 (구성 확인용)**
+**기동 확인만 할 때**
 
-`SITE_ADDRESS` 를 비우면 Caddy 가 `:80` 으로 떠서 IP 접속을 받습니다. 컨테이너 기동과 화면 렌더링을 확인하는 용도로만 쓰고, 실제 운영에는 쓰지 마십시오.
-
-```bash
-# .env 에  WEB_ORIGIN=http://203.0.113.10
-docker compose up -d --build
-```
+`SITE_ADDRESS` 를 비우면 Caddy 가 `:80` 으로 뜹니다. 브라우저에서는 위 이유로 동작하지 않으므로 `docker compose ps` 의 `healthy` 와 `curl http://<서버 IP>/time` 으로만 확인하고, 확인이 끝나면 방법 1 로 바꾸십시오.
 
 ### 2-B. 도메인이 있는 경우 (자동 HTTPS)
 
@@ -212,7 +212,32 @@ docker compose ps
 docker compose logs -f app
 ```
 
-`app` 이 `healthy` 가 되면 정상입니다. 헬스체크는 `/time` 응답만 봅니다 — HTTP 서버가 살아 있다는 뜻이지 DB 연결까지 보증하지는 않습니다. DB 문제는 `docker compose logs app` 에서 확인하십시오.
+`app` 이 `healthy` 가 되면 정상입니다. 헬스체크는 `/time` 응답만 봅니다 — HTTP 서버가 살아 있다는 뜻이지 DB 연결까지 보증하지는 않습니다. DB 문제는 `docker compose logs app` 에서 확인하십시오. 마이그레이션이 적용됐는지는 `docker compose logs app | grep "\[migrate\]"` 로 봅니다(첫 배포면 `000`~`004` 다섯 파일이 `적용` 으로 찍힙니다).
+
+### 첫 배포 체크리스트
+
+1. **서버 시계** — `timedatectl status` 에서 `System clock synchronized: yes` 를 확인합니다. 헤더의 게임 UTC 시각은 이 시계를 그대로 보여줍니다.
+2. **최소 사양** — RAM 2GB 이상. 1GB 라면 빌드 전에 스왑을 만듭니다.
+   ```bash
+   sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
+   ```
+3. **TTS 캐시 옮기기** — 개발 PC 의 `server/tts-cache`(mp3 796개 + `cache.meta.json`)를 통째로 옮깁니다. **`cache.meta.json` 을 빠뜨리면 첫 부팅에서 mp3 가 전부 삭제되고**, `GOOGLE_TTS_API_KEY` 가 있으면 재생성에 27분, 없으면 음성이 영영 나오지 않습니다.
+   ```bash
+   # 개발 PC 에서
+   tar czf tts-cache.tgz -C server tts-cache
+   scp tts-cache.tgz user@서버:/tmp/
+   # 서버에서 — 컨테이너를 올리기 전에. 소유권은 이미지의 node 사용자(uid 1000)로 맞춥니다.
+   docker volume create wos-sfc-helper_tts-cache
+   docker run --rm -v wos-sfc-helper_tts-cache:/data -v /tmp:/src alpine sh -c 'tar xzf /src/tts-cache.tgz -C /data --strip-components=1 && chown -R 1000:1000 /data'
+   ```
+   옮길 캐시가 없으면 `GOOGLE_TTS_API_KEY` 를 채우고 첫 기동 뒤 `docker compose logs app | grep TTS` 로 사전 생성 완료를 기다립니다.
+4. **첫 관리자 만들기** — 화면에서 가입한 뒤 DB 에서 역할을 올립니다. `developer` 역할은 API 로 부여할 수 없습니다.
+   ```bash
+   docker compose exec db mysql -u root -p"$DATABASE_ROOT_PASSWORD" "$DATABASE_NAME" -e "UPDATE users SET role='developer' WHERE nickname='<닉네임>'"
+   ```
+   브라우저를 새로고침하면 소켓이 재접속하며 새 역할이 반영됩니다.
+5. **프록시 단 수 확인** — 아래 "프록시 단 수 확인" 절대로 `[trust proxy 진단]` 로그를 봅니다.
+6. **백업 리허설** — 아래 "볼륨과 백업" 의 덤프와 복원을 한 번 실행해 절차가 동작하는지 확인합니다.
 
 ### 프록시 단 수 확인 — `TRUST_PROXY_HOPS`
 
@@ -247,6 +272,37 @@ Caddy 는 신뢰하지 않는 상대가 보낸 `X-Forwarded-For` 를 **기본적
 
 `deploy/Caddyfile` 상단의 `trusted_proxies` 블록 주석을 풀고 CDN 의 실제 IP 대역을 넣은 뒤, `TRUST_PROXY_HOPS=2` 로 올리십시오.
 
+### 운영 런북
+
+**작전 중 배포 금지.** 재배포하면 진행 중인 카운트다운·집결·라이브 작전판이 전부 끊깁니다. 배포 전에 `docker compose logs app | grep negotiateStartedAt` 로 최근 카운트다운이 없음을 확인하십시오.
+
+**갱신 배포는 2단계로.** 빌드가 실패해도 기존 컨테이너는 살아 있습니다.
+
+```bash
+git pull
+docker compose build --pull app
+docker compose up -d
+docker compose ps                     # app 이 healthy 인지
+docker compose logs app | tail -50    # 마이그레이션·부팅 경고
+```
+
+롤백은 `git checkout <이전 태그>` 뒤 같은 두 명령입니다. 마이그레이션은 되돌리지 않으므로, 스키마를 바꾼 배포는 롤백 전에 DB 백업이 있는지 확인하십시오.
+
+**마이그레이션 파일은 수정하지 않습니다.** 적용된 `server/migrations/*.sql` 을 한 글자라도 고치면(주석 포함) 체크섬 불일치로 다음 기동이 거부됩니다. 변경은 항상 새 번호 파일로 추가합니다.
+
+**비밀번호 초기화.** 가입에 이메일이 없어 사용자가 스스로 복구할 수 없습니다. 운영자가 해시를 만들어 넣습니다.
+
+```bash
+docker compose exec app node -e "require('bcrypt').hash(process.argv[1],12).then(console.log)" '새비밀번호'
+docker compose exec db mysql -u root -p"$DATABASE_ROOT_PASSWORD" "$DATABASE_NAME" -e "UPDATE users SET password_hash='<위 해시>' WHERE nickname='<닉네임>'"
+```
+
+**문구·음성 변경 배포.** `GOOGLE_TTS_API_KEY` 가 있어야 바뀐 mp3 가 재생성됩니다. 브라우저 캐시 때문에 최대 1시간 옛 음성이 섞입니다. 컨테이너에서 미리 만들려면 `docker compose exec app npm run tts:generate:prod` 를 실행합니다.
+
+**한 계정은 기기 10개까지.** refresh 토큰이 기기별로 저장되며 11번째 로그인부터 가장 오래된 기기가 로그아웃됩니다. 로그아웃은 그 기기의 세션만 지웁니다.
+
+**로그.** 컨테이너 로그는 20MB × 5개로 회전합니다. `docker compose logs --since 1h app` 처럼 기간을 잘라 보십시오. Caddy 접근 로그는 `docker compose logs proxy` 에 JSON 으로 남습니다.
+
 ### 볼륨과 백업
 
 **볼륨을 붙이지 않고 배포하면 컨테이너를 다시 만들 때 아래가 전부 사라집니다.**
@@ -274,21 +330,27 @@ docker run --rm -v wos-sfc-helper_tts-cache:/data -v "$PWD":/backup alpine tar c
 복구는 반대로 합니다.
 
 ```bash
+# DB
+docker compose exec -T db sh -c 'mysql -u root -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' < backup-db.sql
+# 볼륨
 docker run --rm -v wos-sfc-helper_tts-cache:/data -v "$PWD":/backup alpine tar xzf /backup/backup-tts-cache.tar.gz -C /data
 ```
 
-### 갱신 배포
+**매일 자동 덤프 (crontab -e).** 04:00 에 DB 를 덤프하고 7일치만 남깁니다. 저장소 경로는 실제 위치로 바꾸십시오.
 
-```bash
-git pull
-docker compose up -d --build
+```
+0 4 * * * cd /opt/wos-sfc-helper && docker compose exec -T db sh -c 'mysqldump -u root -p"$MYSQL_ROOT_PASSWORD" --single-transaction "$MYSQL_DATABASE"' | gzip > /var/backups/wos-db-$(date +\%F).sql.gz && find /var/backups -name 'wos-db-*.sql.gz' -mtime +7 -delete
 ```
 
-`app` 컨테이너만 새로 만들어지고 볼륨 3종은 그대로 유지됩니다. TTS 캐시가 살아 있으므로 재생성 대기 없이 바로 음성이 나옵니다.
+**VPS 밖으로 복사하지 않으면 디스크 장애 한 번에 전부 잃습니다.** `scp` 나 `rclone` 으로 덤프를 매일 외부(다른 PC, 오브젝트 스토리지)에 복사하십시오. 첫 배포 직후 빈 DB 에 한 번 복원해 절차가 실제로 동작하는지 확인하십시오.
+
+### 갱신 배포
+
+위 "운영 런북" 의 2단계 절차(`build --pull app` → `up -d`)를 따릅니다. `app` 컨테이너만 새로 만들어지고 볼륨은 그대로 유지되므로 TTS 캐시가 살아 있어 재생성 대기 없이 바로 음성이 나옵니다. 작전 중에는 배포하지 마십시오.
 
 ### 포트를 바꿔 띄우기
 
-호스트의 80·443 이 이미 사용 중이면 `.env` 에서 바꿉니다. 단 자동 HTTPS 는 80·443 이 있어야 동작하므로, 포트를 바꾼 상태에서는 평문 HTTP 로만 쓰십시오.
+호스트의 80·443 이 이미 사용 중이면 `.env` 에서 바꿉니다. 단 자동 HTTPS 는 80·443 이 있어야 동작하므로, 포트를 바꾼 상태에서는 Let's Encrypt 발급이 되지 않습니다. 이 구성은 로컬 검증용(`SITE_ADDRESS=localhost` 로 Caddy 자체서명)이나 폐쇄망(방법 2)에서만 쓰십시오. 평문 HTTP 로는 브라우저에서 동작하지 않습니다.
 
 ```
 HTTP_PORT=18080
