@@ -30,6 +30,13 @@
   --rail-w: 84px;
   --panel-w: 260px;
   --topbar-h: 66px;
+  /* 재사용 컴포넌트가 인라인 style 로 참조하는 옛 테마 변수 — 잉크 계열로 대응 */
+  --text-1: var(--ink);
+  --text-2: var(--ink-soft);
+  --text-3: var(--ink-mute);
+  --text-secondary: var(--ink-soft);
+  --accent: var(--coral);
+  --border: var(--line-soft);
 }
 
 *,
@@ -1120,6 +1127,10 @@ select.input {
   border-radius: 0 22px 22px 22px;
   background: rgba(255, 253, 248, 0.7);
 }
+.story-community-frame .section-title {
+  /* 재사용 컴포넌트가 연맹 색을 인라인 style 로 박아 넣어 옛 테마의 원색이 새어 나온다 — 잉크색으로 고정 */
+  color: var(--ink) !important;
+}
 .story-community-cols {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
@@ -1718,6 +1729,15 @@ select.input {
   }
   .story-tabs {
     padding-left: 10px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .story-tabs::-webkit-scrollbar {
+    display: none;
+  }
+  .story-tab {
+    flex: 0 0 auto;
   }
   .story-community-frame {
     padding: 16px 14px;
