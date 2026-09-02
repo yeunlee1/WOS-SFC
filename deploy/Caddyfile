@@ -46,6 +46,13 @@
 # ---------------------------------------------------------------------------
 
 {$SITE_ADDRESS::80} {
+	# 접근 로그를 stdout 으로 남긴다. docker compose logs proxy 로 본다.
+	# 사고 조사 때 어떤 IP 가 언제 무엇을 요청했는지가 여기 남는다.
+	log {
+		output stdout
+		format json
+	}
+
 	# Caddy 의 encode 기본 match 목록은 text/*, application/json, javascript, 폰트,
 	# image/svg 같은 압축 이득이 있는 타입만 고른다. audio/mpeg 는 목록에 없으므로
 	# TTS mp3 는 재압축되지 않는다 — 카운트다운 음성 전송에 CPU 를 낭비하지 않는다.

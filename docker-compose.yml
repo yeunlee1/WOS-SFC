@@ -8,6 +8,14 @@ services:
   db:
     image: mysql:8.4
     restart: unless-stopped
+    # 컨테이너 로그 회전. 없으면 json-file 로그가 무한히 쌓여 디스크를 채운다.
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+    # OOM 이 나면 mysqld 가 아니라 이 상한을 넘은 컨테이너만 죽는다. 첫 배포 뒤 docker stats 로 조정.
+    mem_limit: 1g
     # 한글 닉네임·채팅·공지가 들어가므로 utf8mb4 를 서버 기본값으로 고정한다.
     command:
       - --character-set-server=utf8mb4
@@ -39,6 +47,12 @@ services:
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+    mem_limit: 768m
     depends_on:
       db:
         # DB 헬스체크가 통과한 뒤에만 앱 컨테이너가 시작된다.
@@ -71,6 +85,8 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       CHAT_RETENTION_DAYS: ${CHAT_RETENTION_DAYS:-}
       MIGRATE_CMD: ${MIGRATE_CMD:-npm run migrate}
+      # deploy/wait-for-db.js 가 읽는다. compose 는 .env 를 치환에만 쓰므로 여기서 넘겨야 컨테이너에 들어간다.
+      DB_WAIT_TIMEOUT_SEC: ${DB_WAIT_TIMEOUT_SEC:-120}
     volumes:
       # [영속 2/3] 업로드 이미지. server/src/storage-paths.ts 의 UPLOAD_ROOT.
       - uploads:/app/uploads
@@ -85,6 +101,12 @@ services:
   proxy:
     image: caddy:2-alpine
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+    mem_limit: 256m
     depends_on:
       app:
         # Dockerfile 의 HEALTHCHECK(/time)가 통과한 뒤 트래픽을 받는다.
