@@ -923,6 +923,8 @@ describe('RealtimeGateway — BusyLock 통합 단위 테스트', () => {
     const expected = sample.toLocaleString('ko-KR', {
       dateStyle: 'short',
       timeStyle: 'short',
+      // 게이트웨이 포매터가 KST 로 고정돼 있으므로 기대값도 같은 시간대로 만든다(CI 러너는 UTC).
+      timeZone: 'Asia/Seoul',
     });
 
     function withoutToLocaleString<T>(fn: () => T): {

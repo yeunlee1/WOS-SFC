@@ -39,6 +39,16 @@ describe('online:updated 코얼레싱', () => {
 
 describe('formatCreatedAt', () => {
   it('컨테이너 시간대와 무관하게 KST 로 표시한다', () => {
-    expect(formatCreatedAt(new Date('2026-09-02T00:30:00Z'))).toMatch(/오전 9:30/);
+    const at = new Date('2026-09-02T00:30:00Z');
+    const text = formatCreatedAt(at);
+    // 오전/오후 표기는 ICU 데이터에 따라 AM/PM 으로 나올 수 있어 시각만 본다(UTC 00:30 → KST 09:30).
+    expect(text).toMatch(/9:30/);
+    expect(text).toBe(
+      new Intl.DateTimeFormat('ko-KR', {
+        dateStyle: 'short',
+        timeStyle: 'short',
+        timeZone: 'Asia/Seoul',
+      }).format(at),
+    );
   });
 });
