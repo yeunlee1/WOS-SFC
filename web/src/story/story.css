@@ -700,6 +700,11 @@ select.input {
   padding: 26px 28px 40px;
   min-width: 0;
 }
+/* 아주 넓은 화면에서는 본문을 가운데 모아 한쪽만 비지 않게 한다 */
+.story-frame > * {
+  max-width: 1400px;
+  margin-inline: auto;
+}
 .story-frame--chat {
   display: flex;
   flex-direction: column;
