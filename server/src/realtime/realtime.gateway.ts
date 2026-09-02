@@ -45,10 +45,20 @@ const SNAPSHOT_ALLIANCES = ['KOR', 'NSL', 'JKY', 'GPX', 'UFO'] as const;
 const KO_DATETIME_FORMAT = new Intl.DateTimeFormat('ko-KR', {
   dateStyle: 'short',
   timeStyle: 'short',
+  // 컨테이너는 UTC 라 고정하지 않으면 공지·게시글 시각이 9시간 이르게 보인다.
+  // DB 비교는 UTC 그대로 두고 표시만 KST 로 고정한다(앱 컨테이너에 TZ 를 넣지 말 것).
+  timeZone: 'Asia/Seoul',
 });
 
+/**
+ * online:updated 를 묶는 시간 창(ms). operation-boards.gateway.ts 의 PRESENCE_COALESCE_MS 와 같은 근거 —
+ * 재배포 뒤 100명이 재접속하면 k번째 접속이 k명에게 k명분 목록을 보내 총량이 제곱으로 는다.
+ * 접속자 목록은 늦어도 되는 정보라 120ms 지연은 화면에서 구분되지 않는다.
+ */
+export const ONLINE_COALESCE_MS = 120;
+
 /** createdAt 표시 문자열. Date면 캐시된 포매터, 그 밖에는 그대로 문자열화. */
-function formatCreatedAt(value: unknown): string {
+export function formatCreatedAt(value: unknown): string {
   return value instanceof Date
     ? KO_DATETIME_FORMAT.format(value)
     : String(value);
@@ -429,9 +439,15 @@ export class RealtimeGateway
     this.broadcastOnline();
   }
 
+  private onlineBroadcastTimer: NodeJS.Timeout | null = null;
+
+  /** 접속 목록 방출. 창 안의 연속 호출은 마지막 상태 하나로 합쳐진다. */
   broadcastOnline() {
-    const users = Array.from(this.onlineMap.values());
-    this.server.emit('online:updated', users);
+    if (this.onlineBroadcastTimer) return;
+    this.onlineBroadcastTimer = setTimeout(() => {
+      this.onlineBroadcastTimer = null;
+      this.server.emit('online:updated', Array.from(this.onlineMap.values()));
+    }, ONLINE_COALESCE_MS);
   }
 
   async broadcastNotices() {
