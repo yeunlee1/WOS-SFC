@@ -4,9 +4,8 @@ import { APP_GUARD } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
-import { ServeStaticModule } from '@nestjs/serve-static';
 import { JwtService } from '@nestjs/jwt';
-import { join } from 'path';
+import { staticServingModules } from './static-serving';
 import { AppController } from './app.controller';
 import { User } from './users/users.entity';
 import { Message } from './chat/message.entity';
@@ -35,7 +34,6 @@ import { AllianceNoticesModule } from './alliance-notices/alliance-notices.modul
 import { MeModule } from './me/me.module';
 import { RallyGroupsModule } from './rally-groups/rally-groups.module';
 import { OperationBoardsModule } from './operation-boards/operation-boards.module';
-import { UPLOAD_ROOT } from './storage-paths';
 import { createRateLimitTracker } from './common/rate-limit-tracker';
 
 // 전역 요청 한도에서 제외할 경로 접두사.
@@ -178,34 +176,8 @@ export class GlobalThrottlerGuard extends ThrottlerGuard {
         };
       },
     }),
-    ServeStaticModule.forRoot({
-      rootPath: join(__dirname, '..', '..', 'web', 'dist'),
-      exclude: [
-        '/auth/*path',
-        '/notices/*path',
-        '/rallies/*path',
-        '/members/*path',
-        '/boards/*path',
-        '/translations/*path',
-        '/users/*path',
-        '/translate/*path',
-        '/tts-audio/*path',
-        '/admin/*path',
-        '/alliance-notices/*path',
-        '/me/*path',
-        '/rally-groups/*path',
-        '/operation-boards/*path',
-        '/time',
-        '/socket.io/*path',
-        '/uploads/*path',
-      ],
-      serveStaticOptions: { fallthrough: false },
-    }),
-    ServeStaticModule.forRoot({
-      rootPath: UPLOAD_ROOT,
-      serveRoot: '/uploads',
-      serveStaticOptions: { index: false },
-    }),
+    // 업로드 서빙이 web/dist 보다 먼저여야 한다 — 순서 근거는 static-serving.ts 참고.
+    ...staticServingModules(),
     UsersModule,
     AuthModule,
     ChatModule,
