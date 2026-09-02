@@ -56,7 +56,7 @@ export class AdminService {
     if (!result.affected) {
       throw new NotFoundException('유저를 찾을 수 없습니다');
     }
-    // getUsers/setLeader와 동일한 화이트리스트로 응답 — passwordHash/birthDate/name/refreshTokenHash 모두 제외
+    // getUsers/setLeader와 동일한 화이트리스트로 응답 — passwordHash/birthDate/name 모두 제외
     const user = await this.usersRepo.findOne({
       where: { id },
       select: [
@@ -99,7 +99,7 @@ export class AdminService {
     if (!result.affected) {
       throw new NotFoundException('유저를 찾을 수 없습니다');
     }
-    // getUsers와 동일한 화이트리스트로 응답 — passwordHash/birthDate/name/refreshTokenHash 모두 제외
+    // getUsers와 동일한 화이트리스트로 응답 — passwordHash/birthDate/name 모두 제외
     const user = await this.usersRepo.findOne({
       where: { id },
       select: [

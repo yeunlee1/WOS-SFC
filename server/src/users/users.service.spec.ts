@@ -71,7 +71,6 @@ describe('UsersService', () => {
 
       await expect(service.findByNickname(nickname)).resolves.toBeNull();
       await expect(service.findById(7)).resolves.toBeNull();
-      await expect(service.findByIdWithRefreshToken(7)).resolves.toBeNull();
     },
   );
 

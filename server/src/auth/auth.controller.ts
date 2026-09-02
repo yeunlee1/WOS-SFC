@@ -103,14 +103,17 @@ export class AuthController {
   @UseGuards(AuthGuard('jwt'))
   @Post('logout')
   async logout(@Req() req: any, @Res({ passthrough: true }) res: any) {
-    await this.authService.logout(req.user.id);
+    await this.authService.logout(req.user.id, req.cookies?.refresh_token);
     res.clearCookie('access_token', { path: '/' });
+    res.clearCookie('refresh_token', { path: '/auth' });
+    // 경로를 /auth 로 넓히기 전에 발급된 쿠키도 지운다.
     res.clearCookie('refresh_token', { path: '/auth/refresh' });
     return { ok: true };
   }
 
   private setCookies(res: any, accessToken: string, refreshToken: string) {
     res.cookie('access_token', accessToken, cookieOptions(60 * 60 * 1000));
-    res.cookie('refresh_token', refreshToken, cookieOptions(7 * 24 * 60 * 60 * 1000, '/auth/refresh'));
+    // /auth 전체에 보낸다 — /auth/refresh 의 회전과 /auth/logout 의 세션 폐기가 같은 쿠키를 본다.
+    res.cookie('refresh_token', refreshToken, cookieOptions(7 * 24 * 60 * 60 * 1000, '/auth'));
   }
 }

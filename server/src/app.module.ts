@@ -8,6 +8,7 @@ import { JwtService } from '@nestjs/jwt';
 import { staticServingModules } from './static-serving';
 import { AppController } from './app.controller';
 import { User } from './users/users.entity';
+import { RefreshToken } from './auth/refresh-token.entity';
 import { Message } from './chat/message.entity';
 import { Notice } from './notices/notice.entity';
 import { Rally } from './rallies/rally.entity';
@@ -153,6 +154,7 @@ export class GlobalThrottlerGuard extends ThrottlerGuard {
           database: configService.get<string>('DATABASE_NAME'),
           entities: [
             User,
+            RefreshToken,
             Message,
             Notice,
             Rally,

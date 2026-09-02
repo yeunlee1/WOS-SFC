@@ -57,18 +57,6 @@ export class UsersService {
     return this.usersRepo.save(user);
   }
 
-  async updateRefreshTokenHash(userId: number, hash: string | null): Promise<void> {
-    await this.usersRepo.update(userId, { refreshTokenHash: hash });
-  }
-
-  async findByIdWithRefreshToken(id: number): Promise<User | null> {
-    const user = await this.usersRepo.findOne({
-      where: { id },
-      select: ['id', 'nickname', 'role', 'allianceName', 'language', 'refreshTokenHash'],
-    });
-    return isQuarantinedLegacyAccount(user?.nickname) ? null : user;
-  }
-
   async updateMarchSeconds(userId: number, marchSeconds: number | null): Promise<void> {
     await this.usersRepo.update(userId, { marchSeconds });
   }
