@@ -37,17 +37,19 @@ describe('clockSync lifecycle', () => {
     const second = startup();
     expect(first).toBe(second);
 
-    await vi.advanceTimersByTimeAsync(250);
+    // 샘플 개수는 clockSync 내부 상수라 여기에 고정하지 않고 실측해 상대 비교한다.
+    await vi.advanceTimersByTimeAsync(1000);
     await Promise.all([first, second]);
-    expect(apiMocks.getTime).toHaveBeenCalledTimes(3);
+    const samplesPerSync = apiMocks.getTime.mock.calls.length;
+    expect(samplesPerSync).toBeGreaterThan(0);
 
     await startup();
-    expect(apiMocks.getTime).toHaveBeenCalledTimes(3);
+    expect(apiMocks.getTime).toHaveBeenCalledTimes(samplesPerSync);
 
     shutdown();
     const restarted = startup();
-    await vi.advanceTimersByTimeAsync(250);
+    await vi.advanceTimersByTimeAsync(1000);
     await restarted;
-    expect(apiMocks.getTime).toHaveBeenCalledTimes(6);
+    expect(apiMocks.getTime).toHaveBeenCalledTimes(samplesPerSync * 2);
   });
 });

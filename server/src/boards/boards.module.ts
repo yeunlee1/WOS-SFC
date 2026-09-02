@@ -8,6 +8,7 @@ import { RealtimeModule } from '../realtime/realtime.module';
 import { BoardUploadRateGuard } from './board-upload-rate.guard';
 import { BoardUploadQuotaService } from './board-upload-quota.service';
 import { BoardUploadQuotaInterceptor } from './board-upload-quota.interceptor';
+import { BoardImageCleanupService } from './board-image-cleanup.service';
 
 @Module({
   imports: [
@@ -19,12 +20,14 @@ import { BoardUploadQuotaInterceptor } from './board-upload-quota.interceptor';
     BoardUploadRateGuard,
     BoardUploadQuotaService,
     BoardUploadQuotaInterceptor,
+    BoardImageCleanupService,
   ],
   controllers: [BoardsController],
   exports: [
     BoardsService,
     BoardUploadQuotaService,
     BoardUploadQuotaInterceptor,
+    BoardImageCleanupService,
   ],
 })
 export class BoardsModule {}

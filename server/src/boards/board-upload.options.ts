@@ -22,8 +22,21 @@ export const BOARD_UPLOAD_ALLOWED_MIME_TYPES = Object.keys(
   BOARD_UPLOAD_EXTENSION_BY_MIME_TYPE,
 );
 
-export const BOARD_UPLOAD_URL_PATTERN =
-  /^\/uploads\/boards\/\d{13}-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(?:jpg|png|gif|webp)$/i;
+// 업로더가 만드는 파일명 규칙. URL 패턴과 파일명 패턴이 따로 놀면 삭제·고아 판정이
+// 어긋나므로 한 소스에서 두 패턴을 함께 만든다.
+const BOARD_UPLOAD_FILE_NAME_SOURCE = String.raw`\d{13}-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(?:jpg|png|gif|webp)`;
+
+export const BOARD_UPLOAD_URL_PREFIX = '/uploads/boards/';
+
+export const BOARD_UPLOAD_FILE_NAME_PATTERN = new RegExp(
+  `^${BOARD_UPLOAD_FILE_NAME_SOURCE}$`,
+  'i',
+);
+
+export const BOARD_UPLOAD_URL_PATTERN = new RegExp(
+  `^${BOARD_UPLOAD_URL_PREFIX}${BOARD_UPLOAD_FILE_NAME_SOURCE}$`,
+  'i',
+);
 
 export const BOARD_UPLOAD_LIMITS: NonNullable<MulterOptions['limits']> = {
   fileSize: 5 * 1024 * 1024,

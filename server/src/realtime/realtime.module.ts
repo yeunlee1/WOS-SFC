@@ -6,6 +6,7 @@ import { RealtimeGateway } from './realtime.gateway';
 import { ReadyNegotiationService } from './ready-negotiation.service';
 import { WsRateLimitService } from './ws-rate-limit.service';
 import { BusyLockService } from './busy-lock.service';
+import { SocketAuthService } from './socket-auth.service';
 import { NoticesModule } from '../notices/notices.module';
 import { RalliesModule } from '../rallies/rallies.module';
 import { MembersModule } from '../members/members.module';
@@ -34,7 +35,15 @@ import { UsersModule } from '../users/users.module';
     ReadyNegotiationService,
     WsRateLimitService,
     BusyLockService,
+    SocketAuthService,
   ],
-  exports: [RealtimeGateway, BusyLockService, WsRateLimitService],
+  // SocketAuthService는 같은 소켓에 붙는 네 게이트웨이가 인증 결과를 나눠 쓰기 위해
+  // 반드시 한 인스턴스여야 한다. 각 모듈이 따로 provide하면 캐시가 갈라져 공유가 깨진다.
+  exports: [
+    RealtimeGateway,
+    BusyLockService,
+    WsRateLimitService,
+    SocketAuthService,
+  ],
 })
 export class RealtimeModule {}

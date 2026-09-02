@@ -1,0 +1,192 @@
+// 로그인 시도를 계정(닉네임) 단위로 세어, IP 를 갈아타는 무차별 대입을 IP 한도와 별개로 막는다.
+import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
+import { ThrottlerException } from '@nestjs/throttler';
+import { resolveClientIp } from './rate-limit-tracker';
+
+/**
+ * 계정 카운터의 관찰 창. 5분.
+ *
+ * 창을 길게 잡을수록 무차별 대입은 잘 막지만, 공격자가 남의 계정을 잠가두는 시간도 그만큼 길어진다.
+ * 5분은 "작전 준비 시간대에 잘못 걸려도 한 번의 집결을 통째로 놓치지는 않는" 상한으로 잡았다.
+ */
+export const ACCOUNT_WINDOW_MS = 300_000;
+
+/**
+ * 창 안에서 한 계정이 받는 총 시도 수 (모든 IP 합산). 15회 / 5분.
+ *
+ * 정상 사용자는 성공 시 카운터가 비워지므로(recordSuccess) 이 값에 닿을 일이 없다.
+ * 분산 공격자 기준 — 이 값을 넘기면 그 계정에 이미 실패 이력이 있는 IP 는 즉시 막히고,
+ * 새 IP 는 1회만 통과한다. IP 100개를 동원해도 5분당 약 115회로,
+ * 게이트가 없을 때(IP 100개 × login IP 한도 100회 = 10,000회)의 1.2% 수준이다.
+ */
+export const ACCOUNT_ATTEMPT_LIMIT = 15;
+
+/**
+ * 창 안에서 한 (계정, IP) 조합이 받는 시도 수. 5회 / 5분.
+ *
+ * 단일 IP 공격자를 계정당 5회/5분 = 1,440회/일로 묶는다. login 의 IP 한도(100회/5분)를
+ * 크게 올려도 한 계정에 대한 대입 속도는 이 값이 지배한다.
+ * 정상 사용자에게는 "비밀번호 5번 틀리면 5분 쉬기"에 해당한다.
+ */
+export const ACCOUNT_IP_ATTEMPT_LIMIT = 5;
+
+/** 이 크기를 넘으면 만료 항목을 한 번 쓸어낸다. 매 요청마다 전체를 훑지 않기 위한 하한. */
+const SWEEP_FLOOR = 2_000;
+
+/** 창 안의 살아 있는 항목만으로도 이 수를 넘으면 오래된 것부터 버린다. */
+const MAX_TRACKED_KEYS = 10_000;
+
+/**
+ * 닉네임을 카운터 키로 접는다.
+ *
+ * DB(MySQL utf8mb4 계열 기본 collation)는 닉네임을 대소문자·전각 구분 없이 찾으므로,
+ * 접지 않으면 'alice' / 'Alice' / 'ａｌｉｃｅ' 가 서로 다른 버킷이 되어 계정 카운터가 통째로 우회된다.
+ * DB collation 과 완전히 같은 규칙을 재현할 수는 없으므로 일부러 더 세게 접는다 —
+ * 과하게 접히면 서로 다른 계정이 한 버킷을 공유해 조금 더 엄격해질 뿐(안전한 방향)이고,
+ * 덜 접히면 우회 경로가 열린다(위험한 방향).
+ * 공백은 가입 닉네임 규칙(한글/영문/숫자 2~20자)상 원래 들어갈 수 없어 전부 제거해도 실계정이 겹치지 않는다.
+ */
+export function normalizeAccountKey(nickname: unknown): string | null {
+  if (typeof nickname !== 'string') return null;
+  const folded = nickname
+    .normalize('NFKC')
+    .replace(/\s+/gu, '')
+    .toLowerCase();
+  return folded.length > 0 ? folded : null;
+}
+
+export class AccountLoginThrottle {
+  /** 키 → 창 안의 시도 시각(오름차순). 키는 `acct:<계정>` 또는 `pair:<계정>\0<IP>`. */
+  private readonly attempts = new Map<string, number[]>();
+  private sweepAt = SWEEP_FLOOR;
+
+  /**
+   * 시도 한 건을 소비한다. 통과하면 true, 막히면 false.
+   *
+   * 막는 조건 —
+   * 1. (계정, IP) 조합이 자기 몫을 다 썼다.
+   * 2. 계정 전체가 한도를 넘었고, 이 IP 가 그 계정으로 실패한 이력이 있다.
+   *
+   * 2번에 "이력이 있다"를 붙인 것이 잠금 DoS 대책이다. 이 조건이 없으면 공격자가 아무 계정이나
+   * 실패시켜 그 계정 주인을 통째로 잠글 수 있다. 이력이 없는 IP(= 평소 쓰던 정상 사용자의 회선)는
+   * 공격이 진행 중이어도 첫 시도가 항상 통과한다.
+   */
+  consume(account: string, ip: string, now: number = Date.now()): boolean {
+    const accountKey = `acct:${account}`;
+    const pairKey = `pair:${account}\u0000${ip}`;
+
+    const accountHits = this.recent(accountKey, now);
+    const pairHits = this.recent(pairKey, now);
+
+    const blocked =
+      pairHits.length >= ACCOUNT_IP_ATTEMPT_LIMIT ||
+      (accountHits.length >= ACCOUNT_ATTEMPT_LIMIT && pairHits.length >= 1);
+
+    // 막힌 시도는 기록하지 않는다. 기록하면 공격자가 창 내내 두드리는 동안 창이 계속 밀려
+    // 잠금이 무기한 유지된다. 기록하지 않으면 최초 시도 시각 기준으로 창이 지나며 스스로 풀린다.
+    if (blocked) return false;
+
+    accountHits.push(now);
+    pairHits.push(now);
+    this.attempts.set(accountKey, accountHits);
+    this.attempts.set(pairKey, pairHits);
+    this.enforceMemoryCap(now);
+    return true;
+  }
+
+  /** 로그인 성공 — 이 계정의 카운터를 비운다. 정상 사용자의 시도는 누적되지 않는다. */
+  recordSuccess(account: string, ip: string): void {
+    this.attempts.delete(`acct:${account}`);
+    this.attempts.delete(`pair:${account}\u0000${ip}`);
+  }
+
+  /** 테스트 전용 — 프로세스 안 상태를 초기화한다. */
+  reset(): void {
+    this.attempts.clear();
+    this.sweepAt = SWEEP_FLOOR;
+  }
+
+  /** 테스트 전용 — 추적 중인 키 개수. */
+  size(): number {
+    return this.attempts.size;
+  }
+
+  /** 창을 벗어난 앞쪽을 잘라내고 남은 시도 시각을 돌려준다. */
+  private recent(key: string, now: number): number[] {
+    const hits = this.attempts.get(key);
+    if (!hits) return [];
+
+    const cutoff = now - ACCOUNT_WINDOW_MS;
+    let dropped = 0;
+    while (dropped < hits.length && hits[dropped] <= cutoff) dropped += 1;
+    if (dropped === 0) return hits;
+
+    const kept = hits.slice(dropped);
+    if (kept.length === 0) this.attempts.delete(key);
+    else this.attempts.set(key, kept);
+    return kept;
+  }
+
+  /**
+   * 닉네임은 요청자가 정하는 값이라, 매번 새 닉네임으로 두드리면 항목이 무한히 쌓인다.
+   * 만료 항목을 먼저 쓸고, 그래도 상한을 넘으면 마지막 시도가 오래된 것부터 버린다.
+   */
+  private enforceMemoryCap(now: number): void {
+    if (this.attempts.size < this.sweepAt) return;
+
+    const cutoff = now - ACCOUNT_WINDOW_MS;
+    for (const [key, hits] of this.attempts) {
+      if (hits.length === 0 || hits[hits.length - 1] <= cutoff) {
+        this.attempts.delete(key);
+      }
+    }
+
+    if (this.attempts.size > MAX_TRACKED_KEYS) {
+      const byLastSeen = [...this.attempts.entries()].sort(
+        (a, b) => a[1][a[1].length - 1] - b[1][b[1].length - 1],
+      );
+      const excess = this.attempts.size - MAX_TRACKED_KEYS / 2;
+      for (const [key] of byLastSeen.slice(0, excess)) this.attempts.delete(key);
+    }
+
+    this.sweepAt = Math.max(SWEEP_FLOOR, this.attempts.size * 2);
+  }
+}
+
+/**
+ * 프로세스 안에서 공유하는 단일 인스턴스.
+ *
+ * ThrottlerModule 의 기본 저장소(ThrottlerStorageService)와 마찬가지로 메모리에만 산다.
+ * 서버를 여러 프로세스로 띄우면 계정 카운터가 프로세스 수만큼 나뉜다 — 지금 배포는 단일 프로세스라
+ * 문제가 없지만, 수평 확장 시에는 IP 한도와 함께 공유 저장소로 옮겨야 한다.
+ */
+export const accountLoginThrottle = new AccountLoginThrottle();
+
+/**
+ * 로그인 라우트에 붙이는 계정 단위 게이트.
+ *
+ * 본문 파싱(express.json)은 미들웨어라 가드보다 먼저 끝나므로 여기서 req.body 를 읽을 수 있다.
+ * 반대로 ValidationPipe 는 가드보다 뒤에 돌기 때문에, 여기 들어오는 nickname 은 아직 검증 전의 원본이다.
+ * 그래서 타입을 직접 확인한다.
+ *
+ * 의존성이 없는 가드로 만든 것은 의도적이다 — @UseGuards 에 클래스로 넘길 때 모듈 provider 등록 없이
+ * 그대로 인스턴스화되게 하려는 것이다(auth.module.ts 를 건드리지 않는다).
+ */
+@Injectable()
+export class AccountLoginThrottleGuard implements CanActivate {
+  canActivate(context: ExecutionContext): boolean {
+    const req = context.switchToHttp().getRequest();
+    const account = normalizeAccountKey(req?.body?.nickname);
+
+    // 닉네임이 문자열이 아니면 ValidationPipe 가 400 으로 되돌린다. 비밀번호 대조까지 가지 못하므로
+    // 이 경로로는 자격증명을 시험할 수 없고, 따라서 계수 대상도 아니다.
+    if (!account) return true;
+
+    if (!accountLoginThrottle.consume(account, resolveClientIp(req))) {
+      // ThrottlerGuard 와 똑같은 예외를 던진다. 응답만 보고 어느 게이트에 걸렸는지,
+      // 나아가 그 계정이 존재하는지 구분할 수 없어야 한다.
+      throw new ThrottlerException();
+    }
+    return true;
+  }
+}

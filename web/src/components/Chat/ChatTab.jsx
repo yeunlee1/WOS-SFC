@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, memo } from 'react';
 import { useStore, ALLIANCES } from '../../store';
 import { useI18n } from '../../i18n';
-import { getSocket } from '../../api';
+import { CHAT_SEND_ERROR_STYLE, useChatComposer } from './useChatComposer';
 
 // 5-동맹 pill 색상 — store ALLIANCES 순서와 일치
 const ALLIANCE_COLORS = {
@@ -29,7 +29,16 @@ export default function ChatTab() {
   );
 
   const messages = useStore((s) => s.chatMessages);
-  const [input, setInput] = useState('');
+  const {
+    input,
+    sending,
+    errorText,
+    sendMessage,
+    handleChange,
+    handleKeyDown,
+    handleCompositionStart,
+    handleCompositionEnd,
+  } = useChatComposer();
   const autoTranslate = useStore((s) => s.chatAutoTranslate);
   const setAutoTranslate = useStore((s) => s.setChatAutoTranslate);
 
@@ -47,23 +56,6 @@ export default function ChatTab() {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages]);
-
-  // 메시지 전송 — 소켓으로 직접 emit
-  function sendMessage() {
-    const content = input.trim();
-    if (!content) return;
-    const socket = getSocket();
-    if (!socket) return;
-    setInput('');
-    socket.emit('chat:message', content);
-  }
-
-  function handleKeyDown(e) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  }
 
   // 동맹별 온라인 그룹
   const groups = ALLIANCES.map((alliance) => {
@@ -114,19 +106,35 @@ export default function ChatTab() {
           <div ref={messagesEndRef} />
         </div>
 
+        {/* 전송 실패 안내 — 실패를 성공처럼 보이게 두지 않는다 */}
+        {errorText && (
+          <div
+            className="chat-send-error"
+            data-testid="chat-send-error"
+            role="status"
+            aria-live="polite"
+            style={CHAT_SEND_ERROR_STYLE}
+          >
+            {errorText}
+          </div>
+        )}
+
         {/* 입력 영역 */}
         <div className="chat-tab-input-row">
           <input
             className="chat-tab-input"
             type="text"
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={handleChange}
             onKeyDown={handleKeyDown}
+            onCompositionStart={handleCompositionStart}
+            onCompositionEnd={handleCompositionEnd}
             placeholder={t('chatPlaceholder')}
           />
           <button
             className="btn btn-primary chat-tab-send-btn"
             onClick={sendMessage}
+            disabled={sending}
             aria-label={t('chatSend')}
           >
             ▶

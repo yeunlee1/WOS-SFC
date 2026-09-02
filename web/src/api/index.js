@@ -326,6 +326,18 @@ export const api = {
 
 // ── Socket 싱글톤 ──
 let _socket = null;
+// 서버가 인증 실패로 소켓을 끊었을 때 refresh를 몇 번 시도했는지 추적한다.
+// 액세스 토큰 수명이 1시간이라 작전 중 재접속이 그대로 로그아웃이 되면 안 된다.
+let _socketAuthRetried = false;
+let _socketStableTimer = null;
+// 이 시간 이상 유지된 연결은 정상 인증으로 보고 갱신 재시도 기회를 되돌려준다.
+// 밴/권한 회수처럼 붙자마자 끊기는 경우는 이 시간을 못 채워 재시도가 1회로 제한된다.
+const SOCKET_STABLE_MS = 10_000;
+
+function clearSocketStableTimer() {
+  if (_socketStableTimer) clearTimeout(_socketStableTimer);
+  _socketStableTimer = null;
+}
 
 export function getSocket() {
   return _socket;
@@ -347,12 +359,38 @@ export function connectSocket() {
   });
   _socket = socket;
 
+  socket.on('connect', () => {
+    if (_socket !== socket) return;
+    clearSocketStableTimer();
+    _socketStableTimer = setTimeout(() => {
+      _socketStableTimer = null;
+      _socketAuthRetried = false;
+    }, SOCKET_STABLE_MS);
+  });
+
   socket.on('disconnect', (reason) => {
     // 서버가 권한 변경 등으로 연결을 끊으면 Socket.IO는 자동 재연결하지 않는다.
     // 수동 로그아웃과 일시적인 네트워크 단절은 각각 기존 흐름을 유지한다.
     if (reason !== 'io server disconnect' || _socket !== socket) return;
-    _socket = null;
-    window.dispatchEvent(new Event('auth:expired'));
+    clearSocketStableTimer();
+
+    // 만료된 액세스 토큰으로 재접속하면 서버가 인증 실패로 끊는다.
+    // 곧바로 로그아웃하면 작전 중 카운트다운까지 죽으므로 갱신을 한 번 시도한다.
+    if (_socketAuthRetried) {
+      _socket = null;
+      window.dispatchEvent(new Event('auth:expired'));
+      return;
+    }
+    _socketAuthRetried = true;
+    refreshSession()
+      .then(() => {
+        if (_socket !== socket) return;
+        socket.connect();
+      })
+      .catch(() => {
+        // refreshSession이 실패 시 이미 auth:expired를 발행한다.
+        if (_socket === socket) _socket = null;
+      });
   });
 
   if (import.meta.env.DEV) {
@@ -364,6 +402,8 @@ export function connectSocket() {
 }
 
 export function disconnectSocket() {
+  clearSocketStableTimer();
+  _socketAuthRetried = false;
   _socket?.disconnect();
   _socket = null;
 }

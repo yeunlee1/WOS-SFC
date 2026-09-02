@@ -2,7 +2,7 @@
 import { HttpStatus } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { TtsController } from './tts.controller';
-import { TtsService } from './tts.service';
+import { TtsService, TtsUnavailableError } from './tts.service';
 
 function responseMock() {
   const response = {
@@ -99,6 +99,21 @@ describe('TtsController path validation', () => {
 
     expect(response.status).toHaveBeenCalledWith(HttpStatus.NOT_MODIFIED);
     expect(response.end).toHaveBeenCalled();
+    expect(service.createAudioStream).not.toHaveBeenCalled();
+  });
+  it('TTS 를 쓸 수 없으면 404 로 답하고 500 을 내지 않는다', async () => {
+    service.prepareAudio.mockRejectedValue(new TtsUnavailableError('키 없음'));
+    const response = responseMock();
+
+    await controller.serve(
+      'ko',
+      '1',
+      { headers: {} } as Request,
+      response as unknown as Response,
+    );
+
+    expect(response.status).toHaveBeenCalledWith(HttpStatus.NOT_FOUND);
+    expect(response.json).toHaveBeenCalledWith({ error: 'audio unavailable' });
     expect(service.createAudioStream).not.toHaveBeenCalled();
   });
 });

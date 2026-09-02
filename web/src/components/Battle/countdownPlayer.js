@@ -1,16 +1,59 @@
-// countdownPlayer.js — Web Audio API 기반 카운트다운 TTS 재생기 (슬롯 독립 스케줄)
+// countdownPlayer.js — Web Audio API 기반 카운트다운 TTS 재생기 (Web Audio 클럭 절대 예약)
 //
 // 설계:
-//   각 숫자 슬롯을 독립된 setTimeout으로 스케줄한다. 버퍼 로딩은 백그라운드에서
-//   병렬로 진행하며 스케줄링을 블로킹하지 않는다. 타임아웃 콜백 시점에 버퍼가
-//   준비돼 있으면 즉시 playNow, 아직 로딩 중이면 완료 후 즉시 재생한다.
+//   startedAt(서버 시각) 순간에 대응하는 ctx.currentTime 을 앵커로 잡고, 각 숫자 슬롯을
+//   `src.start(ctxAnchor + 경과초)` 절대 시각으로 오디오 스레드에 직접 예약한다.
+//   버퍼 로딩은 백그라운드로 진행하며 스케줄링을 블로킹하지 않는다. 버퍼가 늦게
+//   도착하면 그 시점에 예정 시각을 재검사해, 아직 미래면 예약하고 이미 지났으면 버린다.
 //
-// 왜 이 설계인가 — 과거 "30초 시작했는데 20부터 센다" 버그의 근본 원인:
-//   이전 구현은 scheduleCountdown 내부에서 `await Promise.all(keys.map(loadBuffer))`로
+// 왜 setTimeout 을 버렸나:
+//   이전 구현은 `window.setTimeout(..., fireAt)` 콜백에서 `src.start(0)` 을 호출했다.
+//   JS 타이머는 지터가 있고 백그라운드 탭에서는 최대 1초까지 스로틀되며 iOS 는 아예
+//   멈춘다. 100명이 같은 순간에 들어야 하는 요구사항에서 이 경로는 그대로 오차가 된다.
+//   Web Audio 의 `start(when)` 은 오디오 하드웨어 스레드가 샘플 단위로 처리하므로
+//   JS 실행 상태와 독립적이다. rallyGroupPlayer.js 가 이미 쓰던 방식을 이식했다.
+//
+// 왜 과거 슬롯을 버리나:
+//   콜드캐시 LTE 에서 "30" 버퍼가 몇 초 늦게 도착하면, 시각 검사 없이 재생할 경우
+//   "27" 뒤에 "30" 이 끼어들어 순서가 역전된다. 예정 시각이 200ms 이상 지난 슬롯은
+//   재생하지 않는다.
+//
+// 출력 지연 보정:
+//   `start(when)` 은 샘플이 출력 파이프라인에 들어가는 시각이고, 실제로 스피커에서
+//   소리가 나는 시각은 그보다 뒤다. 그 차이가 기기마다 달라(유선 수십 ms, 블루투스는
+//   수백 ms까지) 보정 없이는 기기 종류만으로 사용자 간 편차가 생긴다.
+//   앵커에서 ctx.outputLatency(미지원 시 baseLatency)를 한 번 빼 보정한다.
+//   ※ 보증하지 못하는 것 — 브라우저가 보고하는 값이 실제 지연과 얼마나 일치하는지는
+//     플랫폼·오디오 백엔드에 달렸다. 블루투스 코덱 지연을 OS가 알려주지 않으면
+//     과소 보고되어 잔차가 남는다. 그 잔차는 개인 수동 보정(personalOffsetMs)의 몫이다.
+//     personalOffsetMs 는 호출자가 timeOffset 에 합산해 넘기므로 이중 적용되지 않는다.
+//   ※ 값은 스케줄 시점에 한 번만 읽는다. 카운트다운 도중 출력 기기를 바꾸면
+//     그 회차에는 반영되지 않는다.
+//   ※ 같은 물리량을 자동(여기)과 수동(personalOffsetMs)이 각각 한 번씩 당긴다.
+//     수식 안에서 두 번 더해지지는 않지만, 이미 손으로 보정해 둔 사용자는 자동 보정만큼
+//     더 빨라진다. getAutoLatencyMs() 로 자동 보정분을 노출해 PersonalSyncOffset 화면이
+//     "자동 + 수동 = 합계" 로 보여주고, 사용자가 그 위에서 재조정하게 한다.
+//
+// AudioContext 가 멈췄다 다시 흐를 때:
+//   ctx 클럭은 suspended/interrupted 동안 멈춘다. 그 상태에서 앵커를 잡으면 재개 이후
+//   남은 예약 전부가 멈춰 있던 시간만큼 통째로 밀린다(setTimeout 시절에는 벽시계 기준이라
+//   정지가 끝나면 저절로 정렬됐다). 그래서
+//     (a) resume 이 200ms 안에 running 이 되지 않으면 예약하지 않고 물러나고,
+//     (b) statechange 로 running 이 되는 시점마다 그때의 클럭·벽시계로 다시 예약한다.
+//   재예약된 슬롯 중 이미 지난 것은 past-due 가드가 거른다.
+//   iOS Safari 는 전화·알람 중 'suspended' 가 아니라 'interrupted' 로 가므로 같이 다룬다.
+//
+// 개인 출발('march') 슬롯:
+//   "출발"은 사용자가 실제로 행동하는 신호라 숫자보다 정확해야 한다. 숫자와 같은 앵커에
+//   `ctxAnchor + (totalSeconds - marchSeconds)` 로 예약해 같은 past-due 가드와 같은
+//   출력지연 보정을 받게 한다. marchSeconds 는 사용자마다 다르고 도중에 바뀔 수 있어
+//   호출자(Countdown.jsx)가 값 변경 시 다시 스케줄한다.
+//
+// 과거 "30초 시작했는데 20부터 센다" 버그 재발 방지 메모:
+//   당시 구현은 scheduleCountdown 내부에서 `await Promise.all(keys.map(loadBuffer))`로
 //   모든 버퍼 디코딩을 기다린 뒤 스케줄을 실행했다. 캐시가 콜드일 때 await가 수 초
-//   걸리면 그 사이 serverNow가 앞서나가 첫 N개 슬롯은 `delayMs < 0`으로 스킵됐다.
-//   슬롯별 독립 스케줄로 전환하면 스케줄은 즉시 완료되고, 버퍼가 늦게 도착해도
-//   각자의 시각에 맞춰 재생된다.
+//   걸리면 그 사이 serverNow가 앞서나가 첫 N개 슬롯이 past-due로 사라졌다.
+//   슬롯별 독립 예약으로 전환해 스케줄 자체는 즉시 완료된다.
 //
 // Web Audio API를 고수하는 이유:
 //   HTMLAudioElement의 (1) play() Promise silent reject, (2) 동시 재생 리소스 한계,
@@ -19,9 +62,10 @@
 //
 // 공개 API:
 //   primeCountdownAudio(keys, lang)     — 버퍼 프리로드 + AudioContext 언락
-//   scheduleCountdown({...})            — 카운트다운 예약 재생
+//   scheduleCountdown({...})            — 카운트다운 예약 재생 (marchSeconds 포함)
 //   stopCountdownAudio()                — 예약된 모든 재생 정지
 //   setCountdownVolume(volume, muted)   — 볼륨/뮤트 실시간 반영
+//   getAutoLatencyMs()                  — 현재 적용 중인 자동 출력지연 보정(ms)
 
 import { ttsUrl } from './tts';
 import { perceptualVolume } from '../../utils/volume';
@@ -33,14 +77,19 @@ let analyser = null;
 // Map<"lang:key", AudioBuffer | Promise<AudioBuffer|null>>
 const bufferCache = new Map();
 
-// 재생 중인 SourceNode 추적 (stop 시 일괄 중단)
+// 재생 예약/중인 SourceNode 추적 (stop 시 일괄 중단 — 미래 시각 예약도 src.stop()으로 취소 가능)
 const activeSources = new Set();
 
-// 예약된 setTimeout id 추적 (stop 시 일괄 취소)
-const activeTimeouts = new Set();
+// 출력 지연 보정 상한. 블루투스 최악값(약 300ms)보다는 크고, 브라우저가 비정상적으로 큰
+// 값을 보고했을 때 앵커가 통째로 과거로 밀려 전 슬롯이 past-due로 사라지는 것은 막는 선.
+const MAX_OUTPUT_LATENCY_SEC = 0.5;
 
 // 스케줄 호출 식별자 — 늦게 도착한 버퍼 완료 콜백이 이전 스케줄의 결과를 재생하는 것 방지
 let latestScheduleId = 0;
+
+// 마지막 스케줄 파라미터. ctx 가 running 으로 돌아왔을 때 이 값으로 다시 예약한다.
+// stopCountdownAudio() 에서 비우므로 정지된 카운트다운은 재개돼도 되살아나지 않는다.
+let pendingSchedule = null;
 
 // DEV 감독관용 텔레메트리
 const dispatchedCount = { value: 0 };
@@ -62,6 +111,16 @@ function ensureContext() {
   analyser.fftSize = 2048;
   masterGain.connect(analyser);
   analyser.connect(ctx.destination);
+  // 멈췄던 클럭이 다시 흐르면 남은 슬롯의 절대시각이 통째로 밀린다 —
+  // running 으로 돌아온 시점의 클럭으로 다시 예약한다.
+  try {
+    ctx.addEventListener('statechange', () => {
+      if (!ctx || ctx.state !== 'running') return;
+      const p = pendingSchedule;
+      if (!p) return;
+      scheduleCountdown(p);
+    });
+  } catch { /* addEventListener 미지원 환경 — 재예약 없이 진행 */ }
   if (import.meta.env.DEV) {
     window.__ttsAnalyser = analyser;
     window.__ttsDispatched = dispatchedCount;
@@ -70,6 +129,45 @@ function ensureContext() {
     window.__ttsCtx = ctx;
   }
   return ctx;
+}
+
+/**
+ * 스피커에서 실제로 소리가 나기까지의 출력 지연(초).
+ * outputLatency 우선, 미지원(Safari 등)이면 baseLatency, 둘 다 없으면 0.
+ * 음수·NaN 같은 비정상 값은 0으로, 과대값은 MAX_OUTPUT_LATENCY_SEC 으로 잘라낸다.
+ */
+function outputLatencySec(c) {
+  if (!c) return 0;
+  const pick = (v) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : 0);
+  const raw = pick(c.outputLatency) || pick(c.baseLatency);
+  if (raw <= 0) return 0;
+  return Math.min(raw, MAX_OUTPUT_LATENCY_SEC);
+}
+
+/**
+ * 지금 적용되는 자동 출력지연 보정(ms, 정수). 발화를 이만큼 "앞당긴다".
+ * AudioContext 가 아직 없으면 0 — 여기서 새로 만들지 않는다(제스처 없이 생성하면
+ * suspended 컨텍스트만 늘어난다). PersonalSyncOffset 이 수동 보정과 합산 표시할 때 쓴다.
+ */
+export function getAutoLatencyMs() {
+  if (!ctx) return 0;
+  return Math.round(outputLatencySec(ctx) * 1000);
+}
+
+/** iOS Safari 는 전화·알람 중 'interrupted' 로 간다. 'suspended' 와 동일하게 다뤄야 한다. */
+function isClockStopped(c) {
+  return !!c && (c.state === 'suspended' || c.state === 'interrupted');
+}
+
+/**
+ * 개인 출발 음성이 울릴 "남은 초". 1~180 정수이고 totalSeconds 이하일 때만 유효.
+ * 그 밖(미설정·범위 밖·소수·문자열)이면 null — 아무 것도 예약하지 않는다.
+ */
+function marchSlotSeconds(marchSeconds, totalSeconds) {
+  if (!Number.isInteger(marchSeconds)) return null;
+  if (marchSeconds < 1 || marchSeconds > 180) return null;
+  if (marchSeconds > totalSeconds) return null;
+  return marchSeconds;
 }
 
 function loadBuffer(lang, key) {
@@ -81,7 +179,11 @@ function loadBuffer(lang, key) {
 
   const promise = (async () => {
     try {
-      const resp = await fetch(ttsUrl(lang, key), { cache: 'no-cache', credentials: 'same-origin' });
+      // 캐시 옵션은 기본값(default)을 쓴다. 서버가 Cache-Control: public, max-age=3600 +
+      // ETag 를 주므로(server/src/tts/tts.controller.ts) 브라우저가 신선한 응답을
+      // 재검증 없이 재사용한다. 과거의 `cache: 'no-cache'` 는 이 헤더를 무력화해
+      // 접속마다 수백 건의 조건부 GET 을 서버로 보냈다.
+      const resp = await fetch(ttsUrl(lang, key), { credentials: 'same-origin' });
       if (!resp.ok) throw new Error('fetch status ' + resp.status);
       const arrBuf = await resp.arrayBuffer();
       const audioBuf = await c.decodeAudioData(arrBuf);
@@ -107,7 +209,7 @@ function loadBuffer(lang, key) {
 export async function primeCountdownAudio(keys, lang = 'ko') {
   const c = ensureContext();
   if (!c) return;
-  if (c.state === 'suspended') {
+  if (isClockStopped(c)) {
     try { await c.resume(); } catch { /* noop */ }
   }
   // iOS Safari 언락: 무음 버퍼 1회 재생
@@ -123,28 +225,36 @@ export async function primeCountdownAudio(keys, lang = 'ko') {
 }
 
 /**
- * 카운트다운 TTS 예약 — 슬롯별 독립 setTimeout.
+ * 카운트다운 TTS 예약 — Web Audio 클럭 절대 예약.
  * startedAt(서버 시각, ms) + (totalSeconds - n)*1000 시각에 각 숫자 n을 재생.
  *
  * 버퍼 로딩은 백그라운드에서 진행되며 스케줄 완료를 블로킹하지 않는다.
- * 타임아웃 콜백 시점에 버퍼가 준비되지 않았다면 완료 후 즉시 재생한다
- * (약간 늦을 수 있지만 누락보다는 낫다).
+ * 버퍼가 늦게 도착하면 그 시점에 예정 시각을 재검사한다 — 아직 미래면 예약,
+ * 이미 200ms 넘게 지났으면 버린다(순서 역전 방지).
  *
- * @param {{totalSeconds:number, startedAt:number, timeOffset:number, lang?:string, volume:number, muted:boolean}} params
+ * marchSeconds 가 유효하면 개인 출발('march')도 같은 앵커에 함께 예약한다.
+ *
+ * @param {{totalSeconds:number, startedAt:number, timeOffset:number, lang?:string,
+ *          volume:number, muted:boolean, marchSeconds?:number|null}} params
  */
-export async function scheduleCountdown({ totalSeconds, startedAt, timeOffset, lang = 'ko', volume, muted }) {
+export async function scheduleCountdown({ totalSeconds, startedAt, timeOffset, lang = 'ko', volume, muted, marchSeconds = null }) {
   const c = ensureContext();
   if (!c) return;
   if (!startedAt || !totalSeconds) return;
-  // totalSeconds < 2 이면 재생할 슬롯이 없음 (firstSlot = totalSeconds - 1 = 0)
-  // 가드 없으면 loadBuffer(lang, 0) → /tts-audio/ko/0 404 발생
+  // 1초 카운트다운은 음성 없이 진행한다 (기존 동작 유지).
+  // 과거 구현은 첫 슬롯을 totalSeconds - 1 로 잡아 여기서 loadBuffer(lang, 0) →
+  // /tts-audio/ko/0 404 가 났고 그 방어로 들어온 가드다. 지금은 첫 슬롯이
+  // totalSeconds 라 0 키를 부를 일은 없지만, 가드를 풀면 동작이 바뀌므로 그대로 둔다.
   if (totalSeconds < 2) return;
 
-  stopCountdownAudio();  // 기존 스케줄 정리 (latestScheduleId는 stop 내에서 증가)
+  stopCountdownAudio();  // 기존 스케줄 정리 (latestScheduleId는 stop 내에서 증가, pendingSchedule 비움)
   const myId = ++latestScheduleId;
   setCountdownVolume(volume, muted);
 
-  if (c.state === 'suspended') {
+  // 재개 시 다시 예약할 파라미터. timeOffset 만 보관하고 serverNow 는 그때 다시 계산한다.
+  pendingSchedule = { totalSeconds, startedAt, timeOffset, lang, volume, muted, marchSeconds };
+
+  if (isClockStopped(c)) {
     c.resume().catch(() => { /* noop */ });
   }
 
@@ -153,8 +263,8 @@ export async function scheduleCountdown({ totalSeconds, startedAt, timeOffset, l
   dispatchedLog.length = 0;
 
   // 첫 슬롯 버퍼 워밍업 — 최대 500ms.
-  // 첫 슬롯은 fireAt ≈ 0ms(= "totalSeconds" 숫자) 에 발화되므로, 이 구간 안에 버퍼가
-  // 도착하지 않으면 setTimeout 콜백에서 .then 대기 동안 발화가 밀린다.
+  // 첫 슬롯(= "totalSeconds" 숫자)은 앵커 시각 그 자체에 발화되므로, 이 구간 안에
+  // 버퍼가 도착하지 않으면 past-due 가드에 걸려 통째로 유실될 수 있다.
   // Promise.race 로 워밍업하되 500ms 초과 시 즉시 스케줄링으로 진행해 "20부터 센다"
   // 류의 전체 블로킹 버그 재발을 방지한다. 동시에 남은 모든 키의 로드도
   // 백그라운드로 시작해 후속 슬롯 준비를 앞당긴다.
@@ -164,90 +274,115 @@ export async function scheduleCountdown({ totalSeconds, startedAt, timeOffset, l
   // "29"부터 시작해, 동시 호출되는 speak('start')의 "준비해주세요"(1.3초)와
   // 1초 후의 "29"가 겹쳐 "이십N부터 센다"로 들리는 원인.
   const firstSlot = totalSeconds;
+  const marchSlot = marchSlotSeconds(marchSeconds, totalSeconds);
   for (let n = totalSeconds; n >= 1; n--) loadBuffer(lang, n);
+  if (marchSlot !== null) loadBuffer(lang, 'march');
   await Promise.race([
     loadBuffer(lang, firstSlot),
     new Promise((r) => setTimeout(r, 500)),
   ]);
   if (myId !== latestScheduleId) return;
 
-  // 버퍼 워밍업 후 시점으로 serverNow 재계산 → whenCtx 정확도 확보
+  // 앵커는 ctx 클럭 기준이라 멈춘 상태에서 잡으면 안 된다 — suspended/interrupted 동안
+  // currentTime 은 멈춰 있으므로, 재개 이후 전 슬롯이 멈춰 있던 시간만큼 통째로 밀린다.
+  // 다만 자동재생이 차단된 환경에서는 resume() 프라미스가 사용자 제스처 전까지
+  // pending 으로 남을 수 있어 무기한 await 는 위험하다. 200ms 상한을 둔다.
+  if (isClockStopped(c)) {
+    await Promise.race([
+      c.resume().catch(() => { /* noop */ }),
+      new Promise((r) => setTimeout(r, 200)),
+    ]);
+    if (myId !== latestScheduleId) return;
+  }
+  // 상한에 걸려 아직 클럭이 멈춰 있으면 예약하지 않고 물러난다. 여기서 앵커를 잡으면
+  // 사용자가 나중에 화면을 터치한 순간 카운트다운 전체가 그만큼 늦게 처음부터 재생된다.
+  // statechange 가 running 을 알리면 그때의 클럭으로 pendingSchedule 을 다시 예약한다.
+  if (c.state !== 'running') {
+    if (import.meta.env.DEV) {
+      console.info('[CountdownPlayer] clock stopped — 재개 시 재예약', c.state);
+    }
+    return;
+  }
+
+  // 워밍업·언락 후 시점으로 serverNow 재계산 → 앵커 정확도 확보.
+  // 앵커: startedAt(서버 시각) 순간의 ctx.currentTime.
+  // 출력 지연만큼 앞당겨야 스피커에서 소리가 나는 시각이 서버 시각과 맞는다.
   const serverNow = Date.now() + timeOffset;
-  let scheduled = 0;
-  let skippedPastDue = 0;
+  const latencySec = outputLatencySec(c);
+  const ctxAnchor = c.currentTime + (startedAt - serverNow) / 1000 - latencySec;
 
   for (let n = totalSeconds; n >= 1; n--) {
-    const playServerTime = startedAt + (totalSeconds - n) * 1000;
-    const delayMs = playServerTime - serverNow;
+    // 슬롯 n 의 서버 절대시각 = startedAt + (totalSeconds - n) * 1000
+    schedulePlay(lang, n, ctxAnchor + (totalSeconds - n), myId);
+  }
 
-    // 200ms 이상 과거 — 진짜로 놓쳤으므로 스킵. 그보다 작은 음수는 즉시 재생 시도.
-    if (delayMs < -200) {
-      skippedPastDue++;
-      continue;
-    }
-
-    const fireAt = Math.max(0, delayMs);
-    scheduleLog.items.push({ n, playServerTime, delayMs: Math.round(delayMs), fireAt });
-
-    const timeoutId = window.setTimeout(() => {
-      activeTimeouts.delete(timeoutId);
-      if (myId !== latestScheduleId) return;
-      dispatchSlot(lang, n, myId);
-    }, fireAt);
-    activeTimeouts.add(timeoutId);
-    scheduled++;
+  // 개인 출발 — 남은 시간이 marchSeconds 가 되는 순간. 숫자와 같은 앵커·같은 가드.
+  if (marchSlot !== null) {
+    schedulePlay(lang, 'march', ctxAnchor + (totalSeconds - marchSlot), myId);
   }
 
   if (import.meta.env.DEV) {
-    console.info('[CountdownPlayer] scheduled', { totalSeconds, scheduled, skippedPastDue });
+    console.info('[CountdownPlayer] scheduled', {
+      totalSeconds,
+      scheduledSlots: scheduleLog.items.length,
+      ctxAnchor,
+      latencySec,
+      marchSlot,
+    });
   }
 }
 
-function dispatchSlot(lang, n, myId) {
+/**
+ * 단일 슬롯 재생 예약 — Web Audio 클럭 `src.start(ctxTimeAtPlay)` 직접 호출.
+ * 버퍼가 로딩 중이면 도착 후 시각을 재검사해 예약, 과거면 skip.
+ */
+function schedulePlay(lang, n, ctxTimeAtPlay, myId) {
+  if (!ctx) return;
+  scheduleLog.items.push({ n, ctxTimeAtPlay });
+
+  const startSource = (buffer) => {
+    if (myId !== latestScheduleId) return;
+    if (!ctx || !masterGain) return;
+    if (!buffer) { if (import.meta.env.DEV) console.warn('[CountdownPlayer] slot buf null', n); return; }
+    // 버퍼 도착 시점에서 예정 시각 재검사 — 200ms 넘게 지난 슬롯은 버린다.
+    // (늦게 온 "30"이 "27" 뒤에 끼어드는 순서 역전 방지)
+    const now = ctx.currentTime;
+    if (ctxTimeAtPlay < now - 0.2) {
+      if (import.meta.env.DEV) console.warn('[CountdownPlayer] slot past due', n, { ctxTimeAtPlay, now });
+      return;
+    }
+    const when = Math.max(ctxTimeAtPlay, now);
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    src.connect(masterGain);
+    src.onended = () => { activeSources.delete(src); };
+    try {
+      src.start(when);
+      activeSources.add(src);
+      dispatchedCount.value += 1;
+      if (import.meta.env.DEV) dispatchedLog.push({ label: n, at: performance.now(), when });
+    } catch (e) {
+      if (import.meta.env.DEV) console.warn('[CountdownPlayer] start fail', n, e.message);
+    }
+  };
+
   const entry = bufferCache.get(`${lang}:${n}`);
   if (entry && typeof entry === 'object' && 'numberOfChannels' in entry) {
-    // 이미 디코드된 AudioBuffer
-    playNow(entry, n);
+    startSource(entry);
     return;
   }
   if (entry && typeof entry.then === 'function') {
-    // 아직 로딩 중 — 완료되면 즉시 재생
-    entry.then((buf) => {
-      if (myId !== latestScheduleId) return;
-      if (buf) playNow(buf, n);
-      else if (import.meta.env.DEV) console.warn('[CountdownPlayer] slot buf null', n);
-    });
+    entry.then(startSource);
     return;
   }
-  // 캐시에 없음 — 지금이라도 로드 시도
-  loadBuffer(lang, n).then((buf) => {
-    if (myId !== latestScheduleId) return;
-    if (buf) playNow(buf, n);
-  });
-}
-
-function playNow(buffer, label) {
-  if (!ctx || !masterGain) return;
-  const src = ctx.createBufferSource();
-  src.buffer = buffer;
-  src.connect(masterGain);
-  src.onended = () => { activeSources.delete(src); };
-  try {
-    src.start(0);
-    activeSources.add(src);
-    dispatchedCount.value += 1;
-    if (import.meta.env.DEV) dispatchedLog.push({ label, at: performance.now() });
-  } catch (e) {
-    if (import.meta.env.DEV) console.warn('[CountdownPlayer] playNow fail', label, e.message);
-  }
+  loadBuffer(lang, n).then(startSource);
 }
 
 export function stopCountdownAudio() {
   latestScheduleId++;
-  for (const id of activeTimeouts) {
-    try { clearTimeout(id); } catch { /* noop */ }
-  }
-  activeTimeouts.clear();
+  // 재개 시 재예약 대상에서 제외 — 정지된 카운트다운이 되살아나면 안 된다.
+  pendingSchedule = null;
+  // src.stop()은 이미 시작된 것은 중단, 미래 시각으로 예약된 것은 취소
   for (const src of activeSources) {
     try { src.stop(); } catch { /* already stopped */ }
     try { src.disconnect(); } catch { /* noop */ }
@@ -271,7 +406,7 @@ export function setCountdownVolume(volume, muted) {
 if (typeof document !== 'undefined') {
   const unlock = () => {
     const c = ensureContext();
-    if (c && c.state === 'suspended') c.resume().catch(() => { /* noop */ });
+    if (isClockStopped(c)) c.resume().catch(() => { /* noop */ });
   };
   document.addEventListener('click', unlock, { passive: true });
   document.addEventListener('keydown', unlock, { passive: true });

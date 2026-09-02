@@ -624,4 +624,113 @@ describe('RallyGroupsService — BusyLock 통합', () => {
       expect(result).toHaveLength(0);
     });
   });
+
+  // ──────────────────────────────────────────────────────────────
+  // 진행 중(running) 카운트다운 보호.
+  // 카운트다운 중 행군 시간이 바뀌면 maxMarch가 흔들려 아직 출발하지 않은
+  // 전원의 절대 발사 시각이 밀리고, orderIndex 재할당으로 음성(captain_N)
+  // 호명 번호까지 어긋난다. 그래서 진행 중에는 아예 거절한다.
+  // ──────────────────────────────────────────────────────────────
+  describe('updateMarchOverride — 진행 중 변경 차단', () => {
+    const fakeMember = (): any => ({
+      id: 'm1',
+      groupId: 'g1',
+      userId: 1,
+      orderIndex: 1,
+      marchSecondsOverride: null,
+      user: { id: 1, marchSeconds: 10, nickname: 'a' },
+    });
+
+    it('그룹이 running이면 ConflictException — DB 쓰기도 재계산 broadcast도 없음', async () => {
+      memberRepo.findOne.mockResolvedValue(fakeMember());
+      groupRepo.findOne.mockResolvedValue(fakeGroup('running'));
+
+      await expect(service.updateMarchOverride('m1', 170)).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+
+      expect(memberRepo.update).not.toHaveBeenCalled();
+      expect(gateway.emitCountdownStart).not.toHaveBeenCalled();
+      expect(gateway.emitGroupUpdated).not.toHaveBeenCalled();
+    });
+
+    it('그룹이 idle이면 정상 저장 + 재정렬 + emitGroupUpdated (과잉 차단 방지)', async () => {
+      memberRepo.findOne.mockResolvedValue(fakeMember());
+      memberRepo.find.mockResolvedValue([fakeMember()]);
+      groupRepo.findOne.mockResolvedValue(fakeGroup('idle'));
+
+      await service.updateMarchOverride('m1', 40);
+
+      expect(memberRepo.update).toHaveBeenCalledWith('m1', {
+        marchSecondsOverride: 40,
+      });
+      expect(gateway.emitGroupUpdated).toHaveBeenCalled();
+      // idle 그룹이므로 카운트다운 재방송은 절대 없어야 한다.
+      expect(gateway.emitCountdownStart).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('reorderAllForUser — 진행 중인 남의 그룹 보호', () => {
+    const membership = (groupId: string): any => ({
+      id: `m-${groupId}`,
+      groupId,
+      userId: 1,
+      orderIndex: 1,
+      marchSecondsOverride: null,
+      user: { id: 1, marchSeconds: 10, nickname: 'a' },
+    });
+
+    it('running 그룹은 재정렬도 broadcast도 하지 않는다', async () => {
+      memberRepo.find.mockResolvedValue([membership('g1')]);
+      groupRepo.find.mockResolvedValue([fakeGroup('running')]);
+      groupRepo.findOne.mockResolvedValue(fakeGroup('running'));
+
+      await service.reorderAllForUser(1);
+
+      // orderIndex 재할당(=memberRepo.update) 자체가 일어나면 안 된다.
+      expect(memberRepo.update).not.toHaveBeenCalled();
+      expect(gateway.emitCountdownStart).not.toHaveBeenCalled();
+      expect(gateway.emitGroupUpdated).not.toHaveBeenCalled();
+    });
+
+    it('idle 그룹은 기존대로 재정렬 + emitGroupUpdated (과잉 차단 방지)', async () => {
+      memberRepo.find.mockResolvedValue([membership('g1')]);
+      groupRepo.find.mockResolvedValue([fakeGroup('idle')]);
+      groupRepo.findOne.mockResolvedValue(fakeGroup('idle'));
+
+      await service.reorderAllForUser(1);
+
+      expect(memberRepo.update).toHaveBeenCalled();
+      expect(gateway.emitGroupUpdated).toHaveBeenCalled();
+      expect(gateway.emitCountdownStart).not.toHaveBeenCalled();
+    });
+
+    it('running(g1) + idle(g2) 혼재 — g2만 재정렬/broadcast', async () => {
+      memberRepo.find.mockResolvedValue([membership('g1'), membership('g2')]);
+      groupRepo.find.mockResolvedValue([
+        fakeGroup('running'),
+        { ...fakeGroup('idle'), id: 'g2' },
+      ]);
+      groupRepo.findOne.mockImplementation((opts: any) =>
+        Promise.resolve(
+          opts?.where?.id === 'g1'
+            ? fakeGroup('running')
+            : { ...fakeGroup('idle'), id: 'g2' },
+        ),
+      );
+
+      await service.reorderAllForUser(1);
+
+      expect(gateway.emitCountdownStart).not.toHaveBeenCalled();
+      expect(gateway.emitGroupUpdated).toHaveBeenCalledTimes(1);
+      expect(gateway.emitGroupUpdated).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'g2' }),
+      );
+      // g1(running)의 상세 조회조차 하지 않는다.
+      const findOneIds = groupRepo.findOne.mock.calls.map(
+        (c: any[]) => c[0]?.where?.id,
+      );
+      expect(findOneIds).not.toContain('g1');
+    });
+  });
 });

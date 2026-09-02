@@ -18,13 +18,25 @@ export const GOOGLE_VOICES: Record<string, { languageCode: string; name: string 
   zh: { languageCode: 'cmn-CN', name: 'cmn-CN-Wavenet-A' },
 };
 
-// Google TTS audioConfig.speakingRate — 값 변경 시 캐시 자동 무효화 트리거
+// Google TTS audioConfig.speakingRate — 값 변경 시 캐시 전량 무효화 트리거
 export const SPEAKING_RATE = 1.5;
+
+// Google TTS가 간혹 거의 빈 MP3(무음)를 반환하는 것을 감지하기 위한 최소 바이트.
+// 관찰값: 손상 파일 <=900 bytes / 정상 파일 >=1600 bytes.
+// 짧은 한국어 1음절(예: "오", "팔") 정상 발화도 최소 2KB 이상이므로 1000 bytes 미만은 손상으로 간주.
+// 서비스와 사전 생성 스크립트가 같은 기준을 써야 한 쪽이 만든 무음 파일을 다른 쪽이 정상으로 보지 않는다.
+export const MIN_MP3_BYTES = 1000;
 
 // 카운트다운 문구 (서비스·컨트롤러 공통 사용)
 export const PHRASES: Record<string, Record<string, string>> = {
   start:      { ko: '준비해주세요.', en: 'Get ready.', ja: '準備してください。', zh: '请准备。' },
   stop:       { ko: '카운트다운이 중지되었습니다.', en: 'Countdown stopped.', ja: 'カウントダウンが中止されました。', zh: '倒计时已停止。' },
+
+  // 개인 출발 안내 — 사용자별 marchSeconds 시점에 로컬에서만 재생된다.
+  // web/src/components/Battle/PersonalPanel.jsx 의 speak('march', lang) 대응.
+  // 숫자 슬롯과 겹쳐 재생되므로 start/stop 톤은 유지하되 짧게 둔다.
+  march:      { ko: '출발하세요.', en: 'March now.', ja: '出発してください。', zh: '请出发。' },
+
   captain_1:  { ko: '1번 집결장', en: 'Captain 1', ja: '集結場1番', zh: '集结场1号' },
   captain_2:  { ko: '2번 집결장', en: 'Captain 2', ja: '集結場2番', zh: '集结场2号' },
   captain_3:  { ko: '3번 집결장', en: 'Captain 3', ja: '集結場3番', zh: '集结场3号' },

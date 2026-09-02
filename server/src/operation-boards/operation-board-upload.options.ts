@@ -24,8 +24,22 @@ export const OPERATION_BOARD_BACKGROUND_ALLOWED_MIME_TYPES = Object.keys(
   OPERATION_BOARD_BACKGROUND_EXTENSION_BY_MIME_TYPE,
 );
 
-export const OPERATION_BOARD_BACKGROUND_URL_PATTERN =
-  /^\/uploads\/operation-boards\/\d{13}-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(?:jpg|png|webp)$/i;
+// 업로더가 만드는 파일명 규칙. URL 패턴과 파일명 패턴이 따로 놀면 삭제 판정이
+// 어긋나므로 한 소스에서 두 패턴을 함께 만든다.
+const OPERATION_BOARD_BACKGROUND_FILE_NAME_SOURCE = String.raw`\d{13}-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(?:jpg|png|webp)`;
+
+export const OPERATION_BOARD_BACKGROUND_URL_PREFIX =
+  '/uploads/operation-boards/';
+
+export const OPERATION_BOARD_BACKGROUND_FILE_NAME_PATTERN = new RegExp(
+  `^${OPERATION_BOARD_BACKGROUND_FILE_NAME_SOURCE}$`,
+  'i',
+);
+
+export const OPERATION_BOARD_BACKGROUND_URL_PATTERN = new RegExp(
+  `^${OPERATION_BOARD_BACKGROUND_URL_PREFIX}${OPERATION_BOARD_BACKGROUND_FILE_NAME_SOURCE}$`,
+  'i',
+);
 
 export function isOperationBoardBackgroundUrl(value: unknown): value is string {
   return (

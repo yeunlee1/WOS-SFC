@@ -1,0 +1,67 @@
+# 역할 — 앱 컨테이너 앞단에서 TLS 를 종단하고 HTTP·WebSocket 을 그대로 넘기는 리버스 프록시 설정.
+#
+# 도메인이 없어도 뜨고, 도메인을 넣으면 자동 HTTPS 가 켜진다 —
+#   SITE_ADDRESS 미설정 → 기본값 :80 → 평문 HTTP 로 모든 호스트명 수신(IP 접속 가능).
+#   SITE_ADDRESS=sfc.example.com → Caddy 가 Let's Encrypt 인증서를 자동 발급하고
+#   80 → 443 리다이렉트까지 스스로 건다.
+# {$VAR:기본값} 은 Caddyfile 파싱 전에 치환되는 환경변수 문법이다.
+# 여기서 기본값 자체가 ":80" 이라 콜론이 두 번 나온다.
+#
+# ---------------------------------------------------------------------------
+# X-Forwarded-For 를 Caddy 가 어떻게 다루는가 (공식 문서 확인, 추측 아님)
+# ---------------------------------------------------------------------------
+# 출처: caddyserver.com/docs/caddyfile/directives/reverse_proxy 의 "Defaults" 절.
+#   "By default, Caddy passes incoming headers to the backend without modifications,
+#    except for setting or augmenting X-Forwarded-For, X-Forwarded-Proto, and
+#    X-Forwarded-Host. To prevent spoofing, Caddy ignores incoming values for these
+#    X-Forwarded-* headers by default. If Caddy is not the first server in the
+#    connection chain (e.g. behind a CDN), you can configure trusted_proxies with
+#    IP ranges to trust incoming values for these headers."
+#
+# 즉 Caddy 의 기본 동작은 "무조건 이어붙이기"가 아니라 이렇다.
+#   - 직접 연결한 상대가 신뢰 목록에 없으면 → 들어온 XFF 를 버리고 실제 클라이언트 IP 로 새로 쓴다.
+#   - 신뢰 목록에 있으면 → 들어온 XFF 뒤에 이어붙인다(augment).
+#
+# 이 구성(Caddy 가 인터넷에 직접 노출된 유일한 앞단)에서는 앞의 동작이 정답이다.
+# 클라이언트가 XFF 를 위조해 보내도 Caddy 가 통째로 버리므로 앱에는 항상 항목 1개짜리
+# 체인만 도달한다. 그래서 TRUST_PROXY_HOPS=1 이 맞고, 위조로 요청 한도를 우회할 수 없다.
+# (nginx 로 치면 proxy_add_x_forwarded_for 보다 안전한 쪽이다. nginx 에서
+#  $remote_addr 로 덮어쓰는 것과 결과가 같아 보이지만, 저건 신뢰 상대에게는 이어붙이므로
+#  CDN 을 앞에 둬도 클라이언트 IP 가 살아남는다는 점이 다르다.)
+#
+# ⚠ 앞에 CDN(Cloudflare 등)을 두면 아래 trusted_proxies 설정을 반드시 켜야 한다.
+#    켜지 않으면 Caddy 가 CDN 이 보낸 XFF 를 버리고 "CDN 의 IP"를 클라이언트로 기록한다.
+#    그 상태에서 TRUST_PROXY_HOPS 를 2로 올려도 진짜 클라이언트 IP 는 이미 유실돼 복구되지 않는다.
+#    (앱의 [trust proxy 진단] 로그는 체인 길이 1 을 보고 '정상'으로 판정하므로 이 경우를 잡지 못한다.)
+#
+#    켜는 방법 — 아래 전역 옵션 블록의 주석을 풀고 CDN 의 실제 IP 대역을 넣는다.
+#    그다음 TRUST_PROXY_HOPS=2 로 올린다.
+#
+# {
+# 	servers {
+# 		trusted_proxies static 173.245.48.0/20 103.21.244.0/22 <CDN 대역 전부>
+# 		trusted_proxies_strict
+# 	}
+# }
+# ---------------------------------------------------------------------------
+
+{$SITE_ADDRESS::80} {
+	# 접근 로그를 stdout 으로 남긴다. docker compose logs proxy 로 본다.
+	# 사고 조사 때 어떤 IP 가 언제 무엇을 요청했는지가 여기 남는다.
+	log {
+		output stdout
+		format json
+	}
+
+	# Caddy 의 encode 기본 match 목록은 text/*, application/json, javascript, 폰트,
+	# image/svg 같은 압축 이득이 있는 타입만 고른다. audio/mpeg 는 목록에 없으므로
+	# TTS mp3 는 재압축되지 않는다 — 카운트다운 음성 전송에 CPU 를 낭비하지 않는다.
+	encode zstd gzip
+
+	# reverse_proxy 는 Caddy v2 에서 WebSocket 업그레이드를 기본으로 통과시킨다.
+	# 별도 헤더 설정이 필요 없다(socket.io 실시간 경로가 이 위로 흐른다).
+	#
+	# X-Forwarded-For / X-Forwarded-Proto / X-Forwarded-Host 를 기본으로 붙인다.
+	# 이 프록시가 앱 앞의 유일한 한 단이라는 것이 TRUST_PROXY_HOPS=1 의 근거다.
+	reverse_proxy app:3001
+}

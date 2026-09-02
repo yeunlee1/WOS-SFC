@@ -18,7 +18,10 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "tts:generate": "ts-node -r tsconfig-paths/register src/tts/scripts/tts-generate.ts"
+    "migrate": "node --env-file-if-exists=.env dist/database/migrate.js",
+    "migrate:dev": "node --env-file-if-exists=.env -r ts-node/register src/database/migrate.ts",
+    "tts:generate": "ts-node -r tsconfig-paths/register src/tts/scripts/tts-generate.ts",
+    "tts:generate:prod": "node dist/tts/scripts/tts-generate.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.105.0",
@@ -38,6 +41,7 @@
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
     "cookie-parser": "^1.4.7",
+    "dotenv": "^16.6.1",
     "helmet": "^8.1.0",
     "multer": "^2.2.0",
     "mysql2": "^3.22.0",

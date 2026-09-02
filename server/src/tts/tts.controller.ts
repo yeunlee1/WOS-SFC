@@ -1,6 +1,6 @@
 import { Controller, Get, Param, Req, Res, HttpStatus } from '@nestjs/common';
 import type { Request, Response } from 'express';
-import { TtsService } from './tts.service';
+import { TtsService, TtsUnavailableError } from './tts.service';
 import {
   getTtsText,
   parseTtsKey,
@@ -61,7 +61,11 @@ export class TtsController {
         stream.on('end', () => resolve());
         stream.on('error', reject);
       });
-    } catch {
+    } catch (error) {
+      // 키 없이 캐시가 빈 상태는 서버 결함이 아니라 '없는 파일'이다. 클라이언트는 !ok 면 무음으로 넘어간다.
+      if (error instanceof TtsUnavailableError) {
+        return res.status(HttpStatus.NOT_FOUND).json({ error: 'audio unavailable' });
+      }
       return res
         .status(HttpStatus.INTERNAL_SERVER_ERROR)
         .json({ error: 'audio unavailable' });

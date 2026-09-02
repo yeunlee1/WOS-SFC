@@ -20,6 +20,7 @@ const socketMocks = vi.hoisted(() => {
       return socket;
     }),
     emit: vi.fn(),
+    connect: vi.fn(),
     disconnect: vi.fn(),
   };
   return { socket, handlers, io: vi.fn(() => socket) };
@@ -49,6 +50,7 @@ describe('socket singleton', () => {
     socketMocks.socket.on.mockClear();
     socketMocks.socket.off.mockClear();
     socketMocks.socket.emit.mockClear();
+    socketMocks.socket.connect.mockClear();
     socketMocks.socket.disconnect.mockClear();
     socketMocks.socket.connected = false;
     Object.keys(socketMocks.handlers).forEach(
@@ -71,9 +73,11 @@ describe('socket singleton', () => {
     expect(socketMocks.io).toHaveBeenCalledTimes(1);
   });
 
-  it('expires auth only when the server forcibly disconnects the socket', () => {
+  it('expires auth only when the server forcibly disconnects the socket', async () => {
     const onExpired = vi.fn();
     window.addEventListener('auth:expired', onExpired);
+    // 토큰 갱신까지 실패해야 비로소 만료로 취급한다.
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 401 })));
 
     try {
       const socket = connectSocket();
@@ -83,8 +87,50 @@ describe('socket singleton', () => {
       expect(onExpired).not.toHaveBeenCalled();
 
       socketMocks.handlers.disconnect('io server disconnect');
+      await vi.waitFor(() => expect(onExpired).toHaveBeenCalledTimes(1));
       expect(getSocket()).toBeNull();
-      expect(onExpired).toHaveBeenCalledTimes(1);
+    } finally {
+      window.removeEventListener('auth:expired', onExpired);
+    }
+  });
+
+  it('서버가 끊으면 로그아웃 전에 토큰 갱신을 먼저 시도한다', async () => {
+    const onExpired = vi.fn();
+    window.addEventListener('auth:expired', onExpired);
+    const fetchMock = vi.fn(async () => ({ ok: true, status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      const socket = connectSocket();
+      socketMocks.handlers.disconnect('io server disconnect');
+
+      await vi.waitFor(() =>
+        expect(socketMocks.socket.connect).toHaveBeenCalledTimes(1),
+      );
+      expect(fetchMock.mock.calls[0][0]).toBe('/auth/refresh');
+      expect(getSocket()).toBe(socket);
+      expect(onExpired).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener('auth:expired', onExpired);
+    }
+  });
+
+  it('갱신 후 재접속이 또 끊기면 그때 인증을 만료한다', async () => {
+    const onExpired = vi.fn();
+    window.addEventListener('auth:expired', onExpired);
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 204 })));
+
+    try {
+      connectSocket();
+      socketMocks.handlers.disconnect('io server disconnect');
+      await vi.waitFor(() =>
+        expect(socketMocks.socket.connect).toHaveBeenCalledTimes(1),
+      );
+
+      socketMocks.handlers.disconnect('io server disconnect');
+      await vi.waitFor(() => expect(onExpired).toHaveBeenCalledTimes(1));
+      expect(socketMocks.socket.connect).toHaveBeenCalledTimes(1);
+      expect(getSocket()).toBeNull();
     } finally {
       window.removeEventListener('auth:expired', onExpired);
     }

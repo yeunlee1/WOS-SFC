@@ -1,6 +1,7 @@
 # PR 트리거 자동 검증. npm workspace(루트)에서 install 후 web/server 각자 빌드·테스트.
 # Branch protection의 required status check 대상.
 # path filter 없음. docs-only PR도 항상 CI를 실행해야 required check 통과 가능 (없으면 영구 BLOCKED).
+# Node 22 — Dockerfile 의 런타임(node:22-bookworm-slim)과 같은 메이저로 검증한다. 잡 name 은 보호 규칙의 required check 이름이라 바꾸지 않는다.
 name: test
 
 on:
@@ -21,7 +22,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: "npm"
       - name: Install workspaces (root)
         run: npm ci
@@ -40,7 +41,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: "npm"
       - name: Install workspaces (root)
         run: npm ci

@@ -39,15 +39,6 @@ export class User {
   @Column({ type: 'enum', enum: LANGUAGES })
   language: Language;
 
-  @Column({
-    name: 'refresh_token_hash',
-    type: 'varchar',
-    nullable: true,
-    length: 255,
-    select: false,
-  })
-  refreshTokenHash: string | null;
-
   @Column({ name: 'march_seconds', type: 'int', nullable: true })
   marchSeconds: number | null;
 

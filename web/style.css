@@ -5961,3 +5961,82 @@ body.theme-spring .chat-dock-input-row .btn-primary:hover {
     min-height: 430px;
   }
 }
+
+/* ─── Operation Board — 안내·경고 문구 ─── */
+/* 기존 규칙은 손대지 않고 뒤에 덧붙인다(다른 브랜치의 테마 추가와 충돌하지 않게).
+   `.operation-board-head p` 가 이 문구들에 회색 12px 를 먼저 씌우므로,
+   부모 클래스를 함께 적어 특정도를 (0,0,2,0)으로 올려 덮는다.
+   색은 전부 기존 테마 토큰이라 frost/spring 어느 쪽에서도 그 테마의 색으로 나온다. */
+
+.operation-board-head .operation-board-hint {
+  margin-top: 8px;
+  padding: 6px 10px;
+  border-left: 3px solid var(--border2);
+  border-radius: var(--r-sm);
+  background: var(--bg-subtle);
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 1.5;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+/* 라이브 보드 소실 고지 — 놓치면 그린 것이 통째로 사라지므로 가장 강하게 준다. */
+.operation-board-head .operation-board-alert {
+  margin-top: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--orange);
+  border-left-width: 4px;
+  border-radius: var(--r-sm);
+  background: var(--orange-soft);
+  color: var(--orange);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.5;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+/* 서버가 돌려준 거절 사유 — 상태 문구와 같은 줄에 있어 구분이 필요하다. */
+.operation-head-actions .operation-board-error {
+  padding: 4px 10px;
+  border: 1px solid var(--red);
+  border-radius: 999px;
+  background: var(--red-soft);
+  color: var(--red);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+  max-width: min(100%, 46ch);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 768px) {
+  .operation-board-head .operation-board-hint,
+  .operation-board-head .operation-board-alert {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  /* 세로 배치로 바뀌면 거절 사유가 오른쪽 끝에 눌려 한 글자씩 줄바꿈된다. */
+  .operation-head-actions .operation-board-error {
+    flex: 1 1 100%;
+    max-width: 100%;
+    border-radius: var(--r-sm);
+    text-align: left;
+  }
+}
+
+@media (max-width: 480px) {
+  .operation-board-head .operation-board-hint,
+  .operation-board-head .operation-board-alert,
+  .operation-head-actions .operation-board-error {
+    padding: 6px 8px;
+    font-size: 11px;
+    line-height: 1.45;
+  }
+
+  .operation-board-head .operation-board-alert {
+    border-left-width: 3px;
+  }
+}

@@ -3,14 +3,23 @@ import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
 import { SignupDto } from './dto/signup.dto';
 import { LoginDto } from './dto/login.dto';
+import { RefreshTokensService } from './refresh-tokens.service';
 import * as bcrypt from 'bcrypt';
-import { randomUUID } from 'crypto';
+
+interface RefreshPayload {
+  sub: number;
+  jti: string;
+  type: string;
+}
+
+const INVALID_REFRESH = '리프레시 토큰이 유효하지 않습니다';
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
+    private readonly sessions: RefreshTokensService,
   ) {}
 
   private createAccessToken(payload: { id: number; nickname: string; role: string; allianceName: string }) {
@@ -20,15 +29,17 @@ export class AuthService {
     );
   }
 
-  private async createRefreshToken(userId: number): Promise<string> {
-    const jti = randomUUID();
-    const hash = await bcrypt.hash(jti, 10);
-    await this.usersService.updateRefreshTokenHash(userId, hash);
-    // refresh token은 jti를 포함한 JWT (타입 구분용)
+  // refresh token은 jti를 포함한 JWT (타입 구분용). jti 의 해시가 refresh_tokens 행과 대응한다.
+  private signRefreshToken(userId: number, jti: string): string {
     return this.jwtService.sign(
       { sub: userId, jti, type: 'refresh' },
       { expiresIn: '7d' },
     );
+  }
+
+  /** 로그인·가입마다 새 세션(기기) 행을 만든다. 다른 기기의 행은 건드리지 않는다. */
+  private async createRefreshToken(userId: number): Promise<string> {
+    return this.signRefreshToken(userId, await this.sessions.issue(userId));
   }
 
   async signup(dto: SignupDto) {
@@ -60,26 +71,40 @@ export class AuthService {
     return { accessToken, refreshToken, user: { id: user.id, nickname: user.nickname, role: user.role, allianceName: user.allianceName, language: user.language } };
   }
 
+  /** 제시된 refresh 토큰의 세션 행만 회전한다. 같은 계정의 다른 기기는 영향받지 않는다. */
   async refreshTokens(rawRefreshToken: string) {
+    let payload: RefreshPayload;
     try {
-      const payload = this.jwtService.verify<{ sub: number; jti: string; type: string }>(rawRefreshToken);
-      if (payload.type !== 'refresh') throw new UnauthorizedException();
-
-      const user = await this.usersService.findByIdWithRefreshToken(payload.sub);
-      if (!user?.refreshTokenHash) throw new UnauthorizedException();
-
-      const valid = await bcrypt.compare(payload.jti, user.refreshTokenHash);
-      if (!valid) throw new UnauthorizedException();
-
-      const accessToken = this.createAccessToken(user);
-      const newRefreshToken = await this.createRefreshToken(user.id);
-      return { accessToken, refreshToken: newRefreshToken, user: { id: user.id, nickname: user.nickname, role: user.role, allianceName: user.allianceName, language: user.language } };
+      payload = this.jwtService.verify<RefreshPayload>(rawRefreshToken);
     } catch {
-      throw new UnauthorizedException('리프레시 토큰이 유효하지 않습니다');
+      throw new UnauthorizedException(INVALID_REFRESH);
     }
+    if (payload.type !== 'refresh' || typeof payload.jti !== 'string') {
+      throw new UnauthorizedException(INVALID_REFRESH);
+    }
+    const nextJti = await this.sessions.rotate(payload.sub, payload.jti);
+    if (!nextJti) throw new UnauthorizedException(INVALID_REFRESH);
+    const user = await this.usersService.findById(payload.sub);
+    if (!user) throw new UnauthorizedException(INVALID_REFRESH);
+    return {
+      accessToken: this.createAccessToken(user),
+      refreshToken: this.signRefreshToken(user.id, nextJti),
+      user: { id: user.id, nickname: user.nickname, role: user.role, allianceName: user.allianceName, language: user.language },
+    };
   }
 
-  async logout(userId: number): Promise<void> {
-    await this.usersService.updateRefreshTokenHash(userId, null);
+  /** refresh 쿠키가 있을 때만 그 기기의 세션을 지운다. 만료된 JWT 도 decode 는 되므로 폐기할 수 있다. */
+  async logout(userId: number, rawRefreshToken?: string): Promise<void> {
+    if (!rawRefreshToken) return;
+    const payload = this.jwtService.decode(rawRefreshToken) as RefreshPayload | null;
+    if (
+      !payload ||
+      payload.type !== 'refresh' ||
+      payload.sub !== userId ||
+      typeof payload.jti !== 'string'
+    ) {
+      return;
+    }
+    await this.sessions.revoke(userId, payload.jti);
   }
 }

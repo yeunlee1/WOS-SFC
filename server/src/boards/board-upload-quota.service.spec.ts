@@ -1,5 +1,5 @@
 // 게시판 업로드 quota가 진행 중 예약과 실제 디스크 사용량을 분리하는지 검증한다.
-import { HttpException } from '@nestjs/common';
+import { HttpException, Logger } from '@nestjs/common';
 import * as fsPromises from 'fs/promises';
 import {
   BOARD_UPLOAD_TOTAL_QUOTA_BYTES,
@@ -116,5 +116,47 @@ describe('BoardUploadQuotaService', () => {
     expect((quota as unknown as { diskBytes: number }).diskBytes).toBe(
       5 * 1024 * 1024,
     );
+  });
+});
+
+// 507만 던지고 끝나면 관리자가 언제 어디가 찼는지 알 수 없다.
+describe('BoardUploadQuotaService 사용량 가시성', () => {
+  const readdirMock = fsPromises.readdir as jest.Mock;
+  const statMock = fsPromises.stat as jest.Mock;
+
+  beforeEach(() => {
+    jest.restoreAllMocks();
+    jest.clearAllMocks();
+    readdirMock.mockResolvedValue([]);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('quota 초과로 507을 던질 때 현재 사용량을 경고 로그로 남긴다', async () => {
+    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+    readdirMock.mockResolvedValue([fileEntry('full.webp')]);
+    statMock.mockResolvedValue({ size: BOARD_UPLOAD_TOTAL_QUOTA_BYTES });
+    const quota = new BoardUploadQuotaService();
+
+    await expect(quota.reserve()).rejects.toMatchObject({ status: 507 });
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0][0])).toContain('1024');
+  });
+
+  it('invalidate 호출 뒤 다음 예약에서 디스크를 다시 실측한다', async () => {
+    const quota = new BoardUploadQuotaService();
+
+    await quota.reserve();
+    expect(readdirMock).toHaveBeenCalledTimes(1);
+
+    await quota.reserve();
+    expect(readdirMock).toHaveBeenCalledTimes(1);
+
+    quota.invalidate();
+    await quota.reserve();
+    expect(readdirMock).toHaveBeenCalledTimes(2);
   });
 });

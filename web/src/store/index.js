@@ -46,6 +46,12 @@ export function getChatMessageKey(message) {
   ].join(':');
 }
 
+// 실제 대화와 입퇴장 시스템 메시지의 상한을 분리한다.
+// 하나의 500칸 버퍼를 공유하면 100명이 입퇴장하는 순간 시스템 메시지가
+// 실제 대화를 통째로 밀어내 버린다.
+const CHAT_MESSAGE_LIMIT = 500;
+const CHAT_SYSTEM_LIMIT = 50;
+
 function mergeChatMessages(current, incoming) {
   const byKey = new Map(
     current.map((message) => [getChatMessageKey(message), message]),
@@ -55,13 +61,24 @@ function mergeChatMessages(current, incoming) {
     const previous = byKey.get(key);
     byKey.set(key, previous ? { ...message, ...previous } : message);
   }
-  return Array.from(byKey.values())
-    .sort((a, b) => {
-      const aTime = Date.parse(a.createdAt || '') || 0;
-      const bTime = Date.parse(b.createdAt || '') || 0;
-      return aTime - bTime;
-    })
-    .slice(-500);
+  const ordered = Array.from(byKey.values()).sort((a, b) => {
+    const aTime = Date.parse(a.createdAt || '') || 0;
+    const bTime = Date.parse(b.createdAt || '') || 0;
+    return aTime - bTime;
+  });
+
+  const kept = new Set([
+    ...ordered
+      .filter((message) => message?._type !== 'system')
+      .slice(-CHAT_MESSAGE_LIMIT)
+      .map(getChatMessageKey),
+    ...ordered
+      .filter((message) => message?._type === 'system')
+      .slice(-CHAT_SYSTEM_LIMIT)
+      .map(getChatMessageKey),
+  ]);
+  // 시간순 정렬을 유지한 채 살아남은 항목만 남긴다.
+  return ordered.filter((message) => kept.has(getChatMessageKey(message)));
 }
 
 // personalOffsetMs 초기값: localStorage 우선, 없으면 0. 범위 -1000~+1000ms로 clamp.
@@ -94,6 +111,10 @@ export const useStore = create((set) => ({
   user: null,
   timeOffset: 0,
   timeSyncRtt: 0, // 진단용 — 마지막 동기화 RTT(ms)
+  // 시계 동기화 진행 상태. timeOffset 초기값 0은 "오차 0"이 아니라 "아직 모름"이므로
+  // 두 상태를 반드시 이 필드로 구분한다. UI는 'synced'가 아닐 때 성공 표시를 하면 안 된다.
+  // 'unsynced' 시작 전/정리 후 · 'syncing' 시도 중 · 'failed' 실패(재시도 대기) · 'synced' 성공
+  timeSyncState: 'unsynced',
   personalOffsetMs: _initPersonalOffsetMs(), // 사용자 디바이스별 미세 보정 (-1000~+1000ms)
 
   // 실시간 데이터
@@ -130,6 +151,7 @@ export const useStore = create((set) => ({
   clearUser: () => set({ user: null, chatMessages: [], onlineUsers: [] }),
   setTimeOffset: (timeOffset) => set({ timeOffset }),
   setTimeSyncRtt: (timeSyncRtt) => set({ timeSyncRtt }),
+  setTimeSyncState: (timeSyncState) => set({ timeSyncState }),
   setPersonalOffsetMs: (ms) => {
     const n = Number(ms);
     const clamped = Number.isFinite(n)
