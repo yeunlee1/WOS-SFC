@@ -5,6 +5,7 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import helmet from 'helmet';
 import * as express from 'express';
 import cookieParser from 'cookie-parser';
+import { assertProductionSecrets, resolveWebOrigin } from './common/boot-config';
 import {
   createTrustProxyProbe,
   resolveTrustProxyHops,
@@ -58,10 +59,11 @@ async function bootstrap() {
     }),
   );
 
-  if (process.env.NODE_ENV === 'production' && !process.env.WEB_ORIGIN) {
-    throw new Error('WEB_ORIGIN 환경변수가 production에서 필수입니다');
-  }
-  const allowedOrigin = process.env.WEB_ORIGIN || 'http://localhost:5173';
+  assertProductionSecrets(process.env);
+  const allowedOrigin = resolveWebOrigin(process.env, new Logger('BootConfig'));
+  // 소켓 CORS(realtime/socket-cors.options.ts)는 요청 시점에 process.env.WEB_ORIGIN 을 읽는다.
+  // 같은 정규화 값을 보도록 여기서 덮어쓴다.
+  process.env.WEB_ORIGIN = allowedOrigin;
   app.enableCors({ origin: allowedOrigin, credentials: true });
 
   await app.listen(process.env.PORT ?? 3001);

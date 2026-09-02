@@ -1,4 +1,4 @@
-import { IsString, MinLength, IsIn, MaxLength, Matches } from 'class-validator';
+import { IsString, MinLength, IsIn, MaxLength, Matches, IsNotEmpty } from 'class-validator';
 import { LANGUAGES } from '../../users/users.entity';
 import type { Language } from '../../users/users.entity';
 
@@ -20,5 +20,5 @@ export class SignupDto {
   @IsString() @MinLength(6) @MaxLength(100) password: string;
   @IsString() @MaxLength(100) allianceName: string;
   @IsIn(LANGUAGES) language: Language;
-  @IsString() @MaxLength(20) serverCode: string;
+  @IsString() @IsNotEmpty() @MaxLength(20) serverCode: string;
 }
