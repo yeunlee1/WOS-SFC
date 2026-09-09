@@ -4,6 +4,7 @@ import { Logger } from '@nestjs/common';
 import {
   DEFAULT_TRANSLATE_MODEL,
   MAX_OUTPUT_TOKENS_CAP,
+  modelRequestParams,
   TranslateEngineService,
   TranslateProviderError,
 } from './translate-engine.service';
@@ -339,6 +340,32 @@ describe('TranslateEngineService — 감사 A 반영', () => {
     for (const [body] of mockCreate.mock.calls) {
       expect(body.max_output_tokens).toBe(Math.ceil(1000 * 2.5) + 100);
     }
+  });
+});
+
+describe('modelRequestParams — 모델 계열별 파라미터(2026-09-10 실측)', () => {
+  it('gpt-5.x 는 reasoning none·verbosity low', () => {
+    expect(modelRequestParams('gpt-5.4-mini')).toEqual({ reasoning: { effort: 'none' }, verbosity: 'low' });
+    expect(modelRequestParams('gpt-5.6-luna')).toEqual({ reasoning: { effort: 'none' }, verbosity: 'low' });
+  });
+
+  it('gpt-5·gpt-5-mini·gpt-5-nano 는 none 을 거부하므로 minimal', () => {
+    expect(modelRequestParams('gpt-5-nano')).toEqual({ reasoning: { effort: 'minimal' }, verbosity: 'low' });
+    expect(modelRequestParams('gpt-5')).toEqual({ reasoning: { effort: 'minimal' }, verbosity: 'low' });
+  });
+
+  it('gpt-4.1 계열은 reasoning 파라미터 자체를 거부하므로 둘 다 보내지 않는다', async () => {
+    expect(modelRequestParams('gpt-4.1-nano')).toEqual({});
+    jest.spyOn(Logger.prototype, 'log').mockImplementation();
+    mockCreate.mockClear();
+    mockCreate.mockResolvedValueOnce(okResponse({ source: 'ko', en: 'Rally' }));
+    const { engine } = makeEngine({ OPENAI_API_KEY: 'k', TRANSLATE_MODEL: 'gpt-4.1-nano' });
+    await engine.translateMulti('집결', ['en']);
+    const body = mockCreate.mock.calls[0][0];
+    expect(body).not.toHaveProperty('reasoning');
+    expect(body.text).not.toHaveProperty('verbosity');
+    expect(body.text.format.type).toBe('json_schema');
+    jest.restoreAllMocks();
   });
 });
 

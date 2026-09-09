@@ -50,9 +50,22 @@ describe('selectGlossaryLines', () => {
     expect(selectGlossaryLines('three waves', ['ko'])).toEqual(['wave=웨이브']);
   });
 
-  it('키릴 원문도 대소문자를 무시한다', () => {
+  it('키릴 원문은 대소문자를 무시하고 어미가 바뀐 형태(부분 일치·어간 별칭)도 잡는다', () => {
     expect(selectGlossaryLines('Сбор через 5 минут', ['ko'])).toEqual([
       'сбор=집결',
+    ]);
+    // копейщики(복수)·стрелки(복수)·замке(전치격) — 단어 경계 규칙이면 전부 놓친다.
+    expect(selectGlossaryLines('копейщики и стрелки в замке', ['ko'])).toEqual([
+      'замк=성',
+      'Копейщик=창병',
+      'стрелк=사수',
+    ]);
+  });
+
+  it('SFC 는 태그처럼 쓰여 영어 대표 표기가 SFC 다(ko 열 별칭으로 매칭되므로 en 도 오른쪽에 남는다)', () => {
+    expect(selectGlossaryLines('SFC 집결 go', ['en', 'ja'])).toEqual([
+      '집결=rally|集結',
+      'SFC=SFC|サンファイア城',
     ]);
   });
 

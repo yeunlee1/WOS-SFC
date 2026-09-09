@@ -62,6 +62,19 @@ const RULES = [
 const estimateTokens = (chars: number): number =>
   Math.ceil(chars * OUTPUT_TOKENS_PER_CHAR);
 
+/**
+ * 모델 계열별 요청 파라미터. 2026-09-10 평가 실측 — gpt-4.1 계열은 reasoning 파라미터 자체를 400 으로
+ * 거부하고, gpt-5·gpt-5-mini·gpt-5-nano 는 effort 'none' 을 거부한다(minimal 까지). gpt-5.x 는 none 을 받는다.
+ */
+export function modelRequestParams(model: string): {
+  reasoning?: { effort: 'none' | 'minimal' };
+  verbosity?: 'low';
+} {
+  if (/^gpt-4/.test(model)) return {};
+  if (/^gpt-5(-|$)/.test(model)) return { reasoning: { effort: 'minimal' }, verbosity: 'low' };
+  return { reasoning: { effort: 'none' }, verbosity: 'low' };
+}
+
 @Injectable()
 export class TranslateEngineService {
   private readonly logger = new Logger(TranslateEngineService.name);
@@ -325,14 +338,15 @@ export class TranslateEngineService {
     const startedAt = Date.now();
     let response: OpenAI.Responses.Response;
     try {
+      const params = modelRequestParams(this.model);
       response = await client.responses.create(
         {
           model: this.model,
           instructions: request.instructions,
           input: request.input,
-          reasoning: { effort: 'none' },
+          ...(params.reasoning ? { reasoning: params.reasoning } : {}),
           text: {
-            verbosity: 'low',
+            ...(params.verbosity ? { verbosity: params.verbosity } : {}),
             format: {
               type: 'json_schema',
               name: request.name,
