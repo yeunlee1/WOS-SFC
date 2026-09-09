@@ -100,10 +100,39 @@ describe('TranslateEngineService.translateMulti', () => {
     await engine.translateMulti('10분 뒤 집결 갑니다', ['en', 'ja']);
 
     const instructions: string = mockCreate.mock.calls[0][0].instructions;
-    expect(instructions).toContain('집결=rally|集結');
-    expect(instructions).not.toContain('화로=');
+    expect(instructions).toContain('Game terms by target language code:');
+    expect(instructions).toContain('집결 → en: rally; ja: 集結');
+    expect(instructions).not.toContain('화로 →');
     expect(instructions.toLowerCase()).toContain('target language');
     expect(instructions).toContain('source');
+  });
+
+  // 2026-09-10 E2E 핫픽스 — 대상 {en, ko} 에 영어 원문이 들어오면 옛 형식(매칭 열 제외·"in target order")은
+  // `bear trap=곰 사냥` 한 줄만 남겨 모델이 en 칸에 한국어를 넣고 ko 칸은 용어만 치환했다.
+  it('대상에 발신 언어가 포함되면 용어집 줄에 그 언어의 표기도 라벨과 함께 있고 "in target order" 는 없다', async () => {
+    mockCreate.mockResolvedValueOnce(okResponse({ source: 'en', en: 'x', ko: 'y' }));
+    const { engine } = makeEngine();
+    await engine.translateMulti(
+      'Bear trap starts at reset, garrison your troops in the fortress.',
+      ['en', 'ko'],
+    );
+
+    const instructions: string = mockCreate.mock.calls[0][0].instructions;
+    expect(instructions).toContain('bear trap → en: Bear Hunt; ko: 곰 사냥');
+    expect(instructions).toContain('fortress → en: fortress; ko: 요새');
+    expect(instructions).not.toContain('in target order');
+    expect(instructions).not.toContain('matched form=target form');
+    expect(instructions).toContain(
+      'Never insert glossary terms into a language other than the one they are labeled for.',
+    );
+    expect(instructions).toContain('glossary lines only fix how terms are rendered');
+  });
+
+  it('시간·기간 낱말(분·초)은 번역하라는 규칙이 있다(luna 의 "1분 30초" 미번역 대응)', async () => {
+    const { engine } = makeEngine();
+    await engine.translateMulti('행군 시간 1분 30초', ['en']);
+    const instructions: string = mockCreate.mock.calls[0][0].instructions;
+    expect(instructions).toContain('Translate time/duration words');
   });
 
   it('TRANSLATE_MODEL 환경변수가 모델을 정한다', async () => {
@@ -311,14 +340,16 @@ describe('TranslateEngineService — 감사 A 반영', () => {
     expect(mockCreate).toHaveBeenCalledTimes(1);
   });
 
-  it('배치에서 항목 하나가 잘리면 null 이다', async () => {
+  it('배치에서 항목 하나가 잘리면 text null 이다', async () => {
     mockCreate.mockResolvedValueOnce({
       ...okResponse({}),
       status: 'incomplete',
       incomplete_details: { reason: 'max_output_tokens' },
     });
     const { engine } = makeEngine();
-    await expect(engine.translateBatch([{ id: 1, text: '집결' }], 'en')).resolves.toEqual({ 1: null });
+    await expect(engine.translateBatch([{ id: 1, text: '집결' }], 'en')).resolves.toEqual({
+      1: { source: 'unknown', text: null },
+    });
     expect(mockCreate).toHaveBeenCalledTimes(1);
   });
 
@@ -389,7 +420,10 @@ describe('TranslateEngineService.translateBatch', () => {
       ],
       'en',
     );
-    expect(result).toEqual({ 1: 'Rally', 2: null });
+    expect(result).toEqual({
+      1: { source: 'ko', text: 'Rally' },
+      2: { source: 'unknown', text: null },
+    });
     expect(mockCreate).toHaveBeenCalledTimes(1);
     const body = mockCreate.mock.calls[0][0];
     expect(JSON.parse(body.input)).toEqual({
@@ -403,8 +437,27 @@ describe('TranslateEngineService.translateBatch', () => {
     expect(schema.properties.items.items.required).toEqual(['id', 'source', 'text']);
     expect(schema.properties.items.items.properties.id).toEqual({ type: 'integer' });
     expect(schema.additionalProperties).toBe(false);
-    expect(body.instructions).toContain('집결=rally');
-    expect(body.instructions).toContain('화로=Furnace');
+    expect(body.instructions).toContain('집결 → en: rally');
+    expect(body.instructions).toContain('화로 → en: Furnace');
+  });
+
+  // 2026-09-10 E2E 핫픽스 — 컨트롤러가 source === target 항목을 원문으로 덮을 수 있게 항목별 source 를 돌려준다.
+  it('항목마다 모델이 준 source 를 함께 돌려주고 알 수 없는 값은 unknown 이다', async () => {
+    mockCreate.mockResolvedValueOnce(
+      okResponse({
+        items: [
+          { id: 1, source: 'ko', text: '10분 뒤 SFC rally 갑니다' },
+          { id: 2, source: 'fr', text: 'x' },
+        ],
+      }),
+    );
+    const { engine } = makeEngine();
+    await expect(
+      engine.translateBatch([{ id: 1, text: '10분 뒤 SFC 집결 갑니다' }, { id: 2, text: 'hello' }], 'ko'),
+    ).resolves.toEqual({
+      1: { source: 'ko', text: '10분 뒤 SFC rally 갑니다' },
+      2: { source: 'unknown', text: 'x' },
+    });
   });
 
   it('JSON 이 깨지면 항목별로 1회씩 다시 부르고 그래도 깨지면 null 이다', async () => {
@@ -423,16 +476,19 @@ describe('TranslateEngineService.translateBatch', () => {
     expect(mockCreate).toHaveBeenCalledTimes(3);
     expect(JSON.parse(mockCreate.mock.calls[1][0].input).items).toEqual([{ id: 1, text: '집결' }]);
     expect(JSON.parse(mockCreate.mock.calls[2][0].input).items).toEqual([{ id: 2, text: '화로' }]);
-    expect(result).toEqual({ 1: 'Rally', 2: null });
+    expect(result).toEqual({
+      1: { source: 'ko', text: 'Rally' },
+      2: { source: 'unknown', text: null },
+    });
   });
 
-  it('빈 문자열 번역은 null 로 돌려준다', async () => {
+  it('빈 문자열 번역은 text null 로 돌려준다(source 는 남긴다)', async () => {
     mockCreate.mockResolvedValueOnce(
       okResponse({ items: [{ id: 1, source: 'ko', text: '   ' }] }),
     );
     const { engine } = makeEngine();
     await expect(engine.translateBatch([{ id: 1, text: '집결' }], 'en')).resolves.toEqual({
-      1: null,
+      1: { source: 'ko', text: null },
     });
   });
 
@@ -450,7 +506,12 @@ describe('TranslateEngineService.translateBatch', () => {
     for (const [body] of mockCreate.mock.calls) {
       expect(body.max_output_tokens).toBeLessThanOrEqual(MAX_OUTPUT_TOKENS_CAP);
     }
-    expect(result).toEqual({ 1: 'T1', 2: 'T2', 3: 'T3', 4: 'T4' });
+    expect(result).toEqual({
+      1: { source: 'ko', text: 'T1' },
+      2: { source: 'ko', text: 'T2' },
+      3: { source: 'ko', text: 'T3' },
+      4: { source: 'ko', text: 'T4' },
+    });
   });
 
   it('공급자 오류는 TranslateProviderError 로 전파한다', async () => {

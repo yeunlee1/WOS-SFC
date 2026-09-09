@@ -35,6 +35,12 @@ export interface BatchItem {
   text: string;
 }
 
+/** 배치 항목 하나의 결과. text 는 실패·누락·빈 문자열이면 null, source 는 모델이 감지한 원문 언어(누락이면 unknown). */
+export interface BatchTranslation {
+  source: SourceLang;
+  text: string | null;
+}
+
 /** 공급자(OpenAI) 호출이 실패했을 때 던진다. status 는 HTTP 상태, 429 면 retryAfterMs 가 있다. */
 export class TranslateProviderError extends Error {
   readonly name = 'TranslateProviderError';
@@ -52,7 +58,8 @@ const RULES = [
   'Rules:',
   '- Return only the JSON object required by the schema. No explanations.',
   '- Use a short, natural chat register.',
-  '- Keep numbers, times, coordinates, nicknames, alliance tags and emoji exactly as written.',
+  '- Keep numbers, clock times (e.g. 1:00), coordinates, nicknames, alliance tags and emoji exactly as written.',
+  '- Translate time/duration words (e.g. 분, 초, min, sec) into the target language; keep only digits, coordinates, nicknames, tags and emoji verbatim.',
   '- Write each translation ONLY in its target language. Never leave source-language words in it.',
   '- If the text is already written in a target language, return it unchanged for that language.',
   '- Set "source" to the language code of the input text (ko, en, ja, zh, ru), or "unknown" if unclear.',
@@ -192,11 +199,14 @@ export class TranslateEngineService {
     return { source: normalizeSource(parsed.source), translations };
   }
 
-  /** 여러 문장을 한 대상 언어로. id 별 결과이고 실패·누락·빈 문자열은 null 이다. */
+  /**
+   * 여러 문장을 한 대상 언어로. id 별 {source, text} 이고 실패·누락·빈 문자열은 text null 이다.
+   * source 는 호출자가 "원문 언어 === 대상" 항목을 원문으로 덮는 데 쓴다(2026-09-10 핫픽스).
+   */
   async translateBatch(
     items: BatchItem[],
     target: Lang,
-  ): Promise<Record<number, string | null>> {
+  ): Promise<Record<number, BatchTranslation>> {
     if (items.length === 0) return {};
     const client = this.requireClient();
 
@@ -216,8 +226,8 @@ export class TranslateEngineService {
     }
     if (current.length > 0) chunks.push(current);
 
-    const result: Record<number, string | null> = {};
-    for (const item of items) result[item.id] = null;
+    const result: Record<number, BatchTranslation> = {};
+    for (const item of items) result[item.id] = { source: 'unknown', text: null };
     for (const chunk of chunks) {
       Object.assign(result, await this.translateBatchChunk(client, chunk, target, true));
     }
@@ -229,7 +239,7 @@ export class TranslateEngineService {
     items: BatchItem[],
     target: Lang,
     retryPerItem: boolean,
-  ): Promise<Record<number, string | null>> {
+  ): Promise<Record<number, BatchTranslation>> {
     const schema = {
       type: 'object',
       properties: {
@@ -255,8 +265,8 @@ export class TranslateEngineService {
       items.reduce((sum, item) => sum + estimateTokens(item.text.length), 0) +
         OUTPUT_TOKENS_OVERHEAD,
     );
-    const result: Record<number, string | null> = {};
-    for (const item of items) result[item.id] = null;
+    const result: Record<number, BatchTranslation> = {};
+    for (const item of items) result[item.id] = { source: 'unknown', text: null };
 
     const response = await this.call(client, {
       name: 'chat_translation_batch',
@@ -273,7 +283,7 @@ export class TranslateEngineService {
       targets: items.length,
     });
 
-    const splitPerItem = async (): Promise<Record<number, string | null>> => {
+    const splitPerItem = async (): Promise<Record<number, BatchTranslation>> => {
       for (const item of items) {
         Object.assign(
           result,
@@ -302,19 +312,30 @@ export class TranslateEngineService {
     const wanted = new Set(items.map((item) => item.id));
     for (const entry of parsed.items as unknown[]) {
       if (!entry || typeof entry !== 'object') continue;
-      const { id, text } = entry as { id?: unknown; text?: unknown };
+      const { id, source, text } = entry as { id?: unknown; source?: unknown; text?: unknown };
       if (typeof id !== 'number' || !wanted.has(id)) continue;
-      if (typeof text === 'string' && text.trim() !== '') {
-        result[id] = text.trim();
-      }
+      result[id] = {
+        source: normalizeSource(source),
+        text: typeof text === 'string' && text.trim() !== '' ? text.trim() : null,
+      };
     }
     return result;
   }
 
+  /**
+   * 규칙 + 문장에 등장한 용어 행. 용어 줄은 언어 코드 라벨 형식(`bear trap → en: Bear Hunt; ko: 곰 사냥`)이다 —
+   * 2026-09-10 E2E 에서 라벨 없는 "in target order" 형식은 대상에 발신 언어가 포함될 때 모델이 용어를
+   * 엉뚱한 칸에 넣고 문장을 번역하지 않는 결함을 냈다.
+   */
   private buildInstructions(text: string, targets: Lang[]): string {
     const lines = selectGlossaryLines(text, targets);
     if (lines.length === 0) return RULES;
-    return `${RULES}\nGame terms (matched form=target form${targets.length > 1 ? ', in target order' : ''}):\n${lines.join('\n')}`;
+    return [
+      RULES,
+      '- Never insert glossary terms into a language other than the one they are labeled for. Translate the whole sentence; glossary lines only fix how terms are rendered.',
+      'Game terms by target language code:',
+      ...lines,
+    ].join('\n');
   }
 
   private requireClient(): OpenAI {

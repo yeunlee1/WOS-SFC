@@ -159,6 +159,46 @@ describe('ChatTranslationService', () => {
       );
       expect(result).toEqual({ translations: { ko: '안녕', en: 'hello' }, failed: [] });
     });
+
+    // 2026-09-10 E2E 핫픽스 — 모델이 발신 언어 칸에 용어만 치환한 문자열(en 에 한국어 섞임)을 돌려줘도
+    // 그 칸은 모델 출력과 무관하게 원문이어야 한다.
+    it('모델이 감지한 source 가 대상에 있으면 그 칸은 모델 출력과 무관하게 원문이다(영어 원문)', async () => {
+      const content = 'Bear trap starts at reset, garrison your troops in the fortress.';
+      const ko = '곰 사냥은 리셋에 시작합니다. 요새에 병력을 주둔시키세요.';
+      engine.translateMulti.mockResolvedValueOnce({
+        source: 'en',
+        translations: { ko, en: '곰 사냥 starts at reset, garrison your troops in the 요새.' },
+      });
+      const result = await service.translateForMessage(
+        { id: 5, content },
+        new Set<Lang>(['ko', 'en']),
+      );
+      expect(result).toEqual({ translations: { ko, en: content }, failed: [] });
+      expect(store.upsertMany).toHaveBeenCalledWith([
+        { messageId: 5, lang: 'ko', text: ko },
+        { messageId: 5, lang: 'en', text: content },
+      ]);
+    });
+
+    it('SFC 가 섞인 한국어(mixed) 원문의 ko 칸도 모델 출력과 무관하게 원문이다', async () => {
+      const content = '10분 뒤 SFC 집결 갑니다. 창병 위주로 넣어주세요.';
+      engine.translateMulti.mockResolvedValueOnce({
+        source: 'ko',
+        translations: {
+          en: 'SFC rally in 10 min. Lancers mainly please.',
+          ko: '10분 뒤 SFC rally 갑니다. 창병 위주로 넣어주세요.',
+        },
+      });
+      const result = await service.translateForMessage(
+        { id: 6, content },
+        new Set<Lang>(['en', 'ko']),
+      );
+      expect(result.translations).toEqual({
+        en: 'SFC rally in 10 min. Lancers mainly please.',
+        ko: content,
+      });
+      expect(result.failed).toEqual([]);
+    });
   });
 
   describe('attachHistory', () => {

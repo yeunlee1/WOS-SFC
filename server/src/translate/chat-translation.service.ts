@@ -45,12 +45,9 @@ export class ChatTranslationService {
         this.engine.translateMulti(msg.content, missing),
       );
       fresh = { ...result.translations };
-      // 모델이 원문 언어를 대상 중 하나로 감지했는데 그 칸을 비웠으면 원문이 곧 그 언어의 번역이다.
-      if (
-        result.source !== 'unknown' &&
-        missing.includes(result.source) &&
-        fresh[result.source] === undefined
-      ) {
+      // 모델이 원문 언어를 대상 중 하나로 감지했으면 그 칸은 모델 출력과 무관하게 원문이다. 비운 경우뿐 아니라
+      // 용어만 치환해 돌려준 경우(2026-09-10 E2E — en 칸에 한국어 용어, SFC 섞인 ko 칸에 영어 용어)도 덮는다.
+      if (result.source !== 'unknown' && missing.includes(result.source)) {
         fresh[result.source] = msg.content;
       }
     } catch (error) {
