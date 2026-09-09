@@ -28,6 +28,7 @@ wos-sfc-helper/
 ├── web/                      # 브라우저 UI (React 18 + Vite)
 │   ├── vite.config.js        # 개발 프록시 — API_PATHS와 /socket.io를 :3001로 전달
 │   ├── style.css             # 기존 앱 스타일 (반응형 미디어쿼리 포함) — App.jsx만 import
+│   ├── DESIGN.md             # daylight 팔레트의 근거로 쓴 Linear 디자인 추출본 — 이 프로젝트의 토큰 정의가 아님
 │   └── src/
 │       ├── main.jsx entry.js # 경로가 /story면 story/StoryApp, 아니면 App을 lazy 로드
 │       ├── App.jsx           # 기존 앱 — 탭 전환, 테마, 소켓·인증 부트스트랩
@@ -56,6 +57,7 @@ wos-sfc-helper/
 ├── deploy/                   # Caddyfile, entrypoint.sh(DB 대기 → 마이그레이션 → 앱), wait-for-db.js
 ├── Dockerfile                # 멀티스테이지 — 서버·웹 빌드를 한 이미지로
 ├── docker-compose.yml        # app + db + proxy, 루트 .env를 읽음
+├── skills-lock.json          # 디자인 작업에 쓴 외부 스킬 4개의 출처·해시 기록
 ├── docs/superpowers/         # specs/ 설계, plans/ 구현 계획
 ├── docs/design/              # frost-protocol UI 디자인 레퍼런스
 ├── .github/                  # PR 템플릿, CI(test.yml·codeql.yml), dependabot
@@ -143,7 +145,7 @@ docker compose up -d --build
 | 관리자 | 사용자 목록·역할·연맹 리더 지정·차단 (`developer` 역할만 탭 표시) | 구현됨 |
 | 동화 버전 | `/story` — 같은 기능을 수채화 그림책 UI로. 입구·전투현황·커뮤니티는 새 껍데기, 작전판·채팅·관리자는 기존 컴포넌트 | 구현됨 |
 
-공통 — JWT 인증(가입 초대 코드 `SERVER_CODE` 필요, 기기별 refresh 토큰), 다국어 i18n(ko/en/ja/zh), 테마(frost/spring), 접속자 표시.
+공통 — JWT 인증(가입 초대 코드 `SERVER_CODE` 필요, 기기별 refresh 토큰), 다국어 i18n(ko/en/ja/zh), 테마(frost/spring/daylight — 목록은 `web/src/store/index.js`의 `THEMES`), 접속자 표시.
 
 ## Superpowers 워크플로우
 

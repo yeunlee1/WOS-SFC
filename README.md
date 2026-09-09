@@ -69,10 +69,10 @@ npm ci
 MySQL 데이터베이스와 전용 사용자를 만든 뒤 `server/.env`에 접속 정보를 넣으십시오. 스키마는 마이그레이션 러너가 만듭니다.
 
 ```powershell
-npm --workspace server run migrate
+npm --workspace server run migrate:dev
 ```
 
-러너(`server/src/database/migrate.ts`)는 `server/migrations/*.sql`을 파일명 순으로 적용하고, `schema_migrations` 이력 테이블에 기록해 이미 적용한 파일은 건너뜁니다. 여러 번 실행해도 안전합니다.
+러너(`server/src/database/migrate.ts`)는 `server/migrations/*.sql`을 파일명 순으로 적용하고, `schema_migrations` 이력 테이블에 기록해 이미 적용한 파일은 건너뜁니다. 여러 번 실행해도 안전합니다. `migrate:dev`는 ts-node로 소스를 바로 실행합니다. `npm run build` 뒤에는 빌드된 `dist`를 쓰는 `npm --workspace server run migrate`도 됩니다. 컨테이너가 쓰는 명령이 이쪽입니다.
 
 | 파일 | 역할 |
 | --- | --- |
@@ -80,6 +80,7 @@ npm --workspace server run migrate
 | `001_users_nullable_pii.sql` | `users`의 `birth_date`·`name`을 NULL 허용으로 변경 |
 | `002_dev_accounts_camelcase_rename.sql` | 레거시 `dev_*` 계정 닉네임을 camelCase로 변경 |
 | `003_messages_created_at_index.sql` | `messages.created_at` 인덱스 추가 |
+| `004_refresh_tokens.sql` | 기기별 refresh 토큰 테이블 `refresh_tokens` 생성, `users.refresh_token_hash` 컬럼은 있을 때만 제거 |
 
 > **이미 테이블이 있는 기존 DB에 그대로 돌리지 마십시오.** `000_initial_schema.sql`은 **빈 DB 기준**이고 `CREATE TABLE IF NOT EXISTS`를 쓰기 때문에, 테이블이 이미 있으면 **정의가 일치하는지 검사하지 않고 조용히 건너뜁니다.** 개발용 `wos_db`처럼 기존 DB를 계속 쓸 계획이라면 적용 전에 **현재 스키마와 이 파일을 직접 대조**하고, 백업과 예상 변경 범위를 확인하십시오.
 
