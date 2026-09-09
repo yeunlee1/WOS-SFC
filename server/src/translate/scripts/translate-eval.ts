@@ -5,7 +5,8 @@
 //        server/.env 의 OPENAI_API_KEY 를 읽는다(npm 스크립트가 --env-file-if-exists=.env 로 넘긴다).
 //
 // 프롬프트·스키마·용어집·분할 규칙을 여기서 다시 구현하지 않는다 — 엔진 클래스를 직접 쓰므로 평가 결과가
-// 운영 동작과 같다. 문장 세트는 반장 실측(번역-실측-2026-09-09.md) 10문장을 포함한 40문장이다.
+// 운영 동작과 같다. 문장 세트는 반장 실측(번역-실측-2026-09-09.md) 10문장을 포함한 40문장 + 2026-09-10 E2E 핫픽스
+// 재현 2문장(대상 집합에 발신 언어 포함)이다. 문장마다 targets 를 갖고 있어 대상 집합을 따로 지정하는 옵션은 없다.
 import { ConfigService } from '@nestjs/config';
 import { writeFileSync } from 'fs';
 import { Lang, TARGET_LANGS } from '../script-detect';
@@ -77,6 +78,10 @@ export const EVAL_CASES: EvalCase[] = [
   { group: '특수', text: 'Wir sammeln in 5 Minuten', source: ['unknown'], targets: ['ko', 'en'], expect: { ko: ['5분'], en: ['5 min'] }, lenient: true },
   { group: '특수', text: '集結 5分', source: ['ja', 'zh', 'unknown'], targets: ['ko', 'en'], expect: { ko: ['집결', '5분'], en: ['rally', '5 min'] }, lenient: true },
   { group: '특수', text: '🔥🔥🔥 GO GO GO 🔥🔥🔥', source: ['en', 'unknown'], targets: ['ko'], expect: { ko: ['🔥'] }, lenient: true },
+  // 발신 언어가 대상에 포함된 경우(2026-09-10 E2E 핫픽스) — 접속자 언어 {en, ko} 에 영어 원문·SFC 섞인 한국어.
+  // 발신 언어 칸은 원문 그대로여야 하고(scoreCase 의 "원문 미보존"), 다른 칸은 문장 전체가 번역돼야 한다.
+  { group: '발신어 포함', text: 'Bear trap starts at reset, garrison your troops in the fortress. Shield is down at 123,456', source: ['en'], targets: ['en', 'ko'], expect: { en: [], ko: ['곰 사냥|곰 함정|곰사냥', '주둔', '병력', '요새', '방패|보호막', '123,456'] } },
+  { group: '발신어 포함', text: '10분 뒤 SFC 집결 갑니다. 창병 위주로 넣어주세요.', source: ['ko'], targets: ['en', 'ko'], expect: { en: ['SFC', 'rally', 'lancer'], ko: [] } },
 ];
 
 /**
@@ -198,6 +203,10 @@ export function scoreCase(
       missing.push(...expected.map((t) => `${target}:${t}`));
       misOutput.push(`${target}:없음`);
       continue;
+    }
+    // 발신 언어 칸은 원문 그대로여야 한다(2026-09-10 핫픽스 — 용어만 치환된 문자열이 스크립트 비율 검사를 통과했다).
+    if (sourceLang && sourceLang === target && output !== c.text.trim()) {
+      misOutput.push(`${target}:원문 미보존`);
     }
     for (const term of expected) {
       if (termHit(output, term)) termHits += 1;
