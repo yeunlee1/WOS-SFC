@@ -306,6 +306,8 @@ async function runModel(model: string, cases: EvalCase[], concurrency: number): 
 }
 
 const pct = (n: number, d: number) => (d === 0 ? '—' : `${((100 * n) / d).toFixed(1)}%`);
+/** 마크다운 표 셀 — 백슬래시와 파이프를 한 번에 이스케이프한다(CodeQL js/incomplete-sanitization: 백슬래시 먼저). */
+const escapeCell = (s: string) => s.replace(/[\\|]/g, (m) => `\\${m}`);
 
 export function renderMarkdown(summaries: ModelSummary[]): string {
   const lines: string[] = [];
@@ -350,7 +352,7 @@ export function renderMarkdown(summaries: ModelSummary[]): string {
             .map(([lang, text]) => `${lang}: ${text}`)
             .join('<br>');
       lines.push(
-        `| ${r.text} | ${r.source}${r.sourceOk ? '' : ' ✗'} | ${r.missing.join(', ') || '—'} | ${r.misOutput.join(', ') || '—'} | ${outputs.replace(/\|/g, '\\|')} |`,
+        `| ${r.text} | ${r.source}${r.sourceOk ? '' : ' ✗'} | ${r.missing.join(', ') || '—'} | ${r.misOutput.join(', ') || '—'} | ${escapeCell(outputs)} |`,
       );
     }
   }
@@ -371,7 +373,7 @@ export function renderFullOutputs(summaries: ModelSummary[]): string {
         : Object.entries(r.outputs)
             .map(([lang, text]) => `${lang}: ${text}`)
             .join('<br>');
-      lines.push(`| ${r.text} | ${r.source} | ${outputs.replace(/\|/g, '\\|')} | ${r.ms} | ${r.inputTokens}/${r.outputTokens} |`);
+      lines.push(`| ${r.text} | ${r.source} | ${escapeCell(outputs)} | ${r.ms} | ${r.inputTokens}/${r.outputTokens} |`);
     }
   }
   return lines.join('\n');
