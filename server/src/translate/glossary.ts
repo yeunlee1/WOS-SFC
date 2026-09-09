@@ -2,8 +2,8 @@
 // ru 열의 소문자 짧은 항목(стрелк·замк·печ 등)은 어미 변화를 잡기 위한 어간 별칭이다.
 //
 // 각 열의 첫 원소가 대표 표기, 나머지는 별칭이다. 원문에서 어느 열의 별칭이든 등장하면
-// 그 행을 `{매칭 표기}={대상 언어 대표 표기|...}` 한 줄로 만든다. 용어집 전체를 매번 넣으면
-// 입력 토큰이 약 2.8배(감사 C 6절)라 등장한 행만 넣는다.
+// 그 행을 `{매칭 표기} → {언어코드}: {대표 표기}; …` 한 줄로 만든다(대상 언어 전부, 매칭된 열은 매칭 표기).
+// 용어집 전체를 매번 넣으면 입력 토큰이 약 2.8배(감사 C 6절)라 등장한 행만 넣는다.
 import { Lang, TARGET_LANGS } from './script-detect';
 
 export interface GlossaryRow {
@@ -89,8 +89,12 @@ const COMPILED: { row: GlossaryRow; aliases: CompiledAlias[] }[] = GLOSSARY.map(
 );
 
 /**
- * 원문에 등장한 용어 행을 `매칭표기=대상1대표|대상2대표` 형태로 돌려준다.
- * 대상 언어는 주어진 순서를 유지하고, 매칭된 열과 같은 언어는 뺀다(원문 그대로라 넣을 이유가 없다).
+ * 원문에 등장한 용어 행을 `매칭표기 → en: 표기; ko: 표기` 형태(대상 언어 순서, 언어 코드 라벨)로 돌려준다.
+ * 매칭된 열과 같은 언어도 빼지 않는다 — 2026-09-10 E2E 에서 대상 {en, ko} 에 영어 원문이 들어왔을 때
+ * 라벨 없이 `bear trap=곰 사냥` 만 남기자 모델이 그 값을 en 칸에 넣고 ko 칸은 용어만 치환했다.
+ * 매칭된 열의 값은 대표 표기가 아니라 매칭된 표기다(`bear trap → en: bear trap; ko: 곰 사냥`) —
+ * 대표 표기를 넣자 모델이 발신 언어 칸의 'Bear trap' 을 'Bear Hunt' 로 고쳤다(재평가 1차, mini·luna 둘 다).
+ * 대상이 매칭된 열의 언어뿐이면 줄에 정보가 없으므로 넣지 않는다.
  */
 export function selectGlossaryLines(
   text: string,
@@ -102,11 +106,11 @@ export function selectGlossaryLines(
   for (const { row, aliases } of COMPILED) {
     const hit = aliases.find((a) => a.test(text));
     if (!hit) continue;
-    const right = targets
-      .filter((lang) => lang !== hit.column)
-      .map((lang) => row[lang][0]);
-    if (right.length === 0) continue;
-    lines.push(`${hit.alias}=${right.join('|')}`);
+    if (targets.every((lang) => lang === hit.column)) continue;
+    const labeled = targets.map(
+      (lang) => `${lang}: ${lang === hit.column ? hit.alias : row[lang][0]}`,
+    );
+    lines.push(`${hit.alias} → ${labeled.join('; ')}`);
     if (lines.length >= max) break;
   }
   return lines;

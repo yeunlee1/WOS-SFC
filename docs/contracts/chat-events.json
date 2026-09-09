@@ -53,7 +53,7 @@
   "translate:batch:request": {
     "targetLang": "en",
     "items": [
-      { "id": 100, "text": "집결" },
+      { "id": 100, "text": "123,456 👍" },
       { "id": 101, "text": "10분 뒤 SFC 집결 갑니다" }
     ]
   },
