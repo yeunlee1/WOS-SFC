@@ -43,11 +43,10 @@ describe('TranslateController — 배치·사용량', () => {
   });
   afterEach(() => jest.restoreAllMocks());
 
-  // 픽스처의 batch 예시 값은 '집결'(ko)을 en 대상에서 skipped 로 적어 두었지만, 설계 규칙은
-  // unambiguousLang(text) === targetLang 일 때만 건너뛴다. 값이 아니라 키 집합·타입만 대조한다.
-  it('계약 픽스처 요청을 넣으면 응답의 키 집합과 타입이 픽스처와 같다', async () => {
+  // 픽스처 항목 100은 글자가 없는 텍스트(좌표·이모지)라 hasLetters 규칙으로 skipped 가 된다.
+  // 응답은 키 집합·타입뿐 아니라 값까지 픽스처 translate:batch:response 와 같아야 한다.
+  it('계약 픽스처 요청을 넣으면 응답이 픽스처 translate:batch:response 와 같다', async () => {
     engine.translateBatch.mockResolvedValueOnce({
-      100: { source: 'ko', text: 'Rally' },
       101: { source: 'ko', text: 'Rally to SFC in 10 min' },
     });
     const body = fixtures['translate:batch:request'];
@@ -61,19 +60,14 @@ describe('TranslateController — 배치·사용량', () => {
       expect(Number.isInteger(Number(id))).toBe(true);
       expect(typeof text).toBe('string');
     }
-    expect(response).toEqual({
-      translated: { 100: 'Rally', 101: 'Rally to SFC in 10 min' },
-      skipped: [],
-      failed: [],
-    });
+    expect(response).toEqual(fixtures['translate:batch:response']);
     expect(rateLimit.consumeBatch).toHaveBeenCalledWith(1);
-    expect(store.getForMessages).toHaveBeenCalledWith([100, 101], ['en']);
+    expect(store.getForMessages).toHaveBeenCalledWith([101], ['en']);
     expect(engine.translateBatch).toHaveBeenCalledWith(
-      [{ id: 100, text: '집결' }, { id: 101, text: body.items[1].text }],
+      [{ id: 101, text: body.items[1].text }],
       'en',
     );
     expect(store.upsertMany).toHaveBeenCalledWith([
-      { messageId: 100, lang: 'en', text: 'Rally' },
       { messageId: 101, lang: 'en', text: 'Rally to SFC in 10 min' },
     ]);
   });
