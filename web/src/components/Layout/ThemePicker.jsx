@@ -2,10 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useStore } from '../../store';
 
 // 테마 메타: 레이블 + 대표 컬러 (미리보기 점 2개로 표시).
-// frost(메인) + spring(후속 리뉴얼 예정). anthropic/dark는 폐기됨.
+// frost(다크 얼음) + spring(다크 벚꽃) + daylight(백야 라이트). anthropic/dark는 폐기됨.
+// 순서는 store의 THEMES와 같아야 한다 — ThemePicker.spec.jsx가 개수 일치를 감시한다.
 const THEME_META = [
-  { id: 'frost',  label: '🧊 Frost',  dot1: '#a8e6ff', dot2: '#3a78ff' },
-  { id: 'spring', label: '🌸 Spring', dot1: '#f9a8d4', dot2: '#d946a8' },
+  { id: 'frost',    label: '🧊 Frost',        dot1: '#a8e6ff', dot2: '#3a78ff' },
+  { id: 'spring',   label: '🌸 Spring',       dot1: '#f9a8d4', dot2: '#d946a8' },
+  { id: 'daylight', label: '☀ 백야(Daylight)', dot1: '#eef4fb', dot2: '#2b7fd9' },
 ];
 
 /**

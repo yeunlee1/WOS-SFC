@@ -4,6 +4,12 @@ import { useStore } from '../../store';
 import { useI18n } from '../../i18n';
 import { warmupRallyAudio } from '../Battle/rallyGroupPlayer';
 
+// 테마별 브랜드 부제 키. 목록에 없는 테마는 기본 authBrandSubtitle로 떨어진다 —
+// frost/spring의 표시 문구가 1글자도 바뀌지 않도록 기본 키를 건드리지 않는다.
+const BRAND_SUBTITLE_KEY = {
+  daylight: 'authBrandSubtitleDaylight',
+};
+
 const LANGUAGES = [
   { value: 'ko', label: '🇰🇷 한국어' },
   { value: 'en', label: '🇺🇸 English' },
@@ -30,6 +36,7 @@ export default function AuthModal() {
   const [serverCode, setServerCode] = useState('');
 
   const setUser = useStore((state) => state.setUser);
+  const theme = useStore((state) => state.theme);
   const { t, changeLang } = useI18n();
 
   async function initUser(user) {
@@ -117,7 +124,9 @@ export default function AuthModal() {
             </svg>
           </div>
           <h2>{t('authBrand')}</h2>
-          <p className="auth-subtitle">{t('authBrandSubtitle')}</p>
+          <p className="auth-subtitle">
+            {t(BRAND_SUBTITLE_KEY[theme] || 'authBrandSubtitle')}
+          </p>
         </div>
 
         <div className="auth-tabs" role="tablist">
