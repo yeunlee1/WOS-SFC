@@ -44,6 +44,7 @@ Copy-Item .env.example server/.env
 | `ANTHROPIC_API_KEY`  | 번역 API                              | 번역 기능 사용 시 필수                         |
 | `GOOGLE_TTS_API_KEY` | Google TTS 생성 API                   | TTS 생성 기능 사용 시 필수                     |
 | `TTS_CACHE_DIR`      | 생성한 TTS 파일 보관 경로             | 선택                                           |
+| `CHAT_RETENTION_DAYS` | 채팅 메시지 보존 일수. 설정하면 6시간마다 그 일수 이전 메시지를 1000행씩 삭제(번역도 함께) | 선택, 기본 비활성. 접속 시 히스토리 창은 7일 고정 |
 | `VITE_API_TARGET`    | Vite 개발 프록시 대상                 | 선택, 기본값 `http://localhost:3001`           |
 | `VITE_API_URL`       | 브라우저 API 기준 URL                 | 선택, 기본값 `/`                               |
 

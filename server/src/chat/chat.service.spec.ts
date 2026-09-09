@@ -5,35 +5,117 @@ import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Message } from './message.entity';
 import {
+  CHAT_HISTORY_DAYS,
   ChatService,
   MESSAGE_RETENTION_FIRST_RUN_MS,
   MESSAGE_RETENTION_INTERVAL_MS,
   parseRetentionDays,
 } from './chat.service';
 
+function makeSelectQb(rows: unknown[]) {
+  return {
+    innerJoin: jest.fn().mockReturnThis(),
+    select: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    orderBy: jest.fn().mockReturnThis(),
+    limit: jest.fn().mockReturnThis(),
+    take: jest.fn().mockReturnThis(),
+    getMany: jest.fn().mockResolvedValue(rows),
+  };
+}
+
 describe('ChatService', () => {
-  it('최신 메시지 200개를 조회한 뒤 오래된 순으로 반환', async () => {
-    const rows = [
-      { id: 3, createdAt: new Date('2026-07-11T03:00:00Z') },
-      { id: 2, createdAt: new Date('2026-07-11T02:00:00Z') },
-      { id: 1, createdAt: new Date('2026-07-11T01:00:00Z') },
-    ];
-    const repo = {
-      find: jest.fn().mockResolvedValue(rows),
-    };
-    const service = new ChatService(repo as never, {
-      get: () => undefined,
-    } as unknown as ConfigService);
+  afterEach(() => {
+    jest.useRealTimers();
+    jest.restoreAllMocks();
+  });
 
-    const result = await service.getRecentMessages();
+  describe('getRecentMessages (A-P1·T2)', () => {
+    it('QueryBuilder 로 조인·필요 컬럼만·limit(200) 한 번에 조회하고 오래된 순으로 돌려준다', async () => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date('2026-09-10T12:00:00Z'));
+      const rows = [
+        { id: 3, createdAt: new Date('2026-09-10T03:00:00Z') },
+        { id: 2, createdAt: new Date('2026-09-10T02:00:00Z') },
+        { id: 1, createdAt: new Date('2026-09-10T01:00:00Z') },
+      ];
+      const qb = makeSelectQb(rows);
+      const repo = { createQueryBuilder: jest.fn().mockReturnValue(qb), find: jest.fn() };
+      const service = new ChatService(repo as never, { get: () => undefined } as unknown as ConfigService);
 
-    expect(repo.find).toHaveBeenCalledWith(
-      expect.objectContaining({
-        order: { createdAt: 'DESC' },
-        take: 200,
-      }),
-    );
-    expect(result.map((message) => message.id)).toEqual([1, 2, 3]);
+      const result = await service.getRecentMessages();
+
+      expect(repo.createQueryBuilder).toHaveBeenCalledWith('m');
+      expect(repo.find).not.toHaveBeenCalled();
+      expect(qb.innerJoin).toHaveBeenCalledWith('m.user', 'u');
+      const selected: string[] = qb.select.mock.calls[0][0];
+      for (const column of ['m.id', 'm.content', 'm.createdAt', 'u.nickname', 'u.allianceName', 'u.language']) {
+        expect(selected).toContain(column);
+      }
+      expect(selected.some((c) => /password/i.test(c))).toBe(false);
+      expect(qb.where).toHaveBeenCalledWith('m.createdAt > :since', {
+        since: new Date(Date.now() - CHAT_HISTORY_DAYS * 86_400_000),
+      });
+      expect(CHAT_HISTORY_DAYS).toBe(7);
+      expect(qb.orderBy).toHaveBeenCalledWith('m.createdAt', 'DESC');
+      expect(qb.limit).toHaveBeenCalledWith(200);
+      expect(qb.take).not.toHaveBeenCalled();
+      expect(qb.getMany).toHaveBeenCalledTimes(1);
+      expect(result.map((message) => message.id)).toEqual([1, 2, 3]);
+    });
+  });
+
+  describe('saveMessage (A-P2)', () => {
+    it('insert 한 번으로 저장하고 SELECT 재조회 없이 반환 객체를 만든다', async () => {
+      const repo = {
+        insert: jest.fn().mockResolvedValue({ identifiers: [{ id: 42 }] }),
+        save: jest.fn(),
+        create: jest.fn(),
+      };
+      const service = new ChatService(repo as never, { get: () => undefined } as unknown as ConfigService);
+      const user = { id: 7, nickname: 'n', allianceName: 'KOR', language: 'ko', role: 'member' };
+      const before = Date.now();
+
+      const saved = await service.saveMessage(user as never, 'hello');
+
+      expect(repo.insert).toHaveBeenCalledTimes(1);
+      expect(repo.insert).toHaveBeenCalledWith({
+        userId: 7,
+        content: 'hello',
+        createdAt: expect.any(Date),
+      });
+      expect(repo.save).not.toHaveBeenCalled();
+      expect(saved).toMatchObject({ id: 42, content: 'hello', userId: 7 });
+      expect(saved.createdAt.getTime()).toBeGreaterThanOrEqual(before);
+      expect(saved.user).toBe(user);
+    });
+  });
+
+  describe('deleteOldMessages (A-A7)', () => {
+    it('LIMIT 1000 씩 반복 삭제하고 합계를 돌려준다', async () => {
+      const repo = {
+        query: jest
+          .fn()
+          .mockResolvedValueOnce({ affectedRows: 1000 })
+          .mockResolvedValueOnce({ affectedRows: 1000 })
+          .mockResolvedValueOnce({ affectedRows: 300 }),
+      };
+      const service = new ChatService(repo as never, { get: () => undefined } as unknown as ConfigService);
+
+      await expect(service.deleteOldMessages(7)).resolves.toBe(2300);
+
+      expect(repo.query).toHaveBeenCalledTimes(3);
+      const [sql, params] = repo.query.mock.calls[0];
+      expect(sql).toMatch(/DELETE FROM `?messages`? WHERE `?created_at`? < \? LIMIT 1000/);
+      expect(params).toEqual([expect.any(Date)]);
+    });
+
+    it('삭제 대상이 0이면 한 번만 돌고 0 이다', async () => {
+      const repo = { query: jest.fn().mockResolvedValueOnce({ affectedRows: 0 }) };
+      const service = new ChatService(repo as never, { get: () => undefined } as unknown as ConfigService);
+      await expect(service.deleteOldMessages(7)).resolves.toBe(0);
+      expect(repo.query).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('보존 정리 옵트인', () => {
