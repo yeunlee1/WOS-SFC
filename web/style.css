@@ -1982,28 +1982,6 @@ input:focus, select:focus, textarea:focus, .input:focus {
 .notice-meta input { flex:1; }
 
 /* ════════════════════════════════════
-   채팅
-════════════════════════════════════ */
-.chat-layout { display:flex; flex-direction:column; height:100%; gap:10px; padding:14px 18px; }
-.chat-header { display:flex; align-items:center; gap:10px; flex-shrink:0; flex-wrap:wrap; }
-.chat-online-badge { font-size:12px; font-weight:700; color:var(--green); background:var(--green-soft); padding:3px 12px; border-radius:20px; flex-shrink:0; }
-.chat-online-list { display:flex; flex-wrap:wrap; gap:5px; flex:1; }
-.chat-online-user { font-size:12px; font-weight:600; color:var(--text-2); background:var(--bg-subtle); border:1px solid var(--border); padding:2px 9px; border-radius:20px; }
-.chat-messages { flex:1; overflow-y:auto; background:var(--bg-card); border:1.5px solid var(--border); border-radius:var(--r-md); padding:12px 14px; display:flex; flex-direction:column; gap:6px; box-shadow:var(--shadow-sm); }
-.chat-message { display:flex; flex-wrap:wrap; align-items:baseline; gap:5px; padding:6px 8px; border-radius:var(--r-sm); transition:background .15s; animation:msgIn .3s ease both; }
-.chat-message:hover { background:var(--bg-hover); }
-.chat-alliance  { color:var(--text-3); font-size:12px; }
-.chat-nickname  { color:var(--accent); font-weight:700; font-size:13px; }
-.chat-time      { color:var(--text-3); font-size:11px; }
-.chat-content   { width:100%; color:var(--text-1); font-size:13px; word-break:break-word; line-height:1.55; padding-left:2px; }
-.chat-original  { width:100%; color:var(--text-3); font-size:12px; word-break:break-word; padding-left:2px; }
-.chat-toggle-original { font-size:11px; color:var(--accent); cursor:pointer; text-decoration:underline; width:100%; padding-left:2px; }
-.chat-toggle-original:hover { color:var(--accent-hover); }
-.chat-system-msg { color:var(--text-3); font-size:12px; text-align:center; font-style:italic; padding:4px; }
-.chat-input-area { display:flex; gap:8px; flex-shrink:0; }
-.chat-input-area input { flex:1; }
-
-/* ════════════════════════════════════
    채팅 v2 베이스 — 레이아웃·구조만 (테마 밖)
    색·배경·테두리·글꼴·간격은 body.theme-* 스코프가 덮는다.
    여기 없는 클래스는 테마가 빠뜨리면 무스타일이 된다 — chatCss.spec.js가 감시한다.
@@ -4474,7 +4452,7 @@ body.theme-frost .chat-dock-title {
   color: var(--ice-1);
   font-weight: 700;
 }
-/* chat-online-pill은 전역 정의 (app.css 참조) — frost에서 재정의 */
+/* chat-online-pill — 레이아웃은 베이스(채팅 v2 베이스 절), 색·글꼴은 여기 */
 body.theme-frost .chat-online-pill {
   gap: 5px;
   padding: 3px 9px;
