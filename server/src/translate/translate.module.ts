@@ -10,6 +10,8 @@ import { TranslationRateLimitService } from './translation-rate-limit.service';
 import { TranslateEngineService } from './translate-engine.service';
 import { TranslateUsageService } from './translate-usage.service';
 import { TranslationCacheService } from './translation-cache.service';
+import { TranslationQueueService } from './translation-queue.service';
+import { ChatTranslationService } from './chat-translation.service';
 
 @Module({
   imports: [TranslationsModule, TypeOrmModule.forFeature([MessageTranslation])],
@@ -21,12 +23,15 @@ import { TranslationCacheService } from './translation-cache.service';
     TranslationCacheService,
     TranslationRateLimitService,
     MessageTranslationsService,
+    TranslationQueueService,
+    ChatTranslationService,
   ],
   exports: [
     TranslateEngineService,
     TranslateUsageService,
     TranslationCacheService,
     MessageTranslationsService,
+    ChatTranslationService,
   ],
 })
 export class TranslateModule {}
