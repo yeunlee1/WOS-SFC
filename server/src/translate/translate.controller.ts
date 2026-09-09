@@ -17,6 +17,7 @@ import { TranslateBatchDto } from './dto/translate-batch.dto';
 import { User } from '../users/users.entity';
 import { TranslationRateLimitService } from './translation-rate-limit.service';
 import {
+  BatchTranslation,
   TranslateEngineService,
   TranslateProviderError,
 } from './translate-engine.service';
@@ -109,7 +110,7 @@ export class TranslateController {
     });
     if (misses.length === 0) return { translated, skipped, failed };
 
-    let fresh: Record<number, string | null>;
+    let fresh: Record<number, BatchTranslation>;
     try {
       fresh = await this.queue.run(() => this.engine.translateBatch(misses, target));
     } catch (error) {
@@ -122,7 +123,10 @@ export class TranslateController {
 
     const rows: { messageId: number; lang: typeof target; text: string }[] = [];
     for (const item of misses) {
-      const text = fresh[item.id];
+      const entry = fresh[item.id];
+      // 모델이 원문 언어를 대상 언어로 감지한 항목(SFC 섞인 한국어 → ko 등)은 모델 출력과 무관하게 원문이다
+      // (2026-09-10 E2E — 용어만 치환된 문자열이 그대로 나갔다). 웹은 원문과 같으면 원문 상태로 표시한다.
+      const text = entry?.source === target ? item.text : entry?.text;
       if (typeof text === 'string' && text !== '') {
         translated[item.id] = text;
         rows.push({ messageId: item.id, lang: target, text });

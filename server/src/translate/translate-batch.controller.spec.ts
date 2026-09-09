@@ -46,7 +46,10 @@ describe('TranslateController — 배치·사용량', () => {
   // 픽스처의 batch 예시 값은 '집결'(ko)을 en 대상에서 skipped 로 적어 두었지만, 설계 규칙은
   // unambiguousLang(text) === targetLang 일 때만 건너뛴다. 값이 아니라 키 집합·타입만 대조한다.
   it('계약 픽스처 요청을 넣으면 응답의 키 집합과 타입이 픽스처와 같다', async () => {
-    engine.translateBatch.mockResolvedValueOnce({ 100: 'Rally', 101: 'Rally to SFC in 10 min' });
+    engine.translateBatch.mockResolvedValueOnce({
+      100: { source: 'ko', text: 'Rally' },
+      101: { source: 'ko', text: 'Rally to SFC in 10 min' },
+    });
     const body = fixtures['translate:batch:request'];
 
     const response = JSON.parse(JSON.stringify(await controller.translateBatch(body as never, request)));
@@ -93,7 +96,7 @@ describe('TranslateController — 배치·사용량', () => {
 
   it('기존 행 적중은 엔진에 보내지 않고 translated 에 바로 넣는다', async () => {
     store.getForMessages.mockResolvedValueOnce(new Map([[1, { en: 'Stored' }]]));
-    engine.translateBatch.mockResolvedValueOnce({ 2: 'Fresh' });
+    engine.translateBatch.mockResolvedValueOnce({ 2: { source: 'ko', text: 'Fresh' } });
     const response = await controller.translateBatch(
       { targetLang: 'en', items: [{ id: 1, text: '집결' }, { id: 2, text: '화로' }] } as never,
       request,
@@ -111,14 +114,43 @@ describe('TranslateController — 배치·사용량', () => {
     expect(queue.run).not.toHaveBeenCalled();
   });
 
-  it('엔진이 null 을 준 항목은 failed 다(부분 실패)', async () => {
-    engine.translateBatch.mockResolvedValueOnce({ 1: 'A', 2: null });
+  it('엔진이 text null 을 준 항목은 failed 다(부분 실패)', async () => {
+    engine.translateBatch.mockResolvedValueOnce({
+      1: { source: 'ko', text: 'A' },
+      2: { source: 'unknown', text: null },
+    });
     const response = await controller.translateBatch(
       { targetLang: 'en', items: [{ id: 1, text: '집결' }, { id: 2, text: '화로' }] } as never,
       request,
     );
     expect(response).toEqual({ translated: { 1: 'A' }, skipped: [], failed: [2] });
     expect(store.upsertMany).toHaveBeenCalledWith([{ messageId: 1, lang: 'en', text: 'A' }]);
+  });
+
+  // 2026-09-10 E2E 핫픽스 — SFC 가 섞인 한국어는 mixed 라 ko 대상에서 skipped 가 아니다. 모델이 source:ko 로
+  // 용어만 치환한 문자열을 돌려줘도 ko 결과는 원문이어야 한다(웹은 원문과 같으면 원문 상태로 표시한다).
+  it('엔진이 source === target 으로 돌려준 항목은 모델 출력과 무관하게 원문이다', async () => {
+    const text = '10분 뒤 SFC 집결 갑니다. 창병 위주로 넣어주세요.';
+    engine.translateBatch.mockResolvedValueOnce({
+      7: { source: 'ko', text: '10분 뒤 SFC rally 갑니다. 창병 위주로 넣어주세요.' },
+    });
+    const response = await controller.translateBatch(
+      { targetLang: 'ko', items: [{ id: 7, text }] } as never,
+      request,
+    );
+    expect(engine.translateBatch).toHaveBeenCalledWith([{ id: 7, text }], 'ko');
+    expect(response).toEqual({ translated: { 7: text }, skipped: [], failed: [] });
+    expect(store.upsertMany).toHaveBeenCalledWith([{ messageId: 7, lang: 'ko', text }]);
+  });
+
+  it('source === target 인데 text 가 비어도 원문이다(failed 아님)', async () => {
+    const text = 'SFC 집결 go';
+    engine.translateBatch.mockResolvedValueOnce({ 8: { source: 'ko', text: null } });
+    const response = await controller.translateBatch(
+      { targetLang: 'ko', items: [{ id: 8, text }] } as never,
+      request,
+    );
+    expect(response).toEqual({ translated: { 8: text }, skipped: [], failed: [] });
   });
 
   it('공급자 오류(429 아님)는 미스 전부를 failed 로 돌려준다(픽스처 failed 형태)', async () => {

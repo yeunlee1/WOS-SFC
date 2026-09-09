@@ -18,7 +18,7 @@
 - **모노레포**: npm workspaces (`web`, `server`) — 루트 `package-lock.json` 하나로 의존성 고정. Node 20.19 이상 또는 22.12 이상
 - **프론트엔드** (`web/`): React 18 + Vite, Zustand, Socket.IO Client, Vitest — JavaScript(JSX)
 - **백엔드** (`server/`): NestJS 11, TypeORM 0.3 + MySQL 8, Socket.IO, JWT(Passport), Jest — TypeScript
-- **AI**: OpenAI Responses API (`openai`, 채팅·게시글 번역 — 서버 전용, 모델은 `TRANSLATE_MODEL`), Google Cloud TTS (카운트다운 음성 mp3를 서버가 사전 생성·캐시 — 서버 전용)
+- **AI**: OpenAI Responses API (`openai`, 채팅·게시글 번역 — 서버 전용, 모델은 `TRANSLATE_MODEL`, 기본 `gpt-5.6-luna`), Google Cloud TTS (카운트다운 음성 mp3를 서버가 사전 생성·캐시 — 서버 전용)
 - **배포**: Docker Compose — `app`(NestJS가 `web/dist`까지 정적 서빙, 같은 origin) + `db`(mysql:8.4) + `proxy`(Caddy, 자동 HTTPS). 개발 포트 — 웹 5173, API 3001
 
 ## 프로젝트 구조
