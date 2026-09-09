@@ -405,8 +405,11 @@ const UI_TEXTS = {
   },
 };
 
-// ─── 번역 캐시 (localStorage) ───
+// ─── 번역 캐시 (localStorage) — 게시글 단건 번역 전용 ───
+// 채팅은 서버가 message_translations로 캐시·푸시하므로 여기를 쓰지 않는다 (C-10, 설계 3.8 M).
+// 키 버전 v3 — 공급자를 Anthropic에서 OpenAI로 바꾸면서 v2 항목을 전부 무효화했다.
 const TRANS_CACHE_KEY = 'wos-trans-cache';
+const TRANS_CACHE_VERSION = 'v3';
 const MAX_CACHE = 500;
 
 function _getCache() {
@@ -419,7 +422,7 @@ function _getCache() {
 
 function _makeCacheKey(text, lang) {
   // 본문 전체를 JSON tuple로 넣어 같은 prefix·길이의 다른 메시지가 충돌하지 않게 한다.
-  return JSON.stringify(['v2', lang, text]);
+  return JSON.stringify([TRANS_CACHE_VERSION, lang, text]);
 }
 
 export function getCachedTranslation(text, lang) {
