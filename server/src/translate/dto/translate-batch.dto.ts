@@ -14,7 +14,8 @@ import {
   ValidationArguments,
   ValidationOptions,
 } from 'class-validator';
-import { Lang, TARGET_LANGS } from '../script-detect';
+import type { Lang } from '../script-detect';
+import { TARGET_LANGS } from '../script-detect';
 
 export const TRANSLATE_BATCH_MAX_ITEMS = 20;
 export const TRANSLATE_BATCH_MAX_ITEM_LENGTH = 500;

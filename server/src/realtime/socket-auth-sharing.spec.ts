@@ -20,6 +20,7 @@ import { MembersService } from '../members/members.service';
 import { BoardsService } from '../boards/boards.service';
 import { AllianceNoticesService } from '../alliance-notices/alliance-notices.service';
 import { ChatGateway } from '../chat/chat.gateway';
+import { ChatTranslationService } from '../translate/chat-translation.service';
 import { ChatService } from '../chat/chat.service';
 import { OperationBoardsGateway } from '../operation-boards/operation-boards.gateway';
 import { RallyGroupsGateway } from '../rally-groups/rally-groups.gateway';
@@ -106,6 +107,10 @@ describe('소켓 1건의 인증 공유', () => {
         saveMessage: jest.fn(),
       } as unknown as ChatService,
       new WsRateLimitService(),
+      {
+        translateForMessage: jest.fn().mockResolvedValue({ translations: {}, failed: [] }),
+        attachHistory: jest.fn().mockResolvedValue(new Map()),
+      } as unknown as ChatTranslationService,
     );
     operationBoards = new OperationBoardsGateway(
       socketAuth,
