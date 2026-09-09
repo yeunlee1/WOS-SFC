@@ -46,6 +46,20 @@ class TtsLikeController {
   }
 }
 
+// 자체 한도(사용자당 60/10/배치 20)가 있는 번역 경로. 전역 가드가 먼저 돌면 429 body 형태가 달라진다(A-R5).
+@Controller('translate')
+class TranslateLikeController {
+  @Post()
+  single() {
+    return { translated: 'x' };
+  }
+
+  @Post('batch')
+  batch() {
+    return { translated: {}, skipped: [], failed: [] };
+  }
+}
+
 describe('전역 ThrottlerGuard 등록', () => {
   let app: INestApplication;
 
@@ -66,6 +80,7 @@ describe('전역 ThrottlerGuard 등록', () => {
         UnthrottledController,
         LocallyThrottledController,
         TtsLikeController,
+        TranslateLikeController,
       ],
       providers: [{ provide: APP_GUARD, useClass: GlobalThrottlerGuard }],
     }).compile();
@@ -92,6 +107,13 @@ describe('전역 ThrottlerGuard 등록', () => {
     await request(app.getHttpServer()).post('/auth/refresh').expect(201);
     await request(app.getHttpServer()).post('/auth/refresh').expect(201);
     await request(app.getHttpServer()).post('/auth/refresh').expect(429);
+  });
+
+  it('/translate 와 /translate/batch 는 전역 한도에 걸리지 않는다(컨트롤러 한도만 남긴다)', async () => {
+    for (let i = 0; i < TEST_LIMIT * 4; i++) {
+      await request(app.getHttpServer()).post('/translate').expect(201);
+      await request(app.getHttpServer()).post('/translate/batch').expect(201);
+    }
   });
 
   it('/tts-audio 는 전역 한도에 걸리지 않는다', async () => {

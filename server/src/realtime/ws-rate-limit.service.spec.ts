@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { WsRateLimitService } from './ws-rate-limit.service';
 
@@ -86,6 +87,36 @@ describe('WsRateLimitService', () => {
       }
       // 6번째는 차단
       expect(service.check('admin1', 'countdown:start', 5, 60_000)).toBe(false);
+    });
+  });
+
+  describe('거부 로그 억제 (A-R2)', () => {
+    afterEach(() => {
+      jest.useRealTimers();
+      jest.restoreAllMocks();
+    });
+
+    it('같은 버킷의 거부 100회에 경고는 윈도우당 1회다', () => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date('2026-09-10T00:00:00Z'));
+      const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+
+      for (let i = 0; i < 3; i++) service.check('s1', 'chat:message', 3, 1000);
+      for (let i = 0; i < 100; i++) {
+        expect(service.check('s1', 'chat:message', 3, 1000)).toBe(false);
+      }
+      expect(warn).toHaveBeenCalledTimes(1);
+
+      // 다른 버킷의 거부는 따로 센다.
+      for (let i = 0; i < 3; i++) service.check('s2', 'chat:message', 3, 1000);
+      expect(service.check('s2', 'chat:message', 3, 1000)).toBe(false);
+      expect(warn).toHaveBeenCalledTimes(2);
+
+      // 윈도우가 지나면 다시 한 번 경고한다.
+      jest.advanceTimersByTime(1100);
+      for (let i = 0; i < 3; i++) service.check('s1', 'chat:message', 3, 1000);
+      expect(service.check('s1', 'chat:message', 3, 1000)).toBe(false);
+      expect(warn).toHaveBeenCalledTimes(3);
     });
   });
 });
