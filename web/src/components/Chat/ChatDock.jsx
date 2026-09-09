@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, memo } from 'react';
 import { useStore } from '../../store';
 import { useI18n } from '../../i18n';
 import { CHAT_SEND_ERROR_STYLE, useChatComposer } from './useChatComposer';
+import { formatSystemMessage } from '../../chat/systemMessages';
 
 // 5-동맹 pill 색상
 const ALLIANCE_COLORS = {
@@ -99,7 +100,7 @@ export default function ChatDock({ onClose }) {
           if (msg._type === 'system') {
             return (
               <div key={msg._id ?? idx} className="chat-dock-system">
-                — {msg.text} —
+                — {formatSystemMessage(msg, t)} —
               </div>
             );
           }

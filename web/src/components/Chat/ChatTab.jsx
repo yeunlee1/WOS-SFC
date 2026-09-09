@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, memo } from 'react';
 import { useStore, ALLIANCES } from '../../store';
 import { useI18n } from '../../i18n';
 import { CHAT_SEND_ERROR_STYLE, useChatComposer } from './useChatComposer';
+import { formatSystemMessage } from '../../chat/systemMessages';
 
 // 5-동맹 pill 색상 — store ALLIANCES 순서와 일치
 const ALLIANCE_COLORS = {
@@ -90,7 +91,7 @@ export default function ChatTab() {
             if (msg._type === 'system') {
               return (
                 <div key={msg._id ?? idx} className="chat-tab-system-msg">
-                  — {msg.text} —
+                  — {formatSystemMessage(msg, t)} —
                 </div>
               );
             }
