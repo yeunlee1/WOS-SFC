@@ -73,7 +73,8 @@ export const EVAL_CASES: EvalCase[] = [
   { group: 'ru→ko', text: 'Битва за крепость завтра, копейщики и стрелки', source: ['ru'], targets: ['ko'], expect: { ko: ['요새전', '창병', '사수|궁병'] } },
   // 특수 — 좌표·이모지·숫자만·혼합·로마자 한국어·독일어·한자 전용
   { group: '특수', text: '456,789 👍', source: ['unknown'], targets: ['en', 'ko'], expect: { en: ['456,789'], ko: ['456,789'] }, lenient: true },
-  { group: '특수', text: 'SFC 집결 go', source: ['ko', 'unknown'], targets: ['en', 'ja'], expect: { en: ['rally', 'SFC'], ja: ['集結', 'SFC'] }, lenient: true },
+  // ja 는 태그 SFC 를 그대로 두거나 용어집 ja 대표 표기(サンファイア城)를 써도 된다 — 둘 다 규칙에 맞는다(반장 결정 2026-09-10).
+  { group: '특수', text: 'SFC 집결 go', source: ['ko', 'unknown'], targets: ['en', 'ja'], expect: { en: ['rally', 'SFC'], ja: ['集結', 'SFC|サンファイア城'] }, lenient: true },
   { group: '특수', text: 'annyeong gg', source: ['ko', 'en', 'unknown'], targets: ['ko'], expect: { ko: [] }, lenient: true },
   { group: '특수', text: 'Wir sammeln in 5 Minuten', source: ['unknown'], targets: ['ko', 'en'], expect: { ko: ['5분'], en: ['5 min'] }, lenient: true },
   { group: '특수', text: '集結 5分', source: ['ja', 'zh', 'unknown'], targets: ['ko', 'en'], expect: { ko: ['집결', '5분'], en: ['rally', '5 min'] }, lenient: true },
