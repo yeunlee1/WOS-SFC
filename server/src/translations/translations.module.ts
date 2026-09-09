@@ -1,14 +1,12 @@
-// server/src/translations/translations.module.ts
+// 번역 캐시 테이블 모듈. 조회 엔드포인트(GET /translations/:key)는 웹이 부르지 않아 제거했다(C-12).
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Translation } from './translation.entity';
 import { TranslationsService } from './translations.service';
-import { TranslationsController } from './translations.controller';
 
 @Module({
   imports: [TypeOrmModule.forFeature([Translation])],
   providers: [TranslationsService],
-  controllers: [TranslationsController],
   exports: [TranslationsService],
 })
 export class TranslationsModule {}

@@ -18,7 +18,7 @@
 - **모노레포**: npm workspaces (`web`, `server`) — 루트 `package-lock.json` 하나로 의존성 고정. Node 20.19 이상 또는 22.12 이상
 - **프론트엔드** (`web/`): React 18 + Vite, Zustand, Socket.IO Client, Vitest — JavaScript(JSX)
 - **백엔드** (`server/`): NestJS 11, TypeORM 0.3 + MySQL 8, Socket.IO, JWT(Passport), Jest — TypeScript
-- **AI**: Anthropic Claude API (`@anthropic-ai/sdk`, 번역 — 서버 전용), Google Cloud TTS (카운트다운 음성 mp3를 서버가 사전 생성·캐시 — 서버 전용)
+- **AI**: OpenAI Responses API (`openai`, 채팅·게시글 번역 — 서버 전용, 모델은 `TRANSLATE_MODEL`), Google Cloud TTS (카운트다운 음성 mp3를 서버가 사전 생성·캐시 — 서버 전용)
 - **배포**: Docker Compose — `app`(NestJS가 `web/dist`까지 정적 서빙, 같은 origin) + `db`(mysql:8.4) + `proxy`(Caddy, 자동 HTTPS). 개발 포트 — 웹 5173, API 3001
 
 ## 프로젝트 구조
@@ -52,7 +52,7 @@ wos-sfc-helper/
 │       ├── rallies/ rally-groups/         # 집결·랠리 그룹
 │       ├── chat/ realtime/                # 채팅·Socket.IO 게이트웨이
 │       ├── notices/ alliance-notices/ boards/ operation-boards/
-│       ├── translate/ translations/      # Claude API 번역 (translate.service.ts)·번역 캐시
+│       ├── translate/ translations/      # OpenAI 번역 엔진·용어집·전역 큐·채팅 푸시 번역(chat-translation.service.ts)·텍스트 해시 캐시
 │       └── tts/                          # Google TTS 생성·캐시·/tts-audio 서빙
 ├── deploy/                   # Caddyfile, entrypoint.sh(DB 대기 → 마이그레이션 → 앱), wait-for-db.js
 ├── Dockerfile                # 멀티스테이지 — 서버·웹 빌드를 한 이미지로
@@ -75,12 +75,14 @@ wos-sfc-helper/
 ### API 통신 패턴
 - 웹 → 서버: REST(`web/src/api/`) + Socket.IO(채팅, 작전 보드, 접속자 표시, 카운트다운, 시계 동기화)
 - 새 API 경로 접두어를 추가하면 두 곳에 등록할 것 — `web/vite.config.js`의 `API_PATHS`(개발 프록시)와 `server/src/static-serving.ts`의 `STATIC_EXCLUDED_ROUTES`(운영에서 index.html 폴백이 가로채지 않게)
-- Claude API 호출은 **반드시 server의 translate 모듈에서**, Google TTS 호출은 **반드시 server의 tts 모듈에서** (API 키 보안) — 브라우저 직접 호출 금지. 웹은 `/tts-audio`의 mp3만 재생한다
+- OpenAI 호출은 **반드시 server의 translate 모듈에서**, Google TTS 호출은 **반드시 server의 tts 모듈에서** (API 키 보안) — 브라우저 직접 호출 금지. 웹은 `/tts-audio`의 mp3만 재생한다
+- 채팅 번역은 서버가 민다 — 웹이 `chat:language`로 대상 언어를 보고하면 서버가 메시지마다 접속자 언어로 한 번에 번역해 `chat:translation`을 방송하고 히스토리에 `translations`를 동봉한다. 유실분은 `POST /translate/batch`로 메운다. 계약 픽스처는 `docs/contracts/chat-events.json`(서버·웹 spec이 공유)
 
 ### 데이터 저장
 - MySQL 8 + TypeORM 엔티티. 운영 스키마는 `server/migrations/*.sql`을 마이그레이션 러너(`server/src/database/migrate.ts`)로 적용해 만든다. `000_initial_schema.sql`이 빈 DB에 테이블을 만들고, 컨테이너는 기동 시 자동 적용한다. 로컬 소스에서는 `npm --workspace server run migrate:dev`(ts-node), 빌드된 dist에서는 `run migrate`
 - 적용된 마이그레이션 파일은 수정하지 않는다(체크섬 불일치로 기동 거부). 스키마 변경은 새 번호 파일로 추가하고 엔티티와 함께 맞춘다
 - `TYPEORM_SYNC=true`는 폐기 가능한 로컬 개발 DB 전용 — 운영 모드(`NODE_ENV=production`)에서는 무시된다
+- 채팅 번역은 `message_translations(message_id, lang)` 테이블이 곧 캐시다(`005_message_translations.sql`, messages FK CASCADE). 게시글 단건 번역만 텍스트 해시 캐시 `translations`를 쓴다
 
 ### 동화 버전 (`/story`)
 - `web/src/entry.js`의 `resolveEntry`가 경로를 보고 `main.jsx`에서 `App` 또는 `story/StoryApp`을 lazy 로드한다. 같은 서버·로그인·실시간 데이터를 쓴다
@@ -141,7 +143,7 @@ docker compose up -d --build
 | 전투 | 실시간 공유 카운트다운(TTS 음성 안내)·개인 행군 시간·집결 그룹(최대 6개) | 구현됨 |
 | 작전 보드 | 실시간 협업 작전 캔버스 — 저장본 목록, 참가자, 보드 채팅 패널 | 구현됨 |
 | 커뮤니티 | 공지 핀보드·연맹 공지·연맹별 게시판(이미지 업로드)·게시글 번역 | 구현됨 |
-| 채팅 | 실시간 채팅·메시지 번역 (Claude API)·다른 탭에서 여는 채팅 도크 | 구현됨 |
+| 채팅 | 실시간 채팅·서버 푸시 메시지 번역 (OpenAI)·다른 탭에서 여는 채팅 도크 | 구현됨 |
 | 관리자 | 사용자 목록·역할·연맹 리더 지정·차단 (`developer` 역할만 탭 표시) | 구현됨 |
 | 동화 버전 | `/story` — 같은 기능을 수채화 그림책 UI로. 입구·전투현황·커뮤니티는 새 껍데기, 작전판·채팅·관리자는 기존 컴포넌트 | 구현됨 |
 

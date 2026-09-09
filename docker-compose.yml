@@ -82,7 +82,9 @@ services:
       TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-1}
       TTS_CACHE_DIR: /app/server/tts-cache
       GOOGLE_TTS_API_KEY: ${GOOGLE_TTS_API_KEY:-}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      TRANSLATE_MODEL: ${TRANSLATE_MODEL:-gpt-5.4-mini}
+      TRANSLATE_GLOBAL_RPM: ${TRANSLATE_GLOBAL_RPM:-120}
       CHAT_RETENTION_DAYS: ${CHAT_RETENTION_DAYS:-}
       MIGRATE_CMD: ${MIGRATE_CMD:-npm run migrate}
       # deploy/wait-for-db.js 가 읽는다. compose 는 .env 를 치환에만 쓰므로 여기서 넘겨야 컨테이너에 들어간다.

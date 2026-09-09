@@ -12,13 +12,19 @@
 
 import { Injectable, Logger } from '@nestjs/common';
 
+type Bucket = {
+  timestamps: number[];
+  /** 마지막 거부 경고 시각. 폭주 클라이언트 하나가 로그를 폭주시키지 않게 윈도우당 1회만 남긴다(A-R2). */
+  lastWarnAt?: number;
+};
+
 @Injectable()
 export class WsRateLimitService {
   private readonly logger = new Logger(WsRateLimitService.name);
 
   // socketId → (eventName → recent timestamps within sliding window)
   // Map of Map은 메모리 격리(socket 단위) + cleanup 단순함을 위해 선택.
-  private readonly buckets = new Map<string, Map<string, number[]>>();
+  private readonly buckets = new Map<string, Map<string, Bucket>>();
 
   /**
    * 특정 socket의 특정 event 호출이 rate limit 내인지 확인 후 시도 기록.
@@ -39,11 +45,12 @@ export class WsRateLimitService {
       this.buckets.set(socketId, eventMap);
     }
 
-    let timestamps = eventMap.get(event);
-    if (!timestamps) {
-      timestamps = [];
-      eventMap.set(event, timestamps);
+    let bucket = eventMap.get(event);
+    if (!bucket) {
+      bucket = { timestamps: [] };
+      eventMap.set(event, bucket);
     }
+    const { timestamps } = bucket;
 
     // 윈도우 밖 timestamp 정리 (sliding window)
     const cutoff = now - windowMs;
@@ -52,9 +59,12 @@ export class WsRateLimitService {
     }
 
     if (timestamps.length >= limit) {
-      this.logger.warn(
-        `Rate limit exceeded — socket=${socketId} event=${event} limit=${limit}/${windowMs}ms`,
-      );
+      if (bucket.lastWarnAt === undefined || now - bucket.lastWarnAt >= windowMs) {
+        bucket.lastWarnAt = now;
+        this.logger.warn(
+          `Rate limit exceeded — socket=${socketId} event=${event} limit=${limit}/${windowMs}ms`,
+        );
+      }
       return false;
     }
 

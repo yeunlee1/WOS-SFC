@@ -10,6 +10,7 @@ import { AppController } from './app.controller';
 import { User } from './users/users.entity';
 import { RefreshToken } from './auth/refresh-token.entity';
 import { Message } from './chat/message.entity';
+import { MessageTranslation } from './chat/message-translation.entity';
 import { Notice } from './notices/notice.entity';
 import { Rally } from './rallies/rally.entity';
 import { Member } from './members/member.entity';
@@ -45,7 +46,10 @@ import { createRateLimitTracker } from './common/rate-limit-tracker';
 // 대신 tts.constants 의 화이트리스트(parseTtsLang/parseTtsKey)가 임의 텍스트 합성을
 // 막고 있고, 응답은 1시간 캐시가 걸린 정적 mp3라 ServeStatic 으로 서빙되는 파일들과
 // 노출 수준이 같다.
-const THROTTLE_EXEMPT_PATH_PREFIXES = ['/tts-audio/'];
+// /translate 는 컨트롤러가 사용자당 60/분(단건)·10/분(공급자 미스)·20/분(배치) 한도를 직접 건다.
+// 전역 60/분이 먼저 돌면 61번째부터 body 에 retryAfterMs 가 없는 ThrottlerException 이 나가
+// 컨트롤러의 429 형태와 어긋나므로(A-R5) 전역 가드에서 뺀다.
+const THROTTLE_EXEMPT_PATH_PREFIXES = ['/tts-audio/', '/translate'];
 
 /**
  * 전역 요청 한도 가드.
@@ -156,6 +160,7 @@ export class GlobalThrottlerGuard extends ThrottlerGuard {
             User,
             RefreshToken,
             Message,
+            MessageTranslation,
             Notice,
             Rally,
             Member,
@@ -200,9 +205,8 @@ export class GlobalThrottlerGuard extends ThrottlerGuard {
   controllers: [AppController],
   // 전역 요청 한도. 키가 (컨트롤러, 핸들러, 추적자)별로 갈리므로 아래 60회/분은
   // "사용자 1인이 라우트 하나에 분당 60회"다. 라우트 전체를 합친 예산이 아니다.
-  // - 정상 사용의 최대치는 채팅 번역(/translate)인데 그쪽은 자체적으로 사용자당
-  //   60회/분(TRANSLATION_REQUEST_RATE_LIMIT)을 이미 걸고 있어 값이 겹칠 뿐 새로
-  //   막히는 것이 없다.
+  // - 번역(/translate)은 자체 한도(사용자당 60/10/배치 20)가 있어 전역 가드에서 제외한다
+  //   (THROTTLE_EXEMPT_PATH_PREFIXES).
   // - 화면 로드형 라우트(/notices, /alliance-notices, /boards, /members,
   //   /rally-groups, /operation-boards, /me/battle-settings)는 접속 시 1~2회,
   //   갱신은 웹소켓 broadcast로 받으므로 분당 60회와 자릿수가 다르다.

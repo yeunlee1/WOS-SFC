@@ -4,6 +4,8 @@ import { Injectable } from '@nestjs/common';
 export const TRANSLATION_REQUEST_RATE_LIMIT = 60;
 export const TRANSLATION_PROVIDER_RATE_LIMIT = 10;
 export const TRANSLATION_GLOBAL_PROVIDER_RATE_LIMIT = 60;
+/** POST /translate/batch 사용자별 한도. 배치 하나가 공급자 호출 1회라 채팅 폴백 규모(최신 50건 + 스크롤 20건)에 충분하다. */
+export const TRANSLATION_BATCH_RATE_LIMIT = 20;
 export const TRANSLATION_RATE_WINDOW_MS = 60_000;
 
 type RateLimitResult = { allowed: boolean; retryAfterMs: number };
@@ -12,6 +14,7 @@ type RateLimitResult = { allowed: boolean; retryAfterMs: number };
 export class TranslationRateLimitService {
   private readonly requestBuckets = new Map<number, number[]>();
   private readonly providerBuckets = new Map<number, number[]>();
+  private readonly batchBuckets = new Map<number, number[]>();
   private readonly globalProviderBucket: number[] = [];
 
   consumeRequest(userId: number): RateLimitResult {
@@ -19,6 +22,14 @@ export class TranslationRateLimitService {
       this.requestBuckets,
       userId,
       TRANSLATION_REQUEST_RATE_LIMIT,
+    );
+  }
+
+  consumeBatch(userId: number): RateLimitResult {
+    return this.consumeBucket(
+      this.batchBuckets,
+      userId,
+      TRANSLATION_BATCH_RATE_LIMIT,
     );
   }
 
