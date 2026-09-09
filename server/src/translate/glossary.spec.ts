@@ -35,6 +35,12 @@ describe('selectGlossaryLines', () => {
     ]);
   });
 
+  it('매칭된 열의 언어 칸에는 대표 표기가 아니라 매칭된 표기를 쓴다(원문을 바꾸라고 부추기지 않는다)', () => {
+    expect(selectGlossaryLines('창기병 보내주세요', ['ko', 'en'])).toEqual([
+      '창기병 → ko: 창기병; en: Lancer',
+    ]);
+  });
+
   it('영어 원문은 대소문자를 무시하고 복수형도 잡는다', () => {
     expect(selectGlossaryLines('send LANCERS now', ['ko'])).toEqual([
       'Lancer → ko: 창병',
@@ -104,15 +110,16 @@ describe('selectGlossaryLines', () => {
   });
 
   // 2026-09-10 E2E 핫픽스 — 대상에 발신 언어가 포함될 때(영어 원문·SFC 섞인 한국어) 매칭된 열의 언어를
-  // 빼면 라벨 없는 값을 모델이 엉뚱한 칸에 넣는다. 매칭 열의 언어도 대표 표기와 함께 넣는다.
-  it('대상에 매칭된 열의 언어가 포함되면 그 언어의 대표 표기도 라벨과 함께 넣는다(영어 원문·대상 en,ko)', () => {
+  // 빼면 라벨 없는 값을 모델이 엉뚱한 칸에 넣는다. 매칭 열의 언어도 라벨과 함께 넣되 값은 매칭된 표기다 —
+  // 대표 표기(Bear Hunt)를 넣자 mini·luna 둘 다 en 칸의 'Bear trap' 을 'Bear Hunt' 로 고쳤다(재평가 1차).
+  it('대상에 매칭된 열의 언어가 포함되면 그 언어도 라벨과 매칭 표기로 넣는다(영어 원문·대상 en,ko)', () => {
     expect(
       selectGlossaryLines(
         'Bear trap starts at reset, garrison your troops in the fortress.',
         ['en', 'ko'],
       ),
     ).toEqual([
-      'bear trap → en: Bear Hunt; ko: 곰 사냥',
+      'bear trap → en: bear trap; ko: 곰 사냥',
       'fortress → en: fortress; ko: 요새',
       'troops → en: troops; ko: 병력',
       'garrison → en: garrison; ko: 주둔',

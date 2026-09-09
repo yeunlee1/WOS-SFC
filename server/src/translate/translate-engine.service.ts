@@ -323,7 +323,7 @@ export class TranslateEngineService {
   }
 
   /**
-   * 규칙 + 문장에 등장한 용어 행. 용어 줄은 언어 코드 라벨 형식(`bear trap → en: Bear Hunt; ko: 곰 사냥`)이다 —
+   * 규칙 + 문장에 등장한 용어 행. 용어 줄은 언어 코드 라벨 형식(`bear trap → en: bear trap; ko: 곰 사냥`)이다 —
    * 2026-09-10 E2E 에서 라벨 없는 "in target order" 형식은 대상에 발신 언어가 포함될 때 모델이 용어를
    * 엉뚱한 칸에 넣고 문장을 번역하지 않는 결함을 냈다.
    */

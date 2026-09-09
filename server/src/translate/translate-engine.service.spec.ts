@@ -118,7 +118,7 @@ describe('TranslateEngineService.translateMulti', () => {
     );
 
     const instructions: string = mockCreate.mock.calls[0][0].instructions;
-    expect(instructions).toContain('bear trap → en: Bear Hunt; ko: 곰 사냥');
+    expect(instructions).toContain('bear trap → en: bear trap; ko: 곰 사냥');
     expect(instructions).toContain('fortress → en: fortress; ko: 요새');
     expect(instructions).not.toContain('in target order');
     expect(instructions).not.toContain('matched form=target form');
