@@ -5,11 +5,13 @@
 //        server/.env 의 OPENAI_API_KEY 를 읽는다(npm 스크립트가 --env-file-if-exists=.env 로 넘긴다).
 //
 // 프롬프트·스키마·용어집·분할 규칙을 여기서 다시 구현하지 않는다 — 엔진 클래스를 직접 쓰므로 평가 결과가
-// 운영 동작과 같다. 문장 세트는 반장 실측(번역-실측-2026-09-09.md) 10문장을 포함한 40문장이다.
+// 운영 동작과 같다. 문장 세트는 반장 실측(번역-실측-2026-09-09.md) 10문장을 포함한 40문장 + 2026-09-10 E2E 핫픽스
+// 재현 2문장(대상 집합에 발신 언어 포함)이다. 문장마다 targets 를 갖고 있어 대상 집합을 따로 지정하는 옵션은 없다.
 import { ConfigService } from '@nestjs/config';
 import { writeFileSync } from 'fs';
 import { Lang, TARGET_LANGS } from '../script-detect';
 import {
+  DEFAULT_TRANSLATE_MODEL,
   SourceLang,
   TranslateEngineService,
   TranslateProviderError,
@@ -72,11 +74,16 @@ export const EVAL_CASES: EvalCase[] = [
   { group: 'ru→ko', text: 'Битва за крепость завтра, копейщики и стрелки', source: ['ru'], targets: ['ko'], expect: { ko: ['요새전', '창병', '사수|궁병'] } },
   // 특수 — 좌표·이모지·숫자만·혼합·로마자 한국어·독일어·한자 전용
   { group: '특수', text: '456,789 👍', source: ['unknown'], targets: ['en', 'ko'], expect: { en: ['456,789'], ko: ['456,789'] }, lenient: true },
-  { group: '특수', text: 'SFC 집결 go', source: ['ko', 'unknown'], targets: ['en', 'ja'], expect: { en: ['rally', 'SFC'], ja: ['集結', 'SFC'] }, lenient: true },
+  // ja 는 태그 SFC 를 그대로 두거나 용어집 ja 대표 표기(サンファイア城)를 써도 된다 — 둘 다 규칙에 맞는다(반장 결정 2026-09-10).
+  { group: '특수', text: 'SFC 집결 go', source: ['ko', 'unknown'], targets: ['en', 'ja'], expect: { en: ['rally', 'SFC'], ja: ['集結', 'SFC|サンファイア城'] }, lenient: true },
   { group: '특수', text: 'annyeong gg', source: ['ko', 'en', 'unknown'], targets: ['ko'], expect: { ko: [] }, lenient: true },
   { group: '특수', text: 'Wir sammeln in 5 Minuten', source: ['unknown'], targets: ['ko', 'en'], expect: { ko: ['5분'], en: ['5 min'] }, lenient: true },
   { group: '특수', text: '集結 5分', source: ['ja', 'zh', 'unknown'], targets: ['ko', 'en'], expect: { ko: ['집결', '5분'], en: ['rally', '5 min'] }, lenient: true },
   { group: '특수', text: '🔥🔥🔥 GO GO GO 🔥🔥🔥', source: ['en', 'unknown'], targets: ['ko'], expect: { ko: ['🔥'] }, lenient: true },
+  // 발신 언어가 대상에 포함된 경우(2026-09-10 E2E 핫픽스) — 접속자 언어 {en, ko} 에 영어 원문·SFC 섞인 한국어.
+  // 발신 언어 칸은 원문 그대로여야 하고(scoreCase 의 "원문 미보존"), 다른 칸은 문장 전체가 번역돼야 한다.
+  { group: '발신어 포함', text: 'Bear trap starts at reset, garrison your troops in the fortress. Shield is down at 123,456', source: ['en'], targets: ['en', 'ko'], expect: { en: [], ko: ['곰 사냥|곰 함정|곰사냥', '주둔', '병력', '요새', '방패|보호막', '123,456'] } },
+  { group: '발신어 포함', text: '10분 뒤 SFC 집결 갑니다. 창병 위주로 넣어주세요.', source: ['ko'], targets: ['en', 'ko'], expect: { en: ['SFC', 'rally', 'lancer'], ko: [] } },
 ];
 
 /**
@@ -199,6 +206,10 @@ export function scoreCase(
       misOutput.push(`${target}:없음`);
       continue;
     }
+    // 발신 언어 칸은 원문 그대로여야 한다(2026-09-10 핫픽스 — 용어만 치환된 문자열이 스크립트 비율 검사를 통과했다).
+    if (sourceLang && sourceLang === target && output !== c.text.trim()) {
+      misOutput.push(`${target}:원문 미보존`);
+    }
     for (const term of expected) {
       if (termHit(output, term)) termHits += 1;
       else missing.push(`${target}:${term}`);
@@ -306,6 +317,8 @@ async function runModel(model: string, cases: EvalCase[], concurrency: number): 
 }
 
 const pct = (n: number, d: number) => (d === 0 ? '—' : `${((100 * n) / d).toFixed(1)}%`);
+/** 마크다운 표 셀 — 백슬래시와 파이프를 한 번에 이스케이프한다(CodeQL js/incomplete-sanitization: 백슬래시 먼저). */
+const escapeCell = (s: string) => s.replace(/[\\|]/g, (m) => `\\${m}`);
 
 export function renderMarkdown(summaries: ModelSummary[]): string {
   const lines: string[] = [];
@@ -350,7 +363,7 @@ export function renderMarkdown(summaries: ModelSummary[]): string {
             .map(([lang, text]) => `${lang}: ${text}`)
             .join('<br>');
       lines.push(
-        `| ${r.text} | ${r.source}${r.sourceOk ? '' : ' ✗'} | ${r.missing.join(', ') || '—'} | ${r.misOutput.join(', ') || '—'} | ${outputs.replace(/\|/g, '\\|')} |`,
+        `| ${r.text} | ${r.source}${r.sourceOk ? '' : ' ✗'} | ${r.missing.join(', ') || '—'} | ${r.misOutput.join(', ') || '—'} | ${escapeCell(outputs)} |`,
       );
     }
   }
@@ -371,7 +384,7 @@ export function renderFullOutputs(summaries: ModelSummary[]): string {
         : Object.entries(r.outputs)
             .map(([lang, text]) => `${lang}: ${text}`)
             .join('<br>');
-      lines.push(`| ${r.text} | ${r.source} | ${outputs.replace(/\|/g, '\\|')} | ${r.ms} | ${r.inputTokens}/${r.outputTokens} |`);
+      lines.push(`| ${r.text} | ${r.source} | ${escapeCell(outputs)} | ${r.ms} | ${r.inputTokens}/${r.outputTokens} |`);
     }
   }
   return lines.join('\n');
@@ -393,7 +406,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
   if (!process.env.OPENAI_API_KEY) {
     throw new Error('OPENAI_API_KEY 가 없다. server/.env 를 확인할 것.');
   }
-  const models = (args.models ?? process.env.TRANSLATE_MODEL ?? 'gpt-5.4-mini')
+  const models = (args.models ?? process.env.TRANSLATE_MODEL ?? DEFAULT_TRANSLATE_MODEL)
     .split(',')
     .map((m) => m.trim())
     .filter(Boolean);

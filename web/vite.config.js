@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react';
 
 const API_PATHS = [
   '/auth', '/notices', '/alliance-notices', '/rallies', '/members', '/boards',
-  '/uploads', '/translations', '/users', '/translate', '/tts-audio', '/time', '/admin',
+  '/uploads', '/users', '/translate', '/tts-audio', '/time', '/admin',
   '/me', '/rally-groups', '/operation-boards',
 ];
 
