@@ -1,3 +1,4 @@
+// 게시글 단건 번역 엔드포인트. 요청 한도 → 캐시 → 공급자 미스 한도 → 같은 키의 동시 요청 합치기.
 import {
   Body,
   Controller,
@@ -7,15 +8,11 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { createHash } from 'crypto';
 import { Request } from 'express';
 import { TranslateService } from './translate.service';
 import { TranslateRequestDto } from './dto/translate-request.dto';
-import { TranslationsService } from '../translations/translations.service';
 import { User } from '../users/users.entity';
 import { TranslationRateLimitService } from './translation-rate-limit.service';
-
-const TRANSLATION_CACHE_VERSION = 'claude-haiku-4-5-20251001:v1';
 
 @Controller('translate')
 @UseGuards(AuthGuard('jwt'))
@@ -24,7 +21,6 @@ export class TranslateController {
 
   constructor(
     private service: TranslateService,
-    private cache: TranslationsService,
     private rateLimit: TranslationRateLimitService,
   ) {}
 
@@ -36,24 +32,20 @@ export class TranslateController {
     const requestRate = this.rateLimit.consumeRequest(req.user.id);
     if (!requestRate.allowed) this.throwRateLimit(requestRate.retryAfterMs);
 
-    const cacheKey = this.makeCacheKey(dto);
-    const cached = await this.cache.get(cacheKey);
+    const cached = await this.service.getCached(dto.text, dto.targetLang);
     if (cached !== null) return { translated: cached };
 
-    let request = this.pending.get(cacheKey);
+    const pendingKey = `${dto.targetLang}\0${dto.text}`;
+    let request = this.pending.get(pendingKey);
     if (!request) {
       const providerRate = this.rateLimit.consumeProviderMiss(req.user.id);
       if (!providerRate.allowed) {
         this.throwRateLimit(providerRate.retryAfterMs);
       }
       request = this.service
-        .translate(dto.text, dto.targetLang)
-        .then(async (translated) => {
-          await this.cache.set(cacheKey, translated);
-          return translated;
-        })
-        .finally(() => this.pending.delete(cacheKey));
-      this.pending.set(cacheKey, request);
+        .translateUncached(dto.text, dto.targetLang)
+        .finally(() => this.pending.delete(pendingKey));
+      this.pending.set(pendingKey, request);
     }
 
     const translated = await request;
@@ -68,12 +60,5 @@ export class TranslateController {
       },
       429,
     );
-  }
-
-  private makeCacheKey(dto: TranslateRequestDto): string {
-    const digest = createHash('sha256')
-      .update(`${TRANSLATION_CACHE_VERSION}\0${dto.targetLang}\0${dto.text}`)
-      .digest('hex');
-    return `translate:${dto.targetLang}:${digest}`;
   }
 }

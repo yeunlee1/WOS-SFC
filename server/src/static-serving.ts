@@ -13,7 +13,6 @@ export const STATIC_EXCLUDED_ROUTES = [
   '/rallies/*path',
   '/members/*path',
   '/boards/*path',
-  '/translations/*path',
   '/users/*path',
   '/translate/*path',
   '/tts-audio/*path',
