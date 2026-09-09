@@ -1,5 +1,4 @@
 import { io } from 'socket.io-client';
-import { getCachedTranslation, cacheTranslation } from '../i18n';
 
 // access token 만료 시 자동 refresh 후 재시도 — 실패 시 auth:expired 이벤트 발행
 let refreshPromise = null;
@@ -140,11 +139,22 @@ export const api = {
     }),
   deleteBoardPost: (id) => apiFetch(`/boards/${id}`, { method: 'DELETE' }),
 
-  // 번역 실행 (Claude API → 서버)
+  // 게시글 단건 번역 (서버 translate 모듈 → OpenAI)
   translate: (text, targetLang, options = {}) =>
     apiFetch('/translate', {
       method: 'POST',
       body: JSON.stringify({ text, targetLang }),
+      signal: options.signal,
+    }),
+
+  // 채팅 번역 배치 — 서버 푸시에서 빠진 번역만 묻는다 (설계 3.5).
+  // 항목 ≤20·원문 합 ≤2000자는 호출자(translationSync)가 지킨다.
+  // 응답 { translated: { [id]: string }, skipped: number[], failed: number[] }.
+  // 오류는 apiFetch 규약 그대로 — error.status, 429면 error.retryAfterMs.
+  translateBatch: (targetLang, items, options = {}) =>
+    apiFetch('/translate/batch', {
+      method: 'POST',
+      body: JSON.stringify({ targetLang, items }),
       signal: options.signal,
     }),
 
@@ -406,39 +416,6 @@ export function disconnectSocket() {
   _socketAuthRetried = false;
   _socket?.disconnect();
   _socket = null;
-}
-
-// ── 채팅 자동번역 ──
-export async function translateChatMessage(msg, myLang, options = {}) {
-  if (
-    !myLang ||
-    myLang === 'other' ||
-    !msg.language ||
-    msg.language === myLang
-  ) {
-    return msg;
-  }
-
-  const localCached = getCachedTranslation(msg.content, myLang);
-  if (localCached) {
-    return {
-      ...msg,
-      translatedContent: localCached,
-      translatedLanguage: myLang,
-    };
-  }
-
-  const res = await api.translate(msg.content, myLang, options);
-  if (res?.translated) {
-    cacheTranslation(msg.content, myLang, res.translated);
-    return {
-      ...msg,
-      translatedContent: res.translated,
-      translatedLanguage: myLang,
-    };
-  }
-
-  return msg;
 }
 
 // ── 공통 유틸 ──

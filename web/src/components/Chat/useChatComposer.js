@@ -1,4 +1,4 @@
-// 채팅 입력창 공통 로직 — IME 조합 보호와 전송 실패 노출을 ChatTab/ChatDock가 공유한다.
+// 채팅 입력창 공통 로직 — IME 조합 보호, 코드 포인트 글자 수 제한, 전송 실패 노출을 ChatTab/ChatDock가 공유한다.
 import { useRef, useState } from 'react';
 import { getSocket } from '../../api';
 import { useI18n } from '../../i18n';
@@ -8,42 +8,24 @@ import { useI18n } from '../../i18n';
 // (clockSync.js의 WS_PING_TIMEOUT_MS와 같은 이유·같은 방식).
 export const CHAT_ACK_TIMEOUT_MS = 5_000;
 
-// i18n/index.jsx는 이번 작업 범위 밖(다른 트랙 담당)이라 문구를 여기에 둔다.
-// 4개 언어 키가 i18n에 추가되면 이 표를 지우고 t()로 옮긴다.
-const SEND_ERROR_TEXT = {
-  ko: {
-    offline: '서버와 연결이 끊겼습니다. 재연결 후 다시 보내세요.',
-    rate_limit: '너무 빠르게 보냈습니다. 잠시 후 다시 시도하세요.',
-    invalid: '보낼 수 없는 메시지입니다 (최대 500자).',
-    failed: '전송하지 못했습니다. 다시 시도하세요.',
-  },
-  en: {
-    offline: 'Disconnected from the server. Try again once reconnected.',
-    rate_limit: 'Sending too fast. Please wait a moment.',
-    invalid: 'Message cannot be sent (max 500 characters).',
-    failed: 'Failed to send. Please try again.',
-  },
-  ja: {
-    offline: 'サーバーとの接続が切れました。再接続後に送信してください。',
-    rate_limit: '送信が速すぎます。少し待ってから再試行してください。',
-    invalid: '送信できないメッセージです（最大500文字）。',
-    failed: '送信できませんでした。もう一度お試しください。',
-  },
-  zh: {
-    offline: '与服务器的连接已断开，重新连接后再发送。',
-    rate_limit: '发送过快，请稍后再试。',
-    invalid: '无法发送该消息（最多500字）。',
-    failed: '发送失败，请重试。',
-  },
-};
+// 서버(chat.gateway)와 같은 상한·같은 계수 — UTF-16 길이가 아니라 코드 포인트 수 (감사 A-A2).
+export const CHAT_MAX_CHARS = 500;
+// 글자 수 표시를 시작하는 지점.
+export const CHAT_COUNT_SHOW_FROM = 450;
 
-function sendErrorText(lang, reason) {
-  const table = SEND_ERROR_TEXT[lang] || SEND_ERROR_TEXT.ko;
-  return table[reason] || table.failed;
+export function countChars(text) {
+  return Array.from(text ?? '').length;
 }
 
+const SEND_ERROR_KEYS = {
+  offline: 'chatSendOffline',
+  rate_limit: 'chatSendRateLimit',
+  invalid: 'chatSendInvalid',
+  failed: 'chatSendFailed',
+};
+
 export function useChatComposer() {
-  const { lang } = useI18n();
+  const { t } = useI18n();
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [errorReason, setErrorReason] = useState(null);
@@ -52,11 +34,19 @@ export function useChatComposer() {
   // 늦게 도착한 ack가 최신 전송 상태를 덮어쓰지 못하게 하는 순번.
   const sendTokenRef = useRef(0);
 
+  const charCount = countChars(input);
+  const overLimit = charCount > CHAT_MAX_CHARS;
+
   function sendMessage() {
     if (sending) return;
     const raw = input;
     const content = raw.trim();
     if (!content) return;
+    // 서버가 invalid로 거절할 것을 알면서 보내지 않는다.
+    if (countChars(content) > CHAT_MAX_CHARS) {
+      setErrorReason('invalid');
+      return;
+    }
 
     const socket = getSocket();
     if (!socket) {
@@ -130,7 +120,13 @@ export function useChatComposer() {
   return {
     input,
     sending,
-    errorText: errorReason ? sendErrorText(lang, errorReason) : null,
+    errorText: errorReason
+      ? t(SEND_ERROR_KEYS[errorReason] || SEND_ERROR_KEYS.failed)
+      : null,
+    charCount,
+    charLimit: CHAT_MAX_CHARS,
+    showCount: charCount >= CHAT_COUNT_SHOW_FROM,
+    overLimit,
     sendMessage,
     handleChange,
     handleKeyDown,
@@ -138,11 +134,3 @@ export function useChatComposer() {
     handleCompositionEnd,
   };
 }
-
-// 실패 안내 줄 — style.css는 이번 작업 범위 밖이라 최소 인라인 스타일만 쓴다.
-export const CHAT_SEND_ERROR_STYLE = {
-  color: '#f87171',
-  fontSize: '0.8rem',
-  lineHeight: 1.4,
-  padding: '0.25rem 0.5rem',
-};

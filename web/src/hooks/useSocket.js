@@ -1,237 +1,16 @@
+// 전역 소켓 훅 — 서버 이벤트를 스토어와 채팅 번역 동기화 모듈에 연결한다. 번역 요청 규칙 자체는 chat/translationSync.js에 있다.
 import { useEffect, useRef } from 'react';
-import { useStore, ALLIANCES, getChatMessageKey } from '../store';
-import { connectSocket, translateChatMessage } from '../api';
-
-const CHAT_TRANSLATION_INTERVAL_MS = 6500;
-const CHAT_TRANSLATION_MAX_ATTEMPTS = 3;
-const CHAT_TRANSLATION_MAX_RATE_RETRIES = 5;
-const CHAT_TRANSLATION_JOB_TIMEOUT_MS = 40_000;
-const CHAT_TRANSLATION_RETRY_GRACE_MS = 250;
-const chatTranslationRequests = new Map();
-const chatTranslationQueue = [];
-let chatTranslationTimer = null;
-let chatTranslationRunning = false;
-let chatTranslationLastStartedAt = 0;
-let chatTranslationGeneration = 0;
-let chatTranslationRunToken = 0;
-let chatTranslationController = null;
-let systemMessageSequence = 0;
-
-function clearChatTranslationRequest(job) {
-  if (chatTranslationRequests.get(job.requestKey) === job.generation) {
-    chatTranslationRequests.delete(job.requestKey);
-  }
-}
-
-function needsChatTranslation(message, targetLanguage) {
-  const state = useStore.getState();
-  if (
-    !state.chatAutoTranslate ||
-    !targetLanguage ||
-    message?._type === 'system'
-  )
-    return false;
-  if (
-    !message?.language ||
-    message.language === targetLanguage ||
-    targetLanguage === 'other'
-  )
-    return false;
-
-  const messageKey = getChatMessageKey(message);
-  const stored = state.chatMessages.find(
-    (item) => getChatMessageKey(item) === messageKey,
-  );
-  return !(
-    stored?.translatedContent && stored.translatedLanguage === targetLanguage
-  );
-}
-
-function addChatTranslationJob(job) {
-  if (!job.priority) {
-    chatTranslationQueue.push(job);
-    return;
-  }
-
-  const firstHistoryIndex = chatTranslationQueue.findIndex(
-    (queued) => !queued.priority,
-  );
-  if (firstHistoryIndex === -1) chatTranslationQueue.push(job);
-  else chatTranslationQueue.splice(firstHistoryIndex, 0, job);
-}
-
-function scheduleNextChatTranslation() {
-  if (
-    chatTranslationRunning ||
-    chatTranslationTimer ||
-    chatTranslationQueue.length === 0
-  )
-    return;
-
-  const elapsed = Date.now() - chatTranslationLastStartedAt;
-  const intervalDelay =
-    chatTranslationLastStartedAt === 0
-      ? 0
-      : Math.max(0, CHAT_TRANSLATION_INTERVAL_MS - elapsed);
-  const earliestReadyAt = Math.min(
-    ...chatTranslationQueue.map((job) => job.notBefore || 0),
-  );
-  const readyDelay = Math.max(0, earliestReadyAt - Date.now());
-  const delay = Math.max(intervalDelay, readyDelay);
-
-  chatTranslationTimer = setTimeout(() => {
-    chatTranslationTimer = null;
-    runNextChatTranslation();
-  }, delay);
-}
-
-function retryChatTranslation(job, error) {
-  if (job.generation !== chatTranslationGeneration) return false;
-  if (!needsChatTranslation(job.message, job.targetLanguage)) {
-    return false;
-  }
-
-  if (error?.status === 429 && Number.isFinite(error.retryAfterMs)) {
-    if (job.rateRetries >= CHAT_TRANSLATION_MAX_RATE_RETRIES) return false;
-    job.rateRetries += 1;
-    job.notBefore =
-      Date.now() +
-      Math.max(CHAT_TRANSLATION_INTERVAL_MS, error.retryAfterMs) +
-      CHAT_TRANSLATION_RETRY_GRACE_MS;
-    addChatTranslationJob(job);
-    return true;
-  }
-
-  if (job.attempt >= CHAT_TRANSLATION_MAX_ATTEMPTS) return false;
-  job.attempt += 1;
-  job.notBefore =
-    Date.now() + CHAT_TRANSLATION_INTERVAL_MS * Math.max(1, job.attempt - 1);
-  addChatTranslationJob(job);
-  return true;
-}
-
-function withChatTranslationTimeout(promise, controller) {
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      controller.abort();
-      reject(new Error('chat translation timeout'));
-    }, CHAT_TRANSLATION_JOB_TIMEOUT_MS);
-    promise.then(
-      (value) => {
-        clearTimeout(timeout);
-        resolve(value);
-      },
-      (error) => {
-        clearTimeout(timeout);
-        reject(error);
-      },
-    );
-  });
-}
-
-function runNextChatTranslation() {
-  if (chatTranslationRunning) return;
-
-  const now = Date.now();
-  let job = null;
-  for (let index = 0; index < chatTranslationQueue.length; ) {
-    const candidate = chatTranslationQueue[index];
-    if (
-      candidate.generation !== chatTranslationGeneration ||
-      !needsChatTranslation(candidate.message, candidate.targetLanguage)
-    ) {
-      chatTranslationQueue.splice(index, 1);
-      clearChatTranslationRequest(candidate);
-      continue;
-    }
-    if (!job && (candidate.notBefore || 0) <= now) {
-      job = chatTranslationQueue.splice(index, 1)[0];
-      break;
-    }
-    index += 1;
-  }
-  if (!job) {
-    scheduleNextChatTranslation();
-    return;
-  }
-
-  chatTranslationRunning = true;
-  chatTranslationLastStartedAt = Date.now();
-  const runToken = ++chatTranslationRunToken;
-  const controller = new AbortController();
-  chatTranslationController = controller;
-  let requeued = false;
-
-  withChatTranslationTimeout(
-    Promise.resolve().then(() =>
-      translateChatMessage(job.message, job.targetLanguage, {
-        signal: controller.signal,
-      }),
-    ),
-    controller,
-  )
-    .then((translated) => {
-      if (job.generation !== chatTranslationGeneration) return;
-      if (!translated?.translatedContent) {
-        requeued = retryChatTranslation(job);
-        return;
-      }
-
-      useStore
-        .getState()
-        .setChatMessageTranslation(
-          job.messageKey,
-          translated.translatedContent,
-          job.targetLanguage,
-        );
-    })
-    .catch((error) => {
-      requeued = retryChatTranslation(job, error);
-    })
-    .finally(() => {
-      if (runToken !== chatTranslationRunToken) return;
-      if (!requeued) clearChatTranslationRequest(job);
-      chatTranslationController = null;
-      chatTranslationRunning = false;
-      scheduleNextChatTranslation();
-    });
-}
-
-function resetChatTranslationQueue() {
-  chatTranslationGeneration += 1;
-  chatTranslationRunToken += 1;
-  chatTranslationController?.abort();
-  chatTranslationController = null;
-  chatTranslationRunning = false;
-  chatTranslationLastStartedAt = 0;
-  chatTranslationQueue.length = 0;
-  chatTranslationRequests.clear();
-  if (chatTranslationTimer) clearTimeout(chatTranslationTimer);
-  chatTranslationTimer = null;
-}
-
-function queueChatTranslation(message, targetLanguage, priority = false) {
-  if (!needsChatTranslation(message, targetLanguage)) return;
-
-  const messageKey = getChatMessageKey(message);
-
-  const requestKey = `${messageKey}:${targetLanguage}`;
-  if (chatTranslationRequests.has(requestKey)) return;
-  const job = {
-    message,
-    messageKey,
-    targetLanguage,
-    requestKey,
-    priority,
-    attempt: 1,
-    rateRetries: 0,
-    notBefore: 0,
-    generation: chatTranslationGeneration,
-  };
-  chatTranslationRequests.set(requestKey, job.generation);
-  addChatTranslationJob(job);
-  scheduleNextChatTranslation();
-}
+import { useStore, ALLIANCES } from '../store';
+import { api, connectSocket } from '../api';
+import {
+  createTranslationSync,
+  getActiveTranslationSync,
+  setActiveTranslationSync,
+} from '../chat/translationSync';
+import {
+  createOnlineTracker,
+  createSystemMessage,
+} from '../chat/systemMessages';
 
 // StrictMode 안전: cleanup에서 소켓 자체는 끊지 않고 핸들러만 해제.
 // 실제 disconnect는 로그아웃 시 Header.handleLogout에서 명시적으로 호출됨.
@@ -252,6 +31,7 @@ export function useSocket(user, chatLanguage = user?.language) {
   const appendChatMessage = useStore((s) => s.appendChatMessage);
   const chatAutoTranslate = useStore((s) => s.chatAutoTranslate);
   const chatLanguageRef = useRef(chatLanguage);
+  const syncRef = useRef(null);
 
   useEffect(() => {
     chatLanguageRef.current = chatLanguage;
@@ -262,6 +42,47 @@ export function useSocket(user, chatLanguage = user?.language) {
     // httpOnly 쿠키가 자동 전송되므로 토큰 파라미터 불필요
     const socket = connectSocket();
 
+    const sync = createTranslationSync({
+      store: useStore,
+      translateBatch: (lang, items, options) =>
+        api.translateBatch(lang, items, options),
+      emitLanguage: (lang) => socket.emit('chat:language', { lang }),
+    });
+    syncRef.current = sync;
+    setActiveTranslationSync(sync);
+
+    // 입퇴장은 서버가 방송하지 않고 online:updated diff로 만든다 (C-5, B-16).
+    const tracker = createOnlineTracker({
+      onFlush: ({ joined, left }) => {
+        if (joined.length === 1) {
+          appendChatMessage(
+            createSystemMessage({ kind: 'joined', nickname: joined[0] }),
+          );
+        } else if (joined.length > 1) {
+          appendChatMessage(
+            createSystemMessage({
+              kind: 'joinedMany',
+              count: joined.length,
+              nicknames: joined,
+            }),
+          );
+        }
+        if (left.length === 1) {
+          appendChatMessage(
+            createSystemMessage({ kind: 'left', nickname: left[0] }),
+          );
+        } else if (left.length > 1) {
+          appendChatMessage(
+            createSystemMessage({
+              kind: 'leftMany',
+              count: left.length,
+              nicknames: left,
+            }),
+          );
+        }
+      },
+    });
+
     const boardHandlers = ALLIANCES.map(
       (a) => (posts) => setBoardPosts(a, posts),
     );
@@ -269,6 +90,17 @@ export function useSocket(user, chatLanguage = user?.language) {
       (a) => (notices) => setAllianceNotices(a, notices),
     );
 
+    // 접속(재접속 포함)마다 대상 언어를 서버에 보고한다 — 소켓별 상태라 매번 필요하다.
+    const onConnect = () =>
+      sync.onConnect(
+        chatLanguageRef.current,
+        useStore.getState().chatAutoTranslate,
+      );
+    const onOnlineUpdated = (list) => {
+      const safeList = Array.isArray(list) ? list : [];
+      setOnlineUsers(safeList);
+      tracker.update(safeList);
+    };
     const onRallyUpdated = (group) => upsertRallyGroup(group);
     const onRallyRemoved = ({ groupId }) => removeRallyGroup(groupId);
     const onRallyCountdownStart = (payload) =>
@@ -278,39 +110,41 @@ export function useSocket(user, chatLanguage = user?.language) {
     const onChatHistory = (messages) => {
       const safeMessages = Array.isArray(messages) ? messages : [];
       setChatHistory(safeMessages);
-      safeMessages.forEach((message) =>
-        queueChatTranslation(message, chatLanguageRef.current),
-      );
+      sync.onHistory(safeMessages);
     };
     const onChatMessage = (message) => {
       if (!message) return;
       appendChatMessage(message);
-      queueChatTranslation(message, chatLanguageRef.current, true);
+      sync.onMessage(message);
     };
-    // 서버가 히스토리 조회에 실패한 경우. 빈 채팅을 정상처럼 보이게 두지 않는다.
-    // (문구는 서버가 보내는 입퇴장 알림과 마찬가지로 아직 한국어 고정 — i18n 키 추가 필요)
+    const onChatTranslation = (payload) => sync.onPushed(payload);
+    // 서버가 히스토리 조회에 실패한 경우(레거시 chat:error). 빈 채팅을 정상처럼 보이게 두지 않는다.
     const onChatError = (payload) => {
       if (payload?.scope !== 'history') return;
-      appendChatMessage({
-        _type: 'system',
-        _id: `${Date.now()}-${systemMessageSequence++}`,
-        text: '지난 대화를 불러오지 못했습니다. 새 메시지는 정상 수신됩니다.',
-        createdAt: new Date().toISOString(),
-      });
+      appendChatMessage(createSystemMessage({ kind: 'history_error' }));
     };
-    const onChatSystem = (message) => {
-      appendChatMessage({
-        _type: 'system',
-        _id: `${Date.now()}-${systemMessageSequence++}`,
-        text: String(message || ''),
-        createdAt: new Date().toISOString(),
-      });
+    // 새 서버는 { kind } 객체, 옛 서버는 문자열을 보낸다. 둘 다 받는다.
+    const onChatSystem = (payload) => {
+      if (payload && typeof payload === 'object') {
+        if (typeof payload.kind !== 'string') return;
+        appendChatMessage(
+          createSystemMessage({
+            kind: payload.kind,
+            ...(payload.nickname ? { nickname: payload.nickname } : {}),
+          }),
+        );
+        return;
+      }
+      const text = String(payload || '');
+      if (!text) return;
+      appendChatMessage(createSystemMessage({ kind: 'text', text }));
     };
 
+    socket.on('connect', onConnect);
     socket.on('notices:updated', setNotices);
     socket.on('rallies:updated', setRallies);
     socket.on('members:updated', setMembers);
-    socket.on('online:updated', setOnlineUsers);
+    socket.on('online:updated', onOnlineUpdated);
     socket.on('countdown:state', setCountdown);
     socket.on('rallyGroup:updated', onRallyUpdated);
     socket.on('rallyGroup:removed', onRallyRemoved);
@@ -319,6 +153,7 @@ export function useSocket(user, chatLanguage = user?.language) {
     socket.on('busy:state', onBusyState);
     socket.on('chat:history', onChatHistory);
     socket.on('chat:message', onChatMessage);
+    socket.on('chat:translation', onChatTranslation);
     socket.on('chat:system', onChatSystem);
     socket.on('chat:error', onChatError);
     ALLIANCES.forEach((a, i) =>
@@ -327,12 +162,15 @@ export function useSocket(user, chatLanguage = user?.language) {
     ALLIANCES.forEach((a, i) => {
       socket.on(`alliance-notice:updated:${a}`, allianceNoticeHandlers[i]);
     });
+    // 이미 연결된 소켓에 다시 붙는 경우(StrictMode 재마운트 등)는 connect 이벤트가 없다.
+    if (socket.connected) onConnect();
 
     return () => {
+      socket.off('connect', onConnect);
       socket.off('notices:updated', setNotices);
       socket.off('rallies:updated', setRallies);
       socket.off('members:updated', setMembers);
-      socket.off('online:updated', setOnlineUsers);
+      socket.off('online:updated', onOnlineUpdated);
       socket.off('countdown:state', setCountdown);
       socket.off('rallyGroup:updated', onRallyUpdated);
       socket.off('rallyGroup:removed', onRallyRemoved);
@@ -341,6 +179,7 @@ export function useSocket(user, chatLanguage = user?.language) {
       socket.off('busy:state', onBusyState);
       socket.off('chat:history', onChatHistory);
       socket.off('chat:message', onChatMessage);
+      socket.off('chat:translation', onChatTranslation);
       socket.off('chat:system', onChatSystem);
       socket.off('chat:error', onChatError);
       ALLIANCES.forEach((a, i) =>
@@ -349,17 +188,21 @@ export function useSocket(user, chatLanguage = user?.language) {
       ALLIANCES.forEach((a, i) => {
         socket.off(`alliance-notice:updated:${a}`, allianceNoticeHandlers[i]);
       });
+      tracker.dispose();
+      sync.dispose();
+      if (syncRef.current === sync) syncRef.current = null;
+      if (getActiveTranslationSync() === sync) setActiveTranslationSync(null);
       // disconnect 하지 않음 — StrictMode 이중 cleanup에서 소켓이 잠시 죽었다 살아나며
       // 서버 handleConnection이 두 번 호출되어 countdown:state 중복 도착하는 문제 방지.
     };
   }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 자동번역을 켜거나 UI 언어를 바꾸면 이미 받은 원문 중 필요한 항목만 번역한다.
+  // UI 언어·자동번역 토글이 바뀌면 동기화 모듈이 서버에 보고하고 빠진 번역을 다시 센다.
   useEffect(() => {
-    resetChatTranslationQueue();
-    if (!user || !chatAutoTranslate) return;
-    useStore.getState().chatMessages.forEach((message) => {
-      queueChatTranslation(message, chatLanguage);
-    });
-  }, [user, chatAutoTranslate, chatLanguage]);
+    syncRef.current?.onLanguageChange(chatLanguage);
+  }, [chatLanguage]);
+
+  useEffect(() => {
+    syncRef.current?.onAutoTranslateChange(chatAutoTranslate);
+  }, [chatAutoTranslate]);
 }

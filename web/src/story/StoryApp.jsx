@@ -4,7 +4,7 @@ import './story.css';
 import { useStore } from '../store';
 import { useSocket } from '../hooks/useSocket';
 import { useReadyProbe } from '../hooks/useReadyProbe';
-import { useI18n } from '../i18n';
+import { useI18n, applyAccountLang } from '../i18n';
 import { api, getSocket, disconnectSocket } from '../api';
 import { syncTime, startup, shutdown } from '../clockSync';
 import { warmupRallyAudio } from '../components/Battle/rallyGroupPlayer';
@@ -41,7 +41,8 @@ export default function StoryApp() {
       try {
         const me = await api.getMe();
         setUser(me.user);
-        changeLang(me.user.language || 'ko');
+        // 메인 App과 같은 규칙 — wos-lang이 없을 때만 계정 언어 (C-11).
+        applyAccountLang(changeLang, me.user.language);
         warmupRallyAudio({ lang: me.user.language || 'ko' }).catch(() => {
           /* noop */
         });

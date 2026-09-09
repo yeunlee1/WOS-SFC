@@ -1589,6 +1589,219 @@ input[type='radio'] {
   font-size: 12px;
 }
 
+/* ───────────── 채팅 도크 — 작전판 패널 안에서 ChatDock을 재사용한다 (B-9) ───────────── */
+.operation-chat-panel {
+  margin-top: 10px;
+}
+.chat-dock {
+  display: flex;
+  flex-direction: column;
+  height: 420px;
+  min-height: 0;
+  border: 2px solid var(--line);
+  border-radius: var(--radius-card);
+  background: rgba(255, 253, 248, 0.72);
+  overflow: hidden;
+}
+.chat-dock-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1.5px dashed var(--line-soft);
+}
+.chat-dock-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--font-serif);
+  font-size: 16px;
+  font-weight: 700;
+}
+.chat-dock-close {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1.5px solid var(--line);
+  background: rgba(255, 255, 255, 0.75);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.chat-online-strip {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 6px;
+  padding: 8px 14px;
+  overflow-x: auto;
+  border-bottom: 1.5px dashed var(--line-soft);
+}
+.chat-online-avatar {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-hand);
+  font-size: 13px;
+  color: #fff;
+}
+.chat-dock-msgs {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  position: relative;
+}
+.chat-dock-msg {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: flex-end;
+}
+.chat-dock-msg-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-hand);
+  font-size: 14px;
+  color: #fff;
+}
+.chat-dock-msg-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.chat-dock-msg-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--ink-mute);
+}
+.chat-dock-msg-nick {
+  font-weight: 700;
+  color: var(--ink);
+}
+.chat-dock-msg-text {
+  margin: 0;
+  padding: 10px 14px;
+  border: 2px solid rgba(63, 58, 74, 0.45);
+  border-radius: 18px 20px 20px 6px / 18px 20px 20px 6px;
+  background: var(--paper-deep);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.chat-dock-msg-tr {
+  align-self: flex-start;
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: 12px;
+  color: #b5654d;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.chat-dock-system {
+  align-self: center;
+  font-family: var(--font-hand);
+  font-size: 15px;
+  color: var(--ink-faint);
+}
+.chat-dock-translate-bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-top: 1.5px dashed var(--line-soft);
+  font-size: 13px;
+}
+.chat-dock-translate-bar label {
+  cursor: pointer;
+}
+.chat-dock-input-row {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1.5px dashed var(--line-soft);
+}
+.chat-dock-input-row .input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 42px;
+  border-radius: 999px;
+  padding: 0 16px;
+}
+.chat-dock-input-row .btn-primary {
+  flex: 0 0 auto;
+  min-height: 40px;
+}
+
+/* ───────────── 채팅 번역 상태·재시도·새 메시지 배지·글자 수 ───────────── */
+.chat-msg-status {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--font-hand);
+  font-size: 13px;
+  color: var(--ink-mute);
+}
+.chat-msg-status--failed {
+  color: var(--danger);
+}
+.chat-msg-retry {
+  margin-left: 4px;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: #b5654d;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.chat-new-badge {
+  position: sticky;
+  bottom: 8px;
+  z-index: 1;
+  align-self: center;
+  flex: 0 0 auto;
+  margin-top: 8px;
+  padding: 6px 14px;
+  border: 1.5px solid var(--ink);
+  border-radius: 999px;
+  background: var(--peach);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: var(--shadow-press);
+}
+.chat-char-count {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--ink-mute);
+  font-variant-numeric: tabular-nums;
+}
+.chat-char-count.is-over {
+  color: var(--danger);
+}
+
 /* ───────────── 작전판 · 관리자 ───────────── */
 .operation-board-tab,
 .admin-tab {

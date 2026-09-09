@@ -1,12 +1,4 @@
-import { useStore, ALLIANCES } from '../../store';
-
-const ALLIANCE_COLORS = {
-  KOR: '#3b82f6',
-  NSL: '#22c55e',
-  JKY: '#a855f7',
-  GPX: '#f97316',
-  UFO: '#ec4899',
-};
+import { useStore, ALLIANCES, getAllianceColor } from '../../store';
 
 const ROLE_ORDER = { developer: 0, admin: 1, member: 2 };
 
@@ -51,7 +43,7 @@ export default function OnlinePanel({ style, isOpen }) {
               <div className="online-alliance-label">
                 <span
                   className="online-alliance-dot"
-                  style={{ background: ALLIANCE_COLORS[alliance] || '#64748b' }}
+                  style={{ background: getAllianceColor(alliance) }}
                 />
                 <span className="online-alliance-name">{alliance}</span>
                 <span className="online-alliance-count">{users.length}</span>

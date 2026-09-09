@@ -7,11 +7,13 @@ import {
 } from 'react';
 
 // ─── 지원 언어 목록 ───
+// ru는 번역 대상으로는 완전 지원하지만 UI 문구 블록은 없다 — t()가 en으로 폴백한다 (C-7, 설계 비목표).
 export const SUPPORTED_LANGS = [
   { code: 'ko', label: '한국어', flag: '🇰🇷' },
   { code: 'en', label: 'English', flag: '🇺🇸' },
   { code: 'ja', label: '日本語', flag: '🇯🇵' },
   { code: 'zh', label: '中文', flag: '🇨🇳' },
+  { code: 'ru', label: 'Русский', flag: '🇷🇺' },
 ];
 
 // ─── UI 텍스트 맵 ───
@@ -68,6 +70,7 @@ const UI_TEXTS = {
     copied: '복사됨!',
     langLabel: '내 언어',
     translating: '번역 중...',
+    translateFailed: '번역 실패',
     viewOriginal: '원문 보기',
     discord: '💬 디스코드',
     kakao: '🟡 카카오톡',
@@ -92,6 +95,22 @@ const UI_TEXTS = {
     chatDockTooltip: '채팅 (C)',
     chatDockClose: '닫기',
     autoTranslate: '자동번역',
+    // 채팅 시스템 메시지 — online:updated diff와 서버 chat:system { kind }
+    chatJoined: '{nickname}님이 입장했습니다',
+    chatLeft: '{nickname}님이 퇴장했습니다',
+    chatJoinedMany: '{count}명이 입장했습니다',
+    chatLeftMany: '{count}명이 퇴장했습니다',
+    chatHistoryError: '지난 대화를 불러오지 못했습니다. 새 메시지는 정상 수신됩니다.',
+    // 채팅 번역 상태·새 메시지 배지
+    chatTranslating: '번역 중…',
+    chatTranslateFailed: '번역 실패',
+    chatRetry: '다시 시도',
+    chatNewMessages: '새 메시지 {count}',
+    // 채팅 전송 실패 사유 (서버 ack reason과 짝)
+    chatSendOffline: '서버와 연결이 끊겼습니다. 재연결 후 다시 보내세요.',
+    chatSendRateLimit: '너무 빠르게 보냈습니다. 잠시 후 다시 시도하세요.',
+    chatSendInvalid: '보낼 수 없는 메시지입니다 (최대 500자).',
+    chatSendFailed: '전송하지 못했습니다. 다시 시도하세요.',
     cmdkTitle: '명령',
     cmdkTooltip: '명령 (⌘K)',
     cmdkPlaceholder: '명령 검색... (Esc 닫기)',
@@ -167,6 +186,7 @@ const UI_TEXTS = {
     copied: 'Copied!',
     langLabel: 'My Language',
     translating: 'Translating...',
+    translateFailed: 'Translation failed',
     viewOriginal: 'View Original',
     discord: '💬 Discord',
     kakao: '🟡 KakaoTalk',
@@ -189,6 +209,19 @@ const UI_TEXTS = {
     chatDockTooltip: 'Chat (C)',
     chatDockClose: 'Close',
     autoTranslate: 'Auto-translate',
+    chatJoined: '{nickname} joined',
+    chatLeft: '{nickname} left',
+    chatJoinedMany: '{count} members joined',
+    chatLeftMany: '{count} members left',
+    chatHistoryError: 'Could not load earlier messages. New messages still arrive.',
+    chatTranslating: 'Translating…',
+    chatTranslateFailed: 'Translation failed',
+    chatRetry: 'Retry',
+    chatNewMessages: '{count} new messages',
+    chatSendOffline: 'Disconnected from the server. Try again once reconnected.',
+    chatSendRateLimit: 'Sending too fast. Please wait a moment.',
+    chatSendInvalid: 'Message cannot be sent (max 500 characters).',
+    chatSendFailed: 'Failed to send. Please try again.',
     cmdkTitle: 'Command',
     cmdkTooltip: 'Command (⌘K)',
     cmdkPlaceholder: 'Type a command... (Esc to close)',
@@ -263,6 +296,7 @@ const UI_TEXTS = {
     copied: 'コピー済!',
     langLabel: '言語',
     translating: '翻訳中...',
+    translateFailed: '翻訳失敗',
     viewOriginal: '原文を見る',
     discord: '💬 Discord',
     kakao: '🟡 カカオトーク',
@@ -285,6 +319,19 @@ const UI_TEXTS = {
     chatDockTooltip: 'チャット (C)',
     chatDockClose: '閉じる',
     autoTranslate: '自動翻訳',
+    chatJoined: '{nickname}さんが入室しました',
+    chatLeft: '{nickname}さんが退室しました',
+    chatJoinedMany: '{count}人が入室しました',
+    chatLeftMany: '{count}人が退室しました',
+    chatHistoryError: '過去の会話を読み込めませんでした。新しいメッセージは受信できます。',
+    chatTranslating: '翻訳中…',
+    chatTranslateFailed: '翻訳失敗',
+    chatRetry: '再試行',
+    chatNewMessages: '新着 {count} 件',
+    chatSendOffline: 'サーバーとの接続が切れました。再接続後に送信してください。',
+    chatSendRateLimit: '送信が速すぎます。少し待ってから再試行してください。',
+    chatSendInvalid: '送信できないメッセージです（最大500文字）。',
+    chatSendFailed: '送信できませんでした。もう一度お試しください。',
     cmdkTitle: 'コマンド',
     cmdkTooltip: 'コマンド (⌘K)',
     cmdkPlaceholder: 'コマンド検索... (Esc で閉じる)',
@@ -359,6 +406,7 @@ const UI_TEXTS = {
     copied: '已复制!',
     langLabel: '我的语言',
     translating: '翻译中...',
+    translateFailed: '翻译失败',
     viewOriginal: '查看原文',
     discord: '💬 Discord',
     kakao: '🟡 KakaoTalk',
@@ -381,6 +429,19 @@ const UI_TEXTS = {
     chatDockTooltip: '聊天 (C)',
     chatDockClose: '关闭',
     autoTranslate: '自动翻译',
+    chatJoined: '{nickname} 加入了聊天',
+    chatLeft: '{nickname} 离开了聊天',
+    chatJoinedMany: '{count} 人加入了聊天',
+    chatLeftMany: '{count} 人离开了聊天',
+    chatHistoryError: '未能加载之前的消息。新消息仍会正常接收。',
+    chatTranslating: '翻译中…',
+    chatTranslateFailed: '翻译失败',
+    chatRetry: '重试',
+    chatNewMessages: '{count} 条新消息',
+    chatSendOffline: '与服务器的连接已断开，重新连接后再发送。',
+    chatSendRateLimit: '发送过快，请稍后再试。',
+    chatSendInvalid: '无法发送该消息（最多500字）。',
+    chatSendFailed: '发送失败，请重试。',
     cmdkTitle: '命令',
     cmdkTooltip: '命令 (⌘K)',
     cmdkPlaceholder: '搜索命令... (Esc 关闭)',
@@ -405,8 +466,11 @@ const UI_TEXTS = {
   },
 };
 
-// ─── 번역 캐시 (localStorage) ───
+// ─── 번역 캐시 (localStorage) — 게시글 단건 번역 전용 ───
+// 채팅은 서버가 message_translations로 캐시·푸시하므로 여기를 쓰지 않는다 (C-10, 설계 3.8 M).
+// 키 버전 v3 — 공급자를 Anthropic에서 OpenAI로 바꾸면서 v2 항목을 전부 무효화했다.
 const TRANS_CACHE_KEY = 'wos-trans-cache';
+const TRANS_CACHE_VERSION = 'v3';
 const MAX_CACHE = 500;
 
 function _getCache() {
@@ -419,7 +483,7 @@ function _getCache() {
 
 function _makeCacheKey(text, lang) {
   // 본문 전체를 JSON tuple로 넣어 같은 prefix·길이의 다른 메시지가 충돌하지 않게 한다.
-  return JSON.stringify(['v2', lang, text]);
+  return JSON.stringify([TRANS_CACHE_VERSION, lang, text]);
 }
 
 export function getCachedTranslation(text, lang) {
@@ -442,6 +506,20 @@ export function cacheTranslation(text, lang, translated) {
   }
 }
 
+// 세션 복원(hydrate) 때 계정 언어를 적용하는 규칙 (C-11, B-3).
+// localStorage `wos-lang`이 없을 때만 계정 언어로 맞춘다 — 헤더에서 고른 언어가 새로고침을 넘긴다.
+// 새 로그인(AuthModal·StoryEntrance)은 이 규칙과 무관하게 계정 언어를 그대로 적용한다.
+export function applyAccountLang(changeLang, accountLang) {
+  let stored = null;
+  try {
+    stored = localStorage.getItem('wos-lang');
+  } catch {
+    stored = null;
+  }
+  if (stored) return;
+  changeLang(accountLang || 'ko');
+}
+
 // ─── Context ───
 const I18nContext = createContext(null);
 
@@ -450,11 +528,12 @@ export function I18nProvider({ children }) {
     () => localStorage.getItem('wos-lang') || 'ko',
   );
 
+  // UI 문구 블록이 없는 언어(ru·other·미지)는 영어로 폴백한다 (C-7).
   const t = useCallback(
     (key) => {
-      const texts = UI_TEXTS[lang] || UI_TEXTS.ko;
+      const texts = UI_TEXTS[lang] ?? UI_TEXTS.en;
       const val =
-        texts[key] !== undefined ? texts[key] : (UI_TEXTS.ko[key] ?? key);
+        texts[key] !== undefined ? texts[key] : (UI_TEXTS.en[key] ?? key);
       return val;
     },
     [lang],
@@ -466,7 +545,9 @@ export function I18nProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    document.documentElement.lang = UI_TEXTS[lang] ? lang : 'ko';
+    document.documentElement.lang = SUPPORTED_LANGS.some((l) => l.code === lang)
+      ? lang
+      : 'ko';
   }, [lang]);
 
   return (

@@ -1,15 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
-import { useStore } from '../../store';
+import { useStore, getAllianceColor } from '../../store';
 import { useI18n } from '../../i18n';
 import { api } from '../../api';
-
-const ALLIANCE_COLORS = {
-  KOR: '#3b82f6',
-  NSL: '#22c55e',
-  JKY: '#a855f7',
-  GPX: '#f97316',
-  UFO: '#06b6d4',
-};
+import { effectiveLang } from '../../chat/script';
 
 const EMOJIS = [
   '😀',
@@ -60,11 +53,12 @@ export default function Board({ alliance }) {
   const { t, lang } = useI18n();
 
   const posts = boards[alliance] || [];
-  const color = ALLIANCE_COLORS[alliance] || '#6b7280';
+  const color = getAllianceColor(alliance);
 
   // 번역 상태
   const [translations, setTranslations] = useState({});
   const [translating, setTranslating] = useState({});
+  const [translateFailed, setTranslateFailed] = useState({});
 
   // 이미지 모달
   const [modalImg, setModalImg] = useState(null);
@@ -81,21 +75,26 @@ export default function Board({ alliance }) {
   // lang 변경 시 번역 캐시 리셋
   useEffect(() => {
     setTranslations({});
+    setTranslateFailed({});
   }, [lang]);
 
-  // 수동 번역
+  // 수동 번역 — UI 언어 other·미지는 en으로 요청하고(B Q3), 실패는 문구로 보인다 (B-10).
   async function handleTranslate(postId, postContent) {
     if (translations[postId] || translating[postId]) return;
     setTranslating((prev) => ({ ...prev, [postId]: true }));
+    setTranslateFailed((prev) => ({ ...prev, [postId]: false }));
+    let failed = true;
     try {
-      const res = await api.translate(postContent, lang);
+      const res = await api.translate(postContent, effectiveLang(lang));
       if (res?.translated) {
         setTranslations((prev) => ({ ...prev, [postId]: res.translated }));
+        failed = false;
       }
     } catch {
-      /* 실패 시 무시 */
+      failed = true;
     } finally {
       setTranslating((prev) => ({ ...prev, [postId]: false }));
+      if (failed) setTranslateFailed((prev) => ({ ...prev, [postId]: true }));
     }
   }
 
@@ -318,14 +317,21 @@ export default function Board({ alliance }) {
 
                 {/* 번역 버튼 — 언어가 다를 때만, 아직 번역 안 됐을 때만 */}
                 {needsTrans && !translated && (
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    onClick={() => handleTranslate(p.id, p.content)}
-                    disabled={isTranslating}
-                    style={{ marginTop: '6px' }}
-                  >
-                    {isTranslating ? '번역 중...' : '🌐 번역'}
-                  </button>
+                  <div className="translate-row">
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => handleTranslate(p.id, p.content)}
+                      disabled={isTranslating}
+                      style={{ marginTop: '6px' }}
+                    >
+                      {isTranslating ? t('translating') : `🌐 ${t('translateBtn')}`}
+                    </button>
+                    {translateFailed[p.id] && (
+                      <span className="translate-failed" role="status">
+                        {t('translateFailed')}
+                      </span>
+                    )}
+                  </div>
                 )}
 
                 {/* 이미지 */}

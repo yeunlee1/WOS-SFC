@@ -1,15 +1,11 @@
 import { useState } from 'react';
-import { useStore } from '../../store';
+import { useStore, getAllianceColor } from '../../store';
 import { useI18n } from '../../i18n';
 import { api } from '../../api';
+import { effectiveLang } from '../../chat/script';
 
 const SOURCE_ICON  = { discord: '💬', kakao: '🟡', game: '🎮' };
 const SOURCE_LABEL = { discord: '💬 Discord', kakao: '🟡 KakaoTalk', game: '🎮 In-game' };
-
-const ALLIANCE_COLORS = {
-  KOR: '#3b82f6', NSL: '#22c55e', JKY: '#a855f7',
-  GPX: '#f97316', UFO: '#06b6d4',
-};
 
 // AllianceNoticeboard — 연맹별 공지사항 컴포넌트
 // 목록 / 글쓰기 / 상세 세 가지 뷰 전환
@@ -18,7 +14,7 @@ export default function AllianceNoticeboard({ alliance }) {
   const { t, lang } = useI18n();
 
   const notices = allianceNotices[alliance] || [];
-  const color = ALLIANCE_COLORS[alliance] || '#6b7280';
+  const color = getAllianceColor(alliance);
 
   // 쓰기 권한: 해당 연맹의 admin/developer
   const canWrite = user &&
@@ -37,18 +33,25 @@ export default function AllianceNoticeboard({ alliance }) {
   // 번역 상태 Map<noticeId, translatedText>
   const [translations, setTranslations] = useState({});
   const [translating, setTranslating] = useState({});
+  const [translateFailed, setTranslateFailed] = useState({});
 
+  // 수동 번역 — UI 언어 other·미지는 en으로 요청하고(B Q3), 실패는 문구로 보인다 (B-10).
   async function handleTranslate(notice) {
     if (translations[notice.id] || translating[notice.id]) return;
     setTranslating((prev) => ({ ...prev, [notice.id]: true }));
+    setTranslateFailed((prev) => ({ ...prev, [notice.id]: false }));
+    let failed = true;
     try {
-      const res = await api.translate(notice.content, lang);
+      const res = await api.translate(notice.content, effectiveLang(lang));
       if (res?.translated) {
         setTranslations((prev) => ({ ...prev, [notice.id]: res.translated }));
+        failed = false;
       }
-    } catch { /* 실패 시 무시 */ }
-    finally {
+    } catch {
+      failed = true;
+    } finally {
       setTranslating((prev) => ({ ...prev, [notice.id]: false }));
+      if (failed) setTranslateFailed((prev) => ({ ...prev, [notice.id]: true }));
     }
   }
 
@@ -188,14 +191,21 @@ export default function AllianceNoticeboard({ alliance }) {
 
         {/* 번역 버튼 */}
         {needsTrans && !translated && (
-          <button
-            className="btn btn-ghost btn-sm"
-            onClick={() => handleTranslate(notice)}
-            disabled={isTranslating}
-            style={{ marginBottom: '8px' }}
-          >
-            {isTranslating ? '번역 중...' : '🌐 번역'}
-          </button>
+          <div className="translate-row">
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => handleTranslate(notice)}
+              disabled={isTranslating}
+              style={{ marginBottom: '8px' }}
+            >
+              {isTranslating ? t('translating') : `🌐 ${t('translateBtn')}`}
+            </button>
+            {translateFailed[notice.id] && (
+              <span className="translate-failed" role="status">
+                {t('translateFailed')}
+              </span>
+            )}
+          </div>
         )}
 
         {/* 본문 */}

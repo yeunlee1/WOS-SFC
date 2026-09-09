@@ -5,7 +5,7 @@ import { useStore, THEMES } from './store';
 import { useSocket } from './hooks/useSocket';
 import { useReadyProbe } from './hooks/useReadyProbe';
 import { useResizable } from './hooks/useResizable';
-import { useI18n } from './i18n';
+import { useI18n, applyAccountLang } from './i18n';
 import { api, getSocket, disconnectSocket } from './api';
 import { syncTime, startup, shutdown } from './clockSync';
 import AuthModal from './components/Auth/AuthModal';
@@ -102,7 +102,8 @@ export default function App() {
       try {
         const me = await api.getMe();
         setUser(me.user);
-        changeLang(me.user.language || 'ko');
+        // 헤더에서 고른 언어(wos-lang)가 있으면 계정 언어로 덮지 않는다 (C-11, B-3).
+        applyAccountLang(changeLang, me.user.language);
         // 세션 복원 경로에서도 rally audio 사전 워밍업 — fire-and-forget.
         // ensureContext()는 사용자 제스처 없어도 AudioContext 생성 가능(suspended 상태).
         // fetch + decodeAudioData는 suspended에서도 동작하므로 bufferCache는 채워진다.

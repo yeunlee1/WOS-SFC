@@ -52,15 +52,15 @@ describe('CommandPalette — 명령 카탈로그 + role 분기', () => {
     expect(screen.getByText('LANGUAGE')).toBeInTheDocument();
     expect(screen.getByText('THEME')).toBeInTheDocument();
     expect(screen.getByText('SESSION')).toBeInTheDocument();
-    // 명령 개수: tab 4 (admin 제외) + actions 2 + lang 4 + theme 3 (frost/spring/daylight) + session 1 = 14
-    // Phase 3.5에서 anthropic/dark 폐기(4→2), Phase 9에서 daylight 추가(2→3).
+    // 명령 개수: tab 4 (admin 제외) + actions 2 + lang 5 + theme 3 (frost/spring/daylight) + session 1 = 15
+    // Phase 3.5에서 anthropic/dark 폐기(4→2), Phase 9에서 daylight 추가(2→3), 채팅 v2에서 ru 추가(lang 4→5).
     const items = document.querySelectorAll('.cmdk-item');
-    expect(items.length).toBe(14);
+    expect(items.length).toBe(15);
     // admin 명령 미노출 (영어 환경 — Admin 텍스트 검색)
     expect(screen.queryByText(/Admin/i)).toBeNull();
   });
 
-  it('role=developer → admin 명령 추가 (총 15개)', () => {
+  it('role=developer → admin 명령 추가 (총 16개)', () => {
     useStore.setState({
       user: { nickname: 'devtester', role: 'developer', allianceName: 'KOR' },
     });
@@ -69,9 +69,9 @@ describe('CommandPalette — 명령 카탈로그 + role 분기', () => {
     );
     // admin 옵션은 영어 환경 라벨 'Go to: 🛡️ Admin' (i18n t('tabAdmin') = '🛡️ Admin')
     expect(screen.getByText(/Admin/)).toBeInTheDocument();
-    // 14 (member 기본) + 1 (admin 명령) = 15
+    // 15 (member 기본) + 1 (admin 명령) = 16
     const items = document.querySelectorAll('.cmdk-item');
-    expect(items.length).toBe(15);
+    expect(items.length).toBe(16);
   });
 
   it('검색 결과 0개 → cmdk-empty 메시지 표시', () => {

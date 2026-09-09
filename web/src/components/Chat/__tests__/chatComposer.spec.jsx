@@ -207,4 +207,71 @@ describe.each(CASES)('%s 입력창', (_name, renderComponent) => {
     expect(el.value).toBe('hello');
     expect(screen.getByTestId('chat-send-error')).toBeInTheDocument();
   });
+
+  // ── B-19·B-20: 오류 문구는 i18n, 색은 CSS 클래스 ──
+  it('오류 문구는 현재 UI 언어의 i18n 문구이고 인라인 색 스타일이 없다', () => {
+    socketMock.present.value = false;
+    const el = input();
+    fireEvent.change(el, { target: { value: 'hello' } });
+    fireEvent.keyDown(el, { key: 'Enter' });
+
+    const error = screen.getByTestId('chat-send-error');
+    expect(error.textContent).toBe('서버와 연결이 끊겼습니다. 재연결 후 다시 보내세요.');
+    expect(error.getAttribute('style')).toBeNull();
+    expect(error.className).toContain('chat-send-error');
+  });
+
+  // ── 감사 A-A2: 글자 수는 서버와 같은 코드 포인트 계수 ──
+  it('500 코드 포인트를 넘으면 보내지 않고 남은 글자 수를 알린다', () => {
+    const el = input();
+    fireEvent.change(el, { target: { value: 'a'.repeat(501) } });
+    fireEvent.keyDown(el, { key: 'Enter' });
+
+    expect(socketMock.state.emit).toBeNull();
+    expect(screen.getByTestId('chat-send-error')).toBeInTheDocument();
+    expect(screen.getByTestId('chat-char-count').textContent).toBe('501/500');
+  });
+
+  it('이모지 500개는 UTF-16 길이가 1000이어도 코드 포인트 500이라 보낸다', () => {
+    const el = input();
+    const text = '😀'.repeat(500);
+    fireEvent.change(el, { target: { value: text } });
+    expect(screen.getByTestId('chat-char-count').textContent).toBe('500/500');
+    fireEvent.keyDown(el, { key: 'Enter' });
+
+    expect(lastContent()).toBe(text);
+  });
+
+  it('글자 수 표시는 450자부터 나타난다', () => {
+    const el = input();
+    fireEvent.change(el, { target: { value: 'a'.repeat(449) } });
+    expect(screen.queryByTestId('chat-char-count')).toBeNull();
+    fireEvent.change(el, { target: { value: 'a'.repeat(450) } });
+    expect(screen.getByTestId('chat-char-count').textContent).toBe('450/500');
+  });
+});
+
+// B-12: 작전판 탭에서 앱 도크와 작전판 채팅 패널이 동시에 열리면 ChatDock이 둘이다.
+describe('ChatDock 둘이 동시에 있을 때', () => {
+  afterEach(() => cleanup());
+
+  it('자동번역 토글 id가 서로 다르다', () => {
+    useStore.setState({
+      chatMessages: [],
+      onlineUsers: [],
+      chatAutoTranslate: false,
+      user: { id: 1, nickname: 'tester', allianceName: 'KOR', language: 'ko' },
+    });
+    const { container } = render(
+      <I18nProvider>
+        <ChatDock onClose={() => {}} />
+        <ChatDock onClose={() => {}} />
+      </I18nProvider>,
+    );
+    const ids = Array.from(container.querySelectorAll('input[type="checkbox"]')).map((el) => el.id);
+    expect(ids).toHaveLength(2);
+    expect(ids[0]).not.toBe(ids[1]);
+    const labels = Array.from(container.querySelectorAll('label')).map((el) => el.htmlFor);
+    expect(labels.sort()).toEqual(ids.slice().sort());
+  });
 });
