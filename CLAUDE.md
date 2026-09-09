@@ -1,57 +1,74 @@
 # WOS SFC 전투 보조 — CLAUDE.md
 
-> 📁 상세 구조 및 기능-파일 매핑: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) 참조
+> 📁 실행·환경변수·DB 준비 상세: [README.md](README.md) 참조.
+> 설계 spec과 구현 plan 문서는 [docs/superpowers/](docs/superpowers/)에 있다.
 
 ## 프로젝트 개요
 
-**WOS(Whiteout Survival) SFC 보조 데스크탑 앱**
+**WOS(Whiteout Survival) SFC 연맹 운영 보조 — 실시간 웹 애플리케이션**
 
-동맹 SFC(참모총장) 역할 수행을 보조하는 Electron 데스크탑 앱.
-집결 타이머, 발송 타이밍 계산, 공지 핀보드, 번역기 기능 제공.
+동맹 SFC(참모총장) 역할 수행을 보조한다. 전투 카운트다운·랠리 그룹, 발송 타이밍 계산,
+실시간 채팅과 번역, 공지·게시판, 작전 보드, TTS 음성 안내를 한 화면에서 제공한다.
+과거 Electron 데스크탑 앱이었으나 React 웹 + NestJS 서버 구조로 전환되었다
+(전환 계획 — docs/superpowers/plans/2026-04-16-react-web-conversion.md).
 
 ## 기술 스택
 
-- **프레임워크**: Electron 34+
-- **AI**: Anthropic Claude API (`@anthropic-ai/sdk`)
-- **언어**: JavaScript (Vanilla JS + HTML/CSS)
-- **배포**: 로컬 데스크탑 앱
+- **모노레포**: npm workspaces (`web`, `server`) — 루트 `package-lock.json` 하나로 의존성 고정
+- **프론트엔드** (`web/`): React 18 + Vite, Zustand, Socket.IO Client, Vitest — JavaScript(JSX)
+- **백엔드** (`server/`): NestJS 11, TypeORM + MySQL 8, Socket.IO, JWT(Passport), Jest — TypeScript
+- **AI**: Anthropic Claude API (`@anthropic-ai/sdk`, 번역 — 서버 전용), Google TTS API (음성 생성)
+- **배포**: 웹 애플리케이션 (개발 포트 — 웹 5173, API 3001)
 
 ## 프로젝트 구조
 
 ```
 wos-sfc-helper/
-├── src/
-│   ├── main.js          # Electron 메인 프로세스 (IPC 핸들러, Claude API 호출)
-│   ├── preload.js       # 메인↔렌더러 브릿지 (contextBridge)
-│   └── renderer/
-│       ├── index.html   # 앱 UI
-│       ├── style.css    # 전체 스타일
-│       └── js/
-│           ├── app.js          # 공통 유틸리티, 탭 전환
-│           ├── rally-timer.js  # 탭1: 집결 타이머
-│           ├── dispatch.js     # 탭2: 발송 타이밍 계산기
-│           ├── noticeboard.js  # 탭3: 공지 핀보드
-│           └── translator.js   # 탭4: 번역기 (Claude API 사용)
-├── .env                 # ANTHROPIC_API_KEY (gitignore 필수!)
-└── package.json
+├── web/                      # 브라우저 UI (React 18 + Vite)
+│   ├── vite.config.js        # 개발 프록시 — API_PATHS와 /socket.io를 :3001로 전달
+│   ├── style.css             # 전체 스타일 (반응형 미디어쿼리 포함)
+│   └── src/
+│       ├── App.jsx           # 탭 전환, 테마, 소켓·인증 부트스트랩
+│       ├── api/              # REST·Socket.IO 클라이언트
+│       ├── store/            # Zustand 전역 상태
+│       ├── hooks/ i18n/ utils/
+│       └── components/
+│           ├── Battle/           # 전투 탭 — 카운트다운, 랠리 타이머·그룹, 발송 계산, TTS 재생
+│           ├── OperationBoard/   # 작전 보드 탭 — 실시간 협업 캔버스
+│           ├── Community/        # 커뮤니티 탭 — 공지 핀보드, 연맹 공지, 게시판
+│           ├── Chat/             # 채팅 탭·도크 — 실시간 채팅, 메시지 번역
+│           └── AdminTab/ Auth/ Dashboard/ Layout/
+├── server/                   # REST API + WebSocket 서버 (NestJS 11)
+│   ├── migrations/           # 기존 DB에 적용하는 수동 SQL 패치 (초기 스키마 아님)
+│   └── src/                  # 기능별 NestJS 모듈
+│       ├── auth/ users/ me/ members/ admin/
+│       ├── rallies/ rally-groups/         # 집결·랠리 그룹
+│       ├── chat/ realtime/                # 채팅·Socket.IO 게이트웨이
+│       ├── notices/ alliance-notices/ boards/ operation-boards/
+│       ├── translate/ translations/      # Claude API 번역 (translate.service.ts)
+│       └── tts/                          # Google TTS 생성·캐시
+├── docs/superpowers/         # 설계 spec, 구현 plan
+├── .github/                  # PR 템플릿, CI, 보안 자동화
+├── .env.example              # 변수 이름과 기본값만 — server/.env로 복사해 사용
+└── package.json              # workspace 루트 (build·test 스크립트)
 ```
 
 ## 개발 규칙
 
 ### 코드 스타일
-- Vanilla JS 사용 (빌드 도구 없음, 번들러 없음)
-- 각 탭 기능은 독립적인 JS 파일로 분리
-- 공통 유틸리티는 `app.js`에 전역 함수로 정의
+- `web/`은 JavaScript(JSX) 함수 컴포넌트, `server/`는 TypeScript NestJS 모듈 구조를 따른다
+- 기능은 컴포넌트 디렉토리(web)와 NestJS 모듈(server) 단위로 분리
 - 주석은 한국어로 작성
 
-### IPC 통신 패턴
-- 렌더러 → 메인: `window.electronAPI.xxx()` (preload.js 경유)
-- 메인 → 렌더러: `ipcMain.handle()` + `ipcRenderer.invoke()`
-- Claude API 호출은 **반드시 main.js에서** (API 키 보안)
+### API 통신 패턴
+- 웹 → 서버: REST(`web/src/api/`) + Socket.IO(채팅, 작전 보드, 접속자 표시)
+- 개발 프록시: 새 API 경로를 추가하면 `web/vite.config.js`의 `API_PATHS`에도 등록할 것
+- Claude API 호출은 **반드시 server의 translate 모듈에서** (API 키 보안) — 브라우저 직접 호출 금지
 
 ### 데이터 저장
-- 현재: 메모리(세션 중만 유지)
-- 개선 시: Electron `store` 또는 localStorage 활용 가능
+- MySQL 8 + TypeORM 엔티티. 스키마는 엔티티가 정의한다
+- `TYPEORM_SYNC=true`는 폐기 가능한 로컬 개발 DB 전용 — 운영 모드에서는 무시된다
+- `server/migrations/`는 기존 DB 대상 수동 SQL 패치다. 빈 DB를 재현하는 초기 마이그레이션은 아직 없다
 
 ### UI / 반응형 디자인 (필수)
 - **모든 UI 구현은 반드시 모바일 반응형으로 작성할 것** — 데스크톱 전용 금지
@@ -62,28 +79,44 @@ wos-sfc-helper/
 - 새 컴포넌트 추가 시 Chrome DevTools 모바일 에뮬레이터(iPhone SE 375px)로 반드시 확인
 
 ### 보안
-- `contextIsolation: true`, `nodeIntegration: false` 유지
-- API 키는 `.env`에만 보관, 렌더러에 절대 노출 금지
-- `.env`는 `.gitignore`에 반드시 포함
+- `.env`, JWT 키, `SERVER_CODE`(가입 초대 코드), DB 자격 증명, 외부 API 키를 커밋하지 않는다
+- 비밀값은 `server/.env`에만 보관. 브라우저 번들에 포함되는 `VITE_` 변수에는 절대 넣지 않는다
+- HTTP·WebSocket CORS 허용 origin은 `WEB_ORIGIN`으로 제어한다 (운영 필수)
+
+### 테스트
+- 웹: Vitest — `npm --workspace web test -- --run`
+- 서버: Jest — `npm --workspace server test -- --runInBand`
+- 서버 e2e는 MySQL과 서버 환경변수가 필요하다 — DB 없는 CI에서는 실행되지 않는다
 
 ## 환경 설정
 
-```bash
-# 실행
-npm start
+```powershell
+# 의존성 설치 (저장소 루트에서, lockfile 기준)
+npm ci
 
-# 개발 모드 (inspect 포함)
-npm run dev
+# 환경변수 준비 — 복사 후 빈 값 채우기
+Copy-Item .env.example server/.env
+
+# 개발 실행 (터미널 2개)
+npm --workspace server run start:dev   # API — http://localhost:3001
+npm --workspace web run dev            # 웹 UI — http://localhost:5173
+
+# 테스트·빌드 (루트에서 두 workspace 모두)
+npm test
+npm run build
 ```
 
 ## 현재 기능 목록
 
 | 탭 | 기능 | 상태 |
 |----|------|------|
-| 집결 타이머 | 최대 6개 카운트다운 타이머 | 구현됨 |
-| 발송 타이밍 | 상대 도착시각 기반 발송시각 계산 | 구현됨 |
-| 공지 핀보드 | 디스코드/카톡/게임 공지 고정 | 구현됨 |
-| 번역기 | Claude AI 한국어 번역 | 구현됨 |
+| 전투 | 카운트다운·랠리 타이머·랠리 그룹·발송 타이밍 계산·TTS 음성 안내 | 구현됨 |
+| 작전 보드 | 실시간 협업 작전 캔버스 | 구현됨 |
+| 커뮤니티 | 공지 핀보드·연맹 공지·게시판 | 구현됨 |
+| 채팅 | 실시간 채팅·메시지 번역 (Claude API) | 구현됨 |
+| 관리자 | 사용자 목록·역할·연맹 관리 | 구현됨 |
+
+공통 — JWT 인증(가입 초대 코드 `SERVER_CODE` 필요), 다국어 i18n, 테마(frost/spring), 접속자 표시.
 
 ## Superpowers 워크플로우
 
