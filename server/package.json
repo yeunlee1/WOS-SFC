@@ -20,6 +20,7 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "migrate": "node --env-file-if-exists=.env dist/database/migrate.js",
     "migrate:dev": "node --env-file-if-exists=.env -r ts-node/register src/database/migrate.ts",
+    "translate:eval": "node --env-file-if-exists=.env -r ts-node/register src/translate/scripts/translate-eval.ts",
     "tts:generate": "ts-node -r tsconfig-paths/register src/tts/scripts/tts-generate.ts",
     "tts:generate:prod": "node dist/tts/scripts/tts-generate.js"
   },
