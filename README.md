@@ -2,6 +2,8 @@
 
 WOS SFC 연맹 운영을 위한 실시간 웹 애플리케이션입니다. 전투 카운트, 랠리 그룹, 채팅과 공지, 작전 보드, 번역과 TTS 기능을 한 화면에서 제공합니다.
 
+채팅 번역은 서버가 밉니다 — 메시지가 저장되면 서버가 접속자들이 보고한 언어로 한 번에 번역해 `chat:translation`으로 모두에게 보내고, 접속 시 히스토리에 번역을 동봉합니다. 웹은 유실분만 `POST /translate/batch`로 메웁니다.
+
 ## 기술 구성
 
 | 경로                 | 역할                             | 주요 기술                                  |
@@ -41,7 +43,9 @@ Copy-Item .env.example server/.env
 | `TYPEORM_SYNC`       | 개발용 TypeORM 스키마 동기화          | 선택, 기본값 `false`                           |
 | `JWT_SECRET`         | access·refresh JWT 서명 키            | 필수                                           |
 | `SERVER_CODE`        | 저장소 밖에서 관리하는 가입 초대 코드 | 필수                                           |
-| `ANTHROPIC_API_KEY`  | 번역 API                              | 번역 기능 사용 시 필수                         |
+| `OPENAI_API_KEY`     | 번역 API (OpenAI Responses)           | 번역 기능 사용 시 필수. 비면 번역만 실패하고 부팅은 됨 |
+| `TRANSLATE_MODEL`    | 번역 모델                             | 선택, 기본값 `gpt-5.4-mini`. 바꿀 때 `npm --workspace server run translate:eval`로 근거를 남김 |
+| `TRANSLATE_GLOBAL_RPM` | 서버 전체 분당 OpenAI 호출 상한     | 선택, 기본값 120. 넘긴 메시지는 `chat:translation`에 `error:'limit'`으로 방송되고 웹 배치가 뒤따름 |
 | `GOOGLE_TTS_API_KEY` | Google TTS 생성 API                   | TTS 생성 기능 사용 시 필수                     |
 | `TTS_CACHE_DIR`      | 생성한 TTS 파일 보관 경로             | 선택                                           |
 | `CHAT_RETENTION_DAYS` | 채팅 메시지 보존 일수. 설정하면 6시간마다 그 일수 이전 메시지를 1000행씩 삭제(번역도 함께) | 선택, 기본 비활성. 접속 시 히스토리 창은 7일 고정 |
@@ -160,7 +164,7 @@ cp .env.example .env
 
 값에는 `$` `#` 따옴표 공백을 넣지 마십시오(compose 치환에서 깨집니다). `JWT_SECRET` 은 32자 이상이어야 하며(`openssl rand -hex 32`), 짧거나 `SERVER_CODE` 가 비어 있으면 앱이 부팅을 거부합니다.
 
-`GOOGLE_TTS_API_KEY`(TTS 생성)와 `ANTHROPIC_API_KEY`(번역)는 해당 기능을 쓸 때만 채웁니다.
+`GOOGLE_TTS_API_KEY`(TTS 생성)와 `OPENAI_API_KEY`(번역)는 해당 기능을 쓸 때만 채웁니다.
 
 > `WEB_ORIGIN` 은 **브라우저가 실제로 여는 주소와 정확히 같아야 합니다**(스킴·호스트·포트 모두). 이 값은 HTTP CORS 뿐 아니라 WebSocket 핸드셰이크 검사에도 그대로 쓰이므로, 어긋나면 화면은 떠도 실시간 카운트다운이 붙지 않습니다. `NODE_ENV=production` 에서 값이 비면 앱이 부팅 자체를 거부합니다. 서버가 부팅 시 끝 슬래시와 경로를 잘라내고, 값에 `localhost` 가 남아 있으면 `.env.example` 자리표시자가 그대로 들어온 것으로 보고 경고를 남깁니다 — `docker compose logs app | grep WEB_ORIGIN` 으로 확인하십시오.
 
