@@ -2,6 +2,21 @@ import { create } from 'zustand';
 
 export const ALLIANCES = ['KOR', 'NSL', 'JKY', 'GPX', 'UFO'];
 
+// 5-연맹 색표 — 채팅·온라인 패널·게시판이 공유하는 한 벌 (B-18).
+// UFO는 채팅·온라인 패널이 쓰던 #ec4899로 통일했다 (Board의 #06b6d4는 버림).
+export const ALLIANCE_COLORS = {
+  KOR: '#3b82f6',
+  NSL: '#22c55e',
+  JKY: '#a855f7',
+  GPX: '#f97316',
+  UFO: '#ec4899',
+};
+export const ALLIANCE_COLOR_FALLBACK = '#64748b';
+
+export function getAllianceColor(alliance) {
+  return ALLIANCE_COLORS[alliance] || ALLIANCE_COLOR_FALLBACK;
+}
+
 // ttsVolume 초기값: localStorage 우선, 없으면 0.3 (30%), 0~1 범위 clamp
 function _initTtsVolume() {
   try {
@@ -59,7 +74,8 @@ function mergeChatMessages(current, incoming) {
   for (const message of incoming) {
     const key = getChatMessageKey(message);
     const previous = byKey.get(key);
-    byKey.set(key, previous ? { ...message, ...previous } : message);
+    // 같은 키면 서버가 새로 보낸(incoming) 필드가 이긴다 (B-4).
+    byKey.set(key, previous ? { ...previous, ...message } : message);
   }
   const ordered = Array.from(byKey.values()).sort((a, b) => {
     const aTime = Date.parse(a.createdAt || '') || 0;
@@ -79,6 +95,78 @@ function mergeChatMessages(current, incoming) {
   ]);
   // 시간순 정렬을 유지한 채 살아남은 항목만 남긴다.
   return ordered.filter((message) => kept.has(getChatMessageKey(message)));
+}
+
+// 서버가 메시지에 실어 보낸 translations를 떼어 [id, map] 목록으로 돌려준다.
+// 번역은 메시지 객체가 아니라 chatTranslations 맵에 둔다 (B-5, C 5절 B).
+function splitTranslations(incoming) {
+  const messages = [];
+  const entries = [];
+  for (const message of incoming) {
+    if (message && typeof message === 'object' && 'translations' in message) {
+      const { translations, ...rest } = message;
+      messages.push(rest);
+      if (rest.id !== undefined && rest.id !== null) {
+        entries.push([rest.id, translations]);
+      }
+    } else {
+      messages.push(message);
+    }
+  }
+  return { messages, entries };
+}
+
+// 언어별로 합친다. 빈 맵은 항목을 만들지 않고 기존 언어를 지우지도 않는다.
+function mergeTranslationMap(current, entries) {
+  let next = current;
+  for (const [id, map] of entries) {
+    if (!map || typeof map !== 'object') continue;
+    const langs = Object.keys(map).filter(
+      (lang) => typeof map[lang] === 'string',
+    );
+    if (langs.length === 0) continue;
+    if (next === current) next = { ...current };
+    const merged = { ...(next[id] || {}) };
+    for (const lang of langs) merged[lang] = map[lang];
+    next[id] = merged;
+  }
+  return next;
+}
+
+// 스토어에 남아 있는 메시지 id만 남긴다 (C-3). 바뀐 것이 없으면 같은 참조를 돌려준다.
+function pruneTranslationState(state, chatMessages) {
+  const alive = new Set();
+  for (const message of chatMessages) {
+    if (message?.id !== undefined && message?.id !== null) {
+      alive.add(String(message.id));
+    }
+  }
+  const keepAlive = (record) => {
+    let changed = false;
+    const out = {};
+    for (const key of Object.keys(record)) {
+      if (alive.has(key)) out[key] = record[key];
+      else changed = true;
+    }
+    return changed ? out : record;
+  };
+  return {
+    chatTranslations: keepAlive(state.chatTranslations),
+    chatTranslationPending: keepAlive(state.chatTranslationPending),
+    chatTranslationFailed: keepAlive(state.chatTranslationFailed),
+  };
+}
+
+function withoutKeys(record, ids) {
+  let changed = false;
+  const out = { ...record };
+  for (const id of ids) {
+    if (id in out) {
+      delete out[id];
+      changed = true;
+    }
+  }
+  return changed ? out : record;
 }
 
 // personalOffsetMs 초기값: localStorage 우선, 없으면 0. 범위 -1000~+1000ms로 clamp.
@@ -123,6 +211,12 @@ export const useStore = create((set) => ({
   members: [],
   onlineUsers: [],
   chatMessages: [],
+  // 번역 맵 { [id]: { [lang]: text } } — 도착 순서·재연결·히스토리 재수신에 무관하다.
+  chatTranslations: {},
+  // { [id]: true } — 동기화 모듈이 내 언어 번역을 기다리는 중(푸시 대기 또는 배치 요청).
+  chatTranslationPending: {},
+  // { [id]: true } — 재시도까지 끝나 수동 재시도만 남은 것.
+  chatTranslationFailed: {},
   chatAutoTranslate: _initChatAutoTranslate(),
   boards: Object.fromEntries(ALLIANCES.map((a) => [a, []])),
   allianceNotices: { KOR: [], NSL: [], JKY: [], GPX: [], UFO: [] },
@@ -148,7 +242,15 @@ export const useStore = create((set) => ({
 
   // Actions
   setUser: (user) => set({ user }),
-  clearUser: () => set({ user: null, chatMessages: [], onlineUsers: [] }),
+  clearUser: () =>
+    set({
+      user: null,
+      chatMessages: [],
+      chatTranslations: {},
+      chatTranslationPending: {},
+      chatTranslationFailed: {},
+      onlineUsers: [],
+    }),
   setTimeOffset: (timeOffset) => set({ timeOffset }),
   setTimeSyncRtt: (timeSyncRtt) => set({ timeSyncRtt }),
   setTimeSyncState: (timeSyncState) => set({ timeSyncState }),
@@ -169,28 +271,72 @@ export const useStore = create((set) => ({
   setMembers: (members) => set({ members }),
   setOnlineUsers: (onlineUsers) => set({ onlineUsers }),
   setChatHistory: (messages) =>
-    set((state) => ({
-      chatMessages: mergeChatMessages(
-        state.chatMessages,
-        Array.isArray(messages) ? messages : [],
-      ),
-    })),
+    set((state) => {
+      const split = splitTranslations(Array.isArray(messages) ? messages : []);
+      const chatMessages = mergeChatMessages(state.chatMessages, split.messages);
+      const chatTranslations = mergeTranslationMap(
+        state.chatTranslations,
+        split.entries,
+      );
+      return {
+        chatMessages,
+        ...pruneTranslationState({ ...state, chatTranslations }, chatMessages),
+      };
+    }),
   appendChatMessage: (message) =>
+    set((state) => {
+      const split = splitTranslations([message]);
+      const chatMessages = mergeChatMessages(state.chatMessages, split.messages);
+      const chatTranslations = mergeTranslationMap(
+        state.chatTranslations,
+        split.entries,
+      );
+      return {
+        chatMessages,
+        ...pruneTranslationState({ ...state, chatTranslations }, chatMessages),
+      };
+    }),
+  // ── 번역 맵 액션 ──
+  mergeChatTranslations: (id, map) =>
     set((state) => ({
-      chatMessages: mergeChatMessages(state.chatMessages, [message]),
+      chatTranslations: mergeTranslationMap(state.chatTranslations, [[id, map]]),
     })),
-  setChatMessageTranslation: (
-    messageKey,
-    translatedContent,
-    translatedLanguage,
-  ) =>
+  mergeChatTranslationsBulk: (entries) =>
     set((state) => ({
-      chatMessages: state.chatMessages.map((message) =>
-        getChatMessageKey(message) === messageKey
-          ? { ...message, translatedContent, translatedLanguage }
-          : message,
+      chatTranslations: mergeTranslationMap(
+        state.chatTranslations,
+        Array.isArray(entries) ? entries : [],
       ),
     })),
+  markTranslationPending: (ids) =>
+    set((state) => ({
+      chatTranslationPending: {
+        ...state.chatTranslationPending,
+        ...Object.fromEntries(ids.map((id) => [id, true])),
+      },
+    })),
+  clearTranslationPending: (ids) =>
+    set((state) => ({
+      chatTranslationPending: ids
+        ? withoutKeys(state.chatTranslationPending, ids)
+        : {},
+    })),
+  markTranslationFailed: (ids) =>
+    set((state) => ({
+      chatTranslationFailed: {
+        ...state.chatTranslationFailed,
+        ...Object.fromEntries(ids.map((id) => [id, true])),
+      },
+      chatTranslationPending: withoutKeys(state.chatTranslationPending, ids),
+    })),
+  clearTranslationFailed: (id) =>
+    set((state) => ({
+      chatTranslationFailed: withoutKeys(state.chatTranslationFailed, [id]),
+    })),
+  resetTranslationStatus: () =>
+    set({ chatTranslationPending: {}, chatTranslationFailed: {} }),
+  pruneChatTranslations: () =>
+    set((state) => pruneTranslationState(state, state.chatMessages)),
   setChatAutoTranslate: (enabled) => {
     const chatAutoTranslate = !!enabled;
     try {
