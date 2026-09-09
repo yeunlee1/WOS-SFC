@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useStore } from '../../store';
 import { useI18n } from '../../i18n';
 import { api } from '../../api';
+import { effectiveLang } from '../../chat/script';
 
 const SOURCE_ICON = { discord: '💬', kakao: '🟡', game: '🎮' };
 const SOURCE_LABEL = {
@@ -28,10 +29,12 @@ export default function Noticeboard() {
   // 번역 상태 Map<noticeId, translatedText>
   const [translations, setTranslations] = useState({});
   const [translating, setTranslating] = useState({});
+  const [translateFailed, setTranslateFailed] = useState({});
 
   // lang 변경 시 번역 캐시 리셋
   useEffect(() => {
     setTranslations({});
+    setTranslateFailed({});
   }, [lang]);
 
   // 쓰기 권한: admin 또는 developer이면서 KOR 연맹
@@ -40,19 +43,23 @@ export default function Noticeboard() {
     (user.role === 'admin' || user.role === 'developer') &&
     user.allianceName === 'KOR';
 
-  // 수동 번역
+  // 수동 번역 — UI 언어 other·미지는 en으로 요청하고(B Q3), 실패는 문구로 보인다 (B-10).
   async function handleTranslate(noticeId, noticeContent) {
     if (translations[noticeId] || translating[noticeId]) return;
     setTranslating((prev) => ({ ...prev, [noticeId]: true }));
+    setTranslateFailed((prev) => ({ ...prev, [noticeId]: false }));
+    let failed = true;
     try {
-      const res = await api.translate(noticeContent, lang);
+      const res = await api.translate(noticeContent, effectiveLang(lang));
       if (res?.translated) {
         setTranslations((prev) => ({ ...prev, [noticeId]: res.translated }));
+        failed = false;
       }
     } catch {
-      /* 실패 시 원문 유지 */
+      failed = true;
     } finally {
       setTranslating((prev) => ({ ...prev, [noticeId]: false }));
+      if (failed) setTranslateFailed((prev) => ({ ...prev, [noticeId]: true }));
     }
   }
 
@@ -199,6 +206,7 @@ export default function Noticeboard() {
   const needsTranslation = postLang !== lang;
   const translated = translations[detailId];
   const isTranslating = translating[detailId];
+  const isTranslateFailed = translateFailed[detailId];
   const isAdmin = user?.role === 'admin' || user?.role === 'developer';
 
   return (
@@ -246,14 +254,21 @@ export default function Noticeboard() {
         ) : (
           <>
             <div className="notice-detail-text">{notice.content}</div>
-            <button
-              className="btn btn-ghost btn-sm"
-              onClick={() => handleTranslate(detailId, notice.content)}
-              disabled={isTranslating}
-              style={{ marginTop: '8px' }}
-            >
-              {isTranslating ? '번역 중...' : '🌐 번역'}
-            </button>
+            <div className="translate-row">
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={() => handleTranslate(detailId, notice.content)}
+                disabled={isTranslating}
+                style={{ marginTop: '8px' }}
+              >
+                {isTranslating ? t('translating') : `🌐 ${t('translateBtn')}`}
+              </button>
+              {isTranslateFailed && (
+                <span className="translate-failed" role="status">
+                  {t('translateFailed')}
+                </span>
+              )}
+            </div>
           </>
         )}
       </div>
