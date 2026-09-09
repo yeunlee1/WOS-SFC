@@ -1,0 +1,81 @@
+{
+  "_comment": "채팅 소켓 이벤트와 번역 HTTP 계약의 공유 픽스처. 서버 spec은 emit 페이로드를 JSON 왕복시켜 여기와 키 집합을 대조하고, 웹 spec은 같은 객체를 핸들러에 넣는다. 설계: docs/superpowers/specs/2026-09-10-채팅-번역-v2-design.md 3.7절",
+  "chat:message": {
+    "id": 101,
+    "nickname": "테스터",
+    "allianceName": "KOR",
+    "language": "ko",
+    "content": "10분 뒤 SFC 집결 갑니다",
+    "createdAt": "2026-09-10T00:00:00.000Z"
+  },
+  "chat:message:ack:ok": { "ok": true },
+  "chat:message:ack:invalid": { "ok": false, "reason": "invalid" },
+  "chat:message:ack:rate_limit": { "ok": false, "reason": "rate_limit" },
+  "chat:message:ack:failed": { "ok": false, "reason": "failed" },
+  "chat:translation": {
+    "id": 101,
+    "translations": { "en": "Rally to SFC in 10 min", "ja": "10分後にSFC集結" }
+  },
+  "chat:translation:failed": {
+    "id": 101,
+    "translations": {},
+    "failed": ["en"],
+    "error": "provider"
+  },
+  "chat:translation:empty": { "id": 102, "translations": {} },
+  "chat:history": [
+    {
+      "id": 100,
+      "nickname": "a",
+      "allianceName": null,
+      "language": "en",
+      "content": "gg",
+      "createdAt": "2026-09-09T23:59:00.000Z",
+      "translations": {}
+    },
+    {
+      "id": 101,
+      "nickname": "테스터",
+      "allianceName": "KOR",
+      "language": "ko",
+      "content": "10분 뒤 SFC 집결 갑니다",
+      "createdAt": "2026-09-10T00:00:00.000Z",
+      "translations": { "en": "Rally to SFC in 10 min" }
+    }
+  ],
+  "chat:system": { "kind": "history_error" },
+  "chat:language": { "lang": "en" },
+  "chat:language:off": { "lang": null },
+  "online:updated": [
+    { "nickname": "테스터", "alliance": "KOR", "role": "member" },
+    { "nickname": "a", "alliance": "NSL", "role": "member" }
+  ],
+  "translate:batch:request": {
+    "targetLang": "en",
+    "items": [
+      { "id": 100, "text": "집결" },
+      { "id": 101, "text": "10분 뒤 SFC 집결 갑니다" }
+    ]
+  },
+  "translate:batch:response": {
+    "translated": { "101": "Rally to SFC in 10 min" },
+    "skipped": [100],
+    "failed": []
+  },
+  "translate:batch:response:failed": {
+    "translated": {},
+    "skipped": [],
+    "failed": [100, 101]
+  },
+  "translate:429": { "message": "번역 요청이 많습니다. 잠시 후 다시 시도해주세요.", "retryAfterMs": 12000 },
+  "script-fixtures": [
+    { "text": "456,789 👍", "script": "none", "unambiguous": null },
+    { "text": "SFC 집결 go", "script": "mixed", "unambiguous": null },
+    { "text": "要塞 準備", "script": "han", "unambiguous": null },
+    { "text": "annyeong gg", "script": "latin", "unambiguous": null },
+    { "text": "Wir sammeln in 5 Minuten", "script": "latin", "unambiguous": null },
+    { "text": "Сбор через 5 минут", "script": "ru", "unambiguous": "ru" },
+    { "text": "10분 뒤 집결 갑니다", "script": "ko", "unambiguous": "ko" },
+    { "text": "集結まで5分、兵力を満タンに", "script": "ja", "unambiguous": "ja" }
+  ]
+}
