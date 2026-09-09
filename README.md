@@ -44,7 +44,7 @@ Copy-Item .env.example server/.env
 | `JWT_SECRET`         | access·refresh JWT 서명 키            | 필수                                           |
 | `SERVER_CODE`        | 저장소 밖에서 관리하는 가입 초대 코드 | 필수                                           |
 | `OPENAI_API_KEY`     | 번역 API (OpenAI Responses)           | 번역 기능 사용 시 필수. 비면 번역만 실패하고 부팅은 됨 |
-| `TRANSLATE_MODEL`    | 번역 모델                             | 선택, 기본값 `gpt-5.4-mini`. 바꿀 때 `npm --workspace server run translate:eval`로 근거를 남김 |
+| `TRANSLATE_MODEL`    | 번역 모델                             | 선택, 기본값 `gpt-5.6-luna`(2026-09-10 핫픽스 후 재평가). 바꿀 때 `npm --workspace server run translate:eval`로 근거를 남김 |
 | `TRANSLATE_GLOBAL_RPM` | 서버 전체 분당 OpenAI 호출 상한     | 선택, 기본값 120. 넘긴 메시지는 `chat:translation`에 `error:'limit'`으로 방송되고 웹 배치가 뒤따름 |
 | `GOOGLE_TTS_API_KEY` | Google TTS 생성 API                   | TTS 생성 기능 사용 시 필수                     |
 | `TTS_CACHE_DIR`      | 생성한 TTS 파일 보관 경로             | 선택                                           |

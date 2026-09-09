@@ -11,6 +11,7 @@ import { ConfigService } from '@nestjs/config';
 import { writeFileSync } from 'fs';
 import { Lang, TARGET_LANGS } from '../script-detect';
 import {
+  DEFAULT_TRANSLATE_MODEL,
   SourceLang,
   TranslateEngineService,
   TranslateProviderError,
@@ -405,7 +406,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
   if (!process.env.OPENAI_API_KEY) {
     throw new Error('OPENAI_API_KEY 가 없다. server/.env 를 확인할 것.');
   }
-  const models = (args.models ?? process.env.TRANSLATE_MODEL ?? 'gpt-5.4-mini')
+  const models = (args.models ?? process.env.TRANSLATE_MODEL ?? DEFAULT_TRANSLATE_MODEL)
     .split(',')
     .map((m) => m.trim())
     .filter(Boolean);

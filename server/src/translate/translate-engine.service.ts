@@ -13,7 +13,11 @@ import { selectGlossaryLines } from './glossary';
 import { Lang, TARGET_LANGS } from './script-detect';
 import { TranslateUsageService } from './translate-usage.service';
 
-export const DEFAULT_TRANSLATE_MODEL = 'gpt-5.4-mini';
+/**
+ * 2026-09-10 핫픽스 후 재평가(42문장) — luna 205/207·오출력 0·source 100%·문장당 비용 mini 의 27%, 응답 0.4~0.6초 느림.
+ * 근거는 docs/superpowers/specs/2026-09-10-번역-평가-결과.md "핫픽스 후 재평가" 절. 바꿀 때 .env.example·docker-compose.yml·README·CLAUDE.md 도 맞춘다.
+ */
+export const DEFAULT_TRANSLATE_MODEL = 'gpt-5.6-luna';
 /** 한 호출의 출력 토큰 상한. 넘으면 대상을 나눠 여러 번 부른다. */
 export const MAX_OUTPUT_TOKENS_CAP = 1500;
 /** 원문 1자당 예상 출력 토큰. CJK 는 글자당 1토큰 안팎이라 여유를 둔다(감사 C 5절 J). */

@@ -374,6 +374,14 @@ describe('TranslateEngineService — 감사 A 반영', () => {
   });
 });
 
+describe('DEFAULT_TRANSLATE_MODEL', () => {
+  // 2026-09-10 핫픽스 후 재평가(42문장) — luna 205/207·오출력 0·source 100%·문장당 비용 mini 의 27%.
+  // 바꿀 때는 .env.example·docker-compose.yml·README 표·CLAUDE.md 의 기본값도 같이 맞춘다.
+  it('기본 모델은 gpt-5.6-luna 다', () => {
+    expect(DEFAULT_TRANSLATE_MODEL).toBe('gpt-5.6-luna');
+  });
+});
+
 describe('modelRequestParams — 모델 계열별 파라미터(2026-09-10 실측)', () => {
   it('gpt-5.x 는 reasoning none·verbosity low', () => {
     expect(modelRequestParams('gpt-5.4-mini')).toEqual({ reasoning: { effort: 'none' }, verbosity: 'low' });
