@@ -44,6 +44,8 @@ describe('ChatGateway', () => {
     allianceName: 'KOR',
     language: 'ko',
     role: 'member',
+    passwordHash: 'secret-hash',
+    isLeader: false,
   } as User;
   let gateway: ChatGateway;
   let socket: Socket;
@@ -109,6 +111,15 @@ describe('ChatGateway', () => {
 
     it('정확히 500자는 허용한다(T1 경계)', async () => {
       await expect(gateway.handleMessage(socket, 'x'.repeat(500))).resolves.toEqual({ ok: true });
+    });
+
+    it('글자 수는 코드 포인트로 센다 — 이모지 300개(UTF-16 600유닛)는 허용, 501 코드 포인트는 거부(A-A2)', async () => {
+      await expect(gateway.handleMessage(socket, '😀'.repeat(300))).resolves.toEqual({ ok: true });
+      await expect(gateway.handleMessage(socket, 'x'.repeat(499) + '😀')).resolves.toEqual({ ok: true });
+      await expect(gateway.handleMessage(socket, 'x'.repeat(500) + '😀')).resolves.toEqual({
+        ok: false,
+        reason: 'invalid',
+      });
     });
 
     it('인증되지 않은 소켓(user 없음)은 invalid 다', async () => {
@@ -356,8 +367,25 @@ describe('ChatGateway', () => {
       expect(connecting.disconnect).not.toHaveBeenCalled();
       expect(connecting.emit).toHaveBeenCalledWith('chat:system', { kind: 'history_error' });
       expect(connecting.emit).not.toHaveBeenCalledWith('chat:error', expect.anything());
-      expect((connecting.data as { user?: User }).user).toBe(user);
+      expect((connecting.data as { user?: User }).user).toMatchObject({ id: user.id });
       expect(connectedUsers().has(connecting.id)).toBe(true);
+    });
+
+    it('소켓에는 사용자 투영(id·nickname·allianceName·language·role)만 둔다(A-S6)', async () => {
+      const connecting = makeConnectingSocket();
+      await gateway.handleConnection(connecting);
+      const stored = (connecting.data as { user?: unknown }).user;
+      expect(stored).toEqual({
+        id: user.id,
+        nickname: user.nickname,
+        allianceName: user.allianceName,
+        language: user.language,
+        role: user.role,
+      });
+      expect(stored).not.toHaveProperty('passwordHash');
+
+      await gateway.handleMessage(connecting, 'hello');
+      expect(chatService.saveMessage).toHaveBeenCalledWith(stored, 'hello');
     });
 
     it('히스토리 조회 성공 시에는 chat:system 을 보내지 않는다', async () => {

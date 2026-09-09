@@ -10,7 +10,7 @@ import {
 } from '@nestjs/websockets';
 import { Logger } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
-import { ChatService } from './chat.service';
+import { ChatService, ChatUser } from './chat.service';
 import { SocketAuthService } from '../realtime/socket-auth.service';
 import { WsRateLimitService } from '../realtime/ws-rate-limit.service';
 import { User } from '../users/users.entity';
@@ -30,7 +30,7 @@ type ConnectedUser = {
 };
 
 type ChatSocketData = {
-  user?: User;
+  user?: ChatUser;
   /** 등록(handleConnection 완료) 전에 도착한 chat:language 보고. 등록 시 초기값으로 쓴다. */
   pendingTargetLang?: Lang | null;
 };
@@ -76,7 +76,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
 
     const data = client.data as ChatSocketData;
-    data.user = user;
+    // 소켓 수명 동안 남는 객체에 passwordHash 가 실리지 않게 필요한 필드만 투영한다(A-S6).
+    data.user = {
+      id: user.id,
+      nickname: user.nickname,
+      allianceName: user.allianceName,
+      language: user.language,
+      role: user.role,
+    };
     // 웹은 connect 직후 chat:language 를 보내는데 위 사용자 조회보다 먼저 올 수 있다.
     // 그 보고를 버리면 계정 언어로 번역을 받게 되므로 보관해 둔 값을 초기값으로 쓴다.
     const targetLang =
@@ -157,7 +164,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       return { ok: false, reason: 'invalid' as const };
     }
     const normalized = content.trim();
-    if (!normalized || normalized.length > CHAT_MESSAGE_MAX_LENGTH) {
+    // String.length 는 UTF-16 코드 유닛이라 이모지가 2로 세어진다. 코드 포인트로 센다(A-A2).
+    // 웹 입력창도 같은 계수(Array.from(s).length)와 maxLength 를 쓴다.
+    if (!normalized || Array.from(normalized).length > CHAT_MESSAGE_MAX_LENGTH) {
       return { ok: false, reason: 'invalid' as const };
     }
     if (
