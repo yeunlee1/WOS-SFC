@@ -1,15 +1,10 @@
 import { useState } from 'react';
-import { useStore } from '../../store';
+import { useStore, getAllianceColor } from '../../store';
 import { useI18n } from '../../i18n';
 import { api } from '../../api';
 
 const SOURCE_ICON  = { discord: '💬', kakao: '🟡', game: '🎮' };
 const SOURCE_LABEL = { discord: '💬 Discord', kakao: '🟡 KakaoTalk', game: '🎮 In-game' };
-
-const ALLIANCE_COLORS = {
-  KOR: '#3b82f6', NSL: '#22c55e', JKY: '#a855f7',
-  GPX: '#f97316', UFO: '#06b6d4',
-};
 
 // AllianceNoticeboard — 연맹별 공지사항 컴포넌트
 // 목록 / 글쓰기 / 상세 세 가지 뷰 전환
@@ -18,7 +13,7 @@ export default function AllianceNoticeboard({ alliance }) {
   const { t, lang } = useI18n();
 
   const notices = allianceNotices[alliance] || [];
-  const color = ALLIANCE_COLORS[alliance] || '#6b7280';
+  const color = getAllianceColor(alliance);
 
   // 쓰기 권한: 해당 연맹의 admin/developer
   const canWrite = user &&

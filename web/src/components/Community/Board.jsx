@@ -1,15 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
-import { useStore } from '../../store';
+import { useStore, getAllianceColor } from '../../store';
 import { useI18n } from '../../i18n';
 import { api } from '../../api';
-
-const ALLIANCE_COLORS = {
-  KOR: '#3b82f6',
-  NSL: '#22c55e',
-  JKY: '#a855f7',
-  GPX: '#f97316',
-  UFO: '#06b6d4',
-};
 
 const EMOJIS = [
   '😀',
@@ -60,7 +52,7 @@ export default function Board({ alliance }) {
   const { t, lang } = useI18n();
 
   const posts = boards[alliance] || [];
-  const color = ALLIANCE_COLORS[alliance] || '#6b7280';
+  const color = getAllianceColor(alliance);
 
   // 번역 상태
   const [translations, setTranslations] = useState({});

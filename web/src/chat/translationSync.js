@@ -13,6 +13,26 @@ export const BATCH_MIN_INTERVAL_MS = 1_000;
 // failed 항목 재시도 간격. 두 번 다 실패하면 markTranslationFailed → 수동 재시도.
 export const RETRY_DELAYS_MS = [10_000, 30_000];
 
+// 화면(ChatMessageItem 재시도 버튼, 스크롤 훅)이 현재 살아 있는 동기화 인스턴스에 닿는 통로.
+// useSocket이 인스턴스를 만들 때 등록하고 cleanup에서 해제한다.
+let activeSync = null;
+
+export function setActiveTranslationSync(sync) {
+  activeSync = sync;
+}
+
+export function getActiveTranslationSync() {
+  return activeSync;
+}
+
+export function retryTranslation(id) {
+  activeSync?.retry(id);
+}
+
+export function requestOlderTranslations(ids) {
+  activeSync?.onScrolledToOlder(ids);
+}
+
 export function createTranslationSync({
   store,
   translateBatch,
@@ -386,7 +406,11 @@ export function createTranslationSync({
 
   function onScrolledToOlder(ids) {
     if (disposed || !Array.isArray(ids)) return;
-    enqueue(ids, 0);
+    // 푸시를 기다리는 실시간 메시지·재시도 대기 중인 것은 스크롤로 앞당기지 않는다.
+    enqueue(
+      ids.filter((id) => !pushWait.has(key(id)) && !retryTimers.has(key(id))),
+      0,
+    );
   }
 
   function retry(id) {

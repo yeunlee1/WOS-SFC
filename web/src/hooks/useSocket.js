@@ -2,7 +2,11 @@
 import { useEffect, useRef } from 'react';
 import { useStore, ALLIANCES } from '../store';
 import { api, connectSocket } from '../api';
-import { createTranslationSync } from '../chat/translationSync';
+import {
+  createTranslationSync,
+  getActiveTranslationSync,
+  setActiveTranslationSync,
+} from '../chat/translationSync';
 import {
   createOnlineTracker,
   createSystemMessage,
@@ -45,6 +49,7 @@ export function useSocket(user, chatLanguage = user?.language) {
       emitLanguage: (lang) => socket.emit('chat:language', { lang }),
     });
     syncRef.current = sync;
+    setActiveTranslationSync(sync);
 
     // 입퇴장은 서버가 방송하지 않고 online:updated diff로 만든다 (C-5, B-16).
     const tracker = createOnlineTracker({
@@ -186,6 +191,7 @@ export function useSocket(user, chatLanguage = user?.language) {
       tracker.dispose();
       sync.dispose();
       if (syncRef.current === sync) syncRef.current = null;
+      if (getActiveTranslationSync() === sync) setActiveTranslationSync(null);
       // disconnect 하지 않음 — StrictMode 이중 cleanup에서 소켓이 잠시 죽었다 살아나며
       // 서버 handleConnection이 두 번 호출되어 countdown:state 중복 도착하는 문제 방지.
     };

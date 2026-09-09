@@ -1,39 +1,34 @@
-import { useState, useEffect, useRef, memo } from 'react';
-import { useStore, ALLIANCES } from '../../store';
+// ChatTab — 실시간 채팅 탭(풀페이지). 메시지 항목은 ChatMessageItem, 번역은 store의 chatTranslations 맵에서 읽는다.
+import { useStore, ALLIANCES, getAllianceColor } from '../../store';
 import { useI18n } from '../../i18n';
-import { CHAT_SEND_ERROR_STYLE, useChatComposer } from './useChatComposer';
-import { formatSystemMessage } from '../../chat/systemMessages';
+import { retryTranslation } from '../../chat/translationSync';
+import { useChatComposer } from './useChatComposer';
+import { useAutoScroll } from './useAutoScroll';
+import { useOlderTranslations } from './useOlderTranslations';
+import ChatMessageItem from './ChatMessageItem';
 
-// 5-동맹 pill 색상 — store ALLIANCES 순서와 일치
-const ALLIANCE_COLORS = {
-  KOR: '#3b82f6',
-  NSL: '#22c55e',
-  JKY: '#a855f7',
-  GPX: '#f97316',
-  UFO: '#ec4899',
-};
-
-function getAllianceColor(alliance) {
-  return ALLIANCE_COLORS[alliance] || '#64748b';
-}
-
-// ChatTab — 실시간 채팅 탭 (풀페이지 모드)
 export default function ChatTab() {
   const { t, lang } = useI18n();
   const user = useStore((s) => s.user);
 
-  // Critical #1: onlineUsers를 store에서 직접 읽음 (로컬 state + chat:online 구독 제거)
+  // onlineUsers를 store에서 직접 읽음 — 같은 유저의 다중 탭/소켓은 1개로 집계
   const onlineUsersRaw = useStore((s) => s.onlineUsers);
-  // 같은 유저의 다중 탭/소켓은 1개로 집계
   const onlineUsers = Array.from(
     new Map(onlineUsersRaw.map((u) => [u.nickname ?? u, u])).values(),
   );
 
   const messages = useStore((s) => s.chatMessages);
+  const translations = useStore((s) => s.chatTranslations);
+  const pendingMap = useStore((s) => s.chatTranslationPending);
+  const failedMap = useStore((s) => s.chatTranslationFailed);
   const {
     input,
     sending,
     errorText,
+    charCount,
+    charLimit,
+    showCount,
+    overLimit,
     sendMessage,
     handleChange,
     handleKeyDown,
@@ -43,20 +38,11 @@ export default function ChatTab() {
   const autoTranslate = useStore((s) => s.chatAutoTranslate);
   const setAutoTranslate = useStore((s) => s.setChatAutoTranslate);
 
-  const messagesEndRef = useRef(null);
-  const messagesContainerRef = useRef(null);
-
-  // 자동 스크롤 — messages 변경 시 (사용자가 하단에 있을 때만)
-  useEffect(() => {
-    const container = messagesContainerRef.current;
-    if (!container) return;
-    const isAtBottom =
-      container.scrollHeight - container.scrollTop - container.clientHeight <
-      60;
-    if (isAtBottom) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [messages]);
+  const { containerRef, onScroll, newCount, scrollToBottom } = useAutoScroll(
+    messages,
+    translations,
+  );
+  const onScrollOlder = useOlderTranslations(containerRef);
 
   // 동맹별 온라인 그룹
   const groups = ALLIANCES.map((alliance) => {
@@ -86,25 +72,36 @@ export default function ChatTab() {
         </div>
 
         {/* 메시지 목록 */}
-        <div className="chat-tab-messages" ref={messagesContainerRef}>
-          {messages.map((msg, idx) => {
-            if (msg._type === 'system') {
-              return (
-                <div key={msg._id ?? idx} className="chat-tab-system-msg">
-                  — {formatSystemMessage(msg, t)} —
-                </div>
-              );
-            }
-            return (
-              <ChatMessage
-                key={msg.id ?? msg._id ?? idx}
-                msg={msg}
-                autoTranslate={autoTranslate}
-                translationLanguage={lang}
-              />
-            );
-          })}
-          <div ref={messagesEndRef} />
+        <div
+          className="chat-tab-messages"
+          ref={containerRef}
+          onScroll={() => {
+            onScroll();
+            onScrollOlder();
+          }}
+        >
+          {messages.map((msg, idx) => (
+            <ChatMessageItem
+              key={msg.id ?? msg._id ?? idx}
+              msg={msg}
+              translations={msg.id != null ? translations[msg.id] : undefined}
+              myLang={lang}
+              autoTranslate={autoTranslate}
+              pending={msg.id != null && !!pendingMap[msg.id]}
+              failed={msg.id != null && !!failedMap[msg.id]}
+              onRetry={retryTranslation}
+              variant="tab"
+            />
+          ))}
+          {newCount > 0 && (
+            <button
+              type="button"
+              className="chat-new-badge"
+              onClick={() => scrollToBottom('smooth')}
+            >
+              {String(t('chatNewMessages')).replace('{count}', String(newCount))}
+            </button>
+          )}
         </div>
 
         {/* 전송 실패 안내 — 실패를 성공처럼 보이게 두지 않는다 */}
@@ -114,7 +111,6 @@ export default function ChatTab() {
             data-testid="chat-send-error"
             role="status"
             aria-live="polite"
-            style={CHAT_SEND_ERROR_STYLE}
           >
             {errorText}
           </div>
@@ -132,6 +128,14 @@ export default function ChatTab() {
             onCompositionEnd={handleCompositionEnd}
             placeholder={t('chatPlaceholder')}
           />
+          {showCount && (
+            <span
+              className={'chat-char-count' + (overLimit ? ' is-over' : '')}
+              data-testid="chat-char-count"
+            >
+              {charCount}/{charLimit}
+            </span>
+          )}
           <button
             className="btn btn-primary chat-tab-send-btn"
             onClick={sendMessage}
@@ -183,69 +187,3 @@ export default function ChatTab() {
     </div>
   );
 }
-
-// ── 개별 채팅 메시지 컴포넌트 ──
-const localeMap = { ko: 'ko-KR', en: 'en-US', ja: 'ja-JP', zh: 'zh-CN' };
-
-const ChatMessage = memo(function ChatMessage({
-  msg,
-  autoTranslate,
-  translationLanguage,
-}) {
-  const { t, lang } = useI18n();
-  const [showOriginal, setShowOriginal] = useState(false);
-
-  // createdAt 방어 처리 — locale-aware 시간 형식
-  const locale = localeMap[lang] || 'ko-KR';
-  const time = msg.createdAt
-    ? new Date(msg.createdAt).toLocaleTimeString(locale, {
-        hour: '2-digit',
-        minute: '2-digit',
-      })
-    : '';
-
-  const hasTranslation =
-    msg.translatedContent &&
-    msg.translatedLanguage === translationLanguage &&
-    msg.translatedContent !== msg.content;
-
-  // autoTranslate 꺼지면 항상 원문 표시
-  const displayContent =
-    autoTranslate && hasTranslation && !showOriginal
-      ? msg.translatedContent
-      : msg.content;
-
-  const initials = (msg.nickname || '??').slice(0, 2).toUpperCase();
-  const avatarColor = getAllianceColor(msg.allianceName);
-
-  return (
-    <div className="chat-tab-msg">
-      <div className="chat-tab-msg-avatar" style={{ background: avatarColor }}>
-        {initials}
-      </div>
-      <div className="chat-tab-msg-body">
-        <div className="chat-tab-msg-head">
-          <span className="chat-tab-msg-nick">{msg.nickname}</span>
-          {msg.allianceName && (
-            <span
-              className="chat-tab-msg-alliance"
-              style={{ color: avatarColor }}
-            >
-              [{msg.allianceName}]
-            </span>
-          )}
-          <span className="chat-tab-msg-time">{time}</span>
-        </div>
-        <p className="chat-tab-msg-text">{displayContent}</p>
-        {autoTranslate && hasTranslation && (
-          <span
-            className="chat-tab-toggle-original"
-            onClick={() => setShowOriginal((v) => !v)}
-          >
-            {showOriginal ? t('viewTranslation') : t('viewOriginal')}
-          </span>
-        )}
-      </div>
-    </div>
-  );
-});
