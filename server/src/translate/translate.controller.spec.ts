@@ -26,6 +26,10 @@ describe('TranslateController', () => {
     controller = new TranslateController(
       service as unknown as TranslateService,
       rateLimit as unknown as TranslationRateLimitService,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
     );
   });
 

@@ -1,5 +1,6 @@
 // 번역 공급자 호출 제한이 사용자별로 분리되고 정확한 재시도 시간을 반환하는지 검증한다.
 import {
+  TRANSLATION_BATCH_RATE_LIMIT,
   TRANSLATION_GLOBAL_PROVIDER_RATE_LIMIT,
   TRANSLATION_PROVIDER_RATE_LIMIT,
   TRANSLATION_REQUEST_RATE_LIMIT,
@@ -60,5 +61,26 @@ describe('TranslationRateLimitService', () => {
 
     now.mockReturnValue(3_060_000);
     expect(service.consumeProviderMiss(999).allowed).toBe(true);
+  });
+});
+
+describe('TranslationRateLimitService — 배치', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  it('배치 요청은 사용자별 20회/분 별도 버킷이고 다른 버킷과 섞이지 않는다', () => {
+    const now = jest.spyOn(Date, 'now').mockReturnValue(4_000_000);
+    const service = new TranslationRateLimitService();
+
+    for (let index = 0; index < TRANSLATION_BATCH_RATE_LIMIT; index += 1) {
+      expect(service.consumeBatch(1).allowed).toBe(true);
+    }
+    expect(TRANSLATION_BATCH_RATE_LIMIT).toBe(20);
+    expect(service.consumeBatch(1)).toEqual({ allowed: false, retryAfterMs: 60_000 });
+    expect(service.consumeBatch(2).allowed).toBe(true);
+    expect(service.consumeRequest(1).allowed).toBe(true);
+    expect(service.consumeProviderMiss(1).allowed).toBe(true);
+
+    now.mockReturnValue(4_060_000);
+    expect(service.consumeBatch(1).allowed).toBe(true);
   });
 });
