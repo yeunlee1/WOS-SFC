@@ -10,6 +10,7 @@ import { AppController } from './app.controller';
 import { User } from './users/users.entity';
 import { RefreshToken } from './auth/refresh-token.entity';
 import { Message } from './chat/message.entity';
+import { MessageTranslation } from './chat/message-translation.entity';
 import { Notice } from './notices/notice.entity';
 import { Rally } from './rallies/rally.entity';
 import { Member } from './members/member.entity';
@@ -156,6 +157,7 @@ export class GlobalThrottlerGuard extends ThrottlerGuard {
             User,
             RefreshToken,
             Message,
+            MessageTranslation,
             Notice,
             Rally,
             Member,

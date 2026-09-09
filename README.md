@@ -81,6 +81,7 @@ npm --workspace server run migrate:dev
 | `002_dev_accounts_camelcase_rename.sql` | 레거시 `dev_*` 계정 닉네임을 camelCase로 변경 |
 | `003_messages_created_at_index.sql` | `messages.created_at` 인덱스 추가 |
 | `004_refresh_tokens.sql` | 기기별 refresh 토큰 테이블 `refresh_tokens` 생성, `users.refresh_token_hash` 컬럼은 있을 때만 제거 |
+| `005_message_translations.sql` | 채팅 메시지별 번역 테이블 `message_translations` 생성 (`messages` FK CASCADE, 보존 정리와 함께 삭제) |
 
 > **이미 테이블이 있는 기존 DB에 그대로 돌리지 마십시오.** `000_initial_schema.sql`은 **빈 DB 기준**이고 `CREATE TABLE IF NOT EXISTS`를 쓰기 때문에, 테이블이 이미 있으면 **정의가 일치하는지 검사하지 않고 조용히 건너뜁니다.** 개발용 `wos_db`처럼 기존 DB를 계속 쓸 계획이라면 적용 전에 **현재 스키마와 이 파일을 직접 대조**하고, 백업과 예상 변경 범위를 확인하십시오.
 
@@ -213,7 +214,7 @@ docker compose ps
 docker compose logs -f app
 ```
 
-`app` 이 `healthy` 가 되면 정상입니다. 헬스체크는 `/time` 응답만 봅니다 — HTTP 서버가 살아 있다는 뜻이지 DB 연결까지 보증하지는 않습니다. DB 문제는 `docker compose logs app` 에서 확인하십시오. 마이그레이션이 적용됐는지는 `docker compose logs app | grep "\[migrate\]"` 로 봅니다(첫 배포면 `000`~`004` 다섯 파일이 `적용` 으로 찍힙니다).
+`app` 이 `healthy` 가 되면 정상입니다. 헬스체크는 `/time` 응답만 봅니다 — HTTP 서버가 살아 있다는 뜻이지 DB 연결까지 보증하지는 않습니다. DB 문제는 `docker compose logs app` 에서 확인하십시오. 마이그레이션이 적용됐는지는 `docker compose logs app | grep "\[migrate\]"` 로 봅니다(첫 배포면 `000`~`005` 여섯 파일이 `적용` 으로 찍힙니다).
 
 ### 첫 배포 체크리스트
 
