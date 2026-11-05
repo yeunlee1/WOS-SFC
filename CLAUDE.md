@@ -99,7 +99,7 @@ wos-sfc-helper/
 - 고정 px 너비 금지 → `min()`, `clamp()`, `%`, `vw` 사용
 - 2열 이상 그리드는 `@media (max-width: 768px)` 에서 1열로 전환
 - iOS Safari `100vh` 버그 대응: `height: 100dvh` 사용
-- 새 컴포넌트 추가 시 Chrome DevTools 모바일 에뮬레이터(iPhone SE 375px)로 반드시 확인
+- 새 컴포넌트 추가 시 이고라이트(`ego-browser` 스킬)로 모바일 폭(iPhone SE 375px)을 재현해 반드시 확인
 
 ### 보안
 - `.env`, JWT 키, `SERVER_CODE`(가입 초대 코드), DB 자격 증명, 외부 API 키를 커밋하지 않는다
